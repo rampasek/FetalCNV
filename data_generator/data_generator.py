@@ -1,17 +1,19 @@
 import random
 import math
-import numpy as np
 
 nucleotides = ['A', 'C', 'G', 'T']
 
-length = 10**6 #how many "SNP" positions to generate
+length = 10**5 #how many "SNP" positions to generate
 mixture = 0.1 #proportion of fetal genome in plasma
-mean_coverage = 70 #average coverage of the plasma \mu
+mean_coverage = 75 #average coverage of the plasma \mu
 dev_coverage = 5   #deviation \sigma
 
 #how many SNP an CNV event will span - uniform distrib
-cnv_length_min = 500
-cnv_length_max = 1500 
+#cnv_length_min = 500
+#cnv_length_max = 1500
+cnv_length_mu = 300
+cnv_length_dev = 100
+
 
 file_paternal = "paternal_alleles.txt"
 file_maternal = "maternal_alleles.txt"
@@ -55,9 +57,18 @@ for mats in range(3):
 #generate fetal alleles with CNVs
 F = []
 i = 0
+X = 3
 while i < length:
-    X = random.choice([0,1,2,3,3,3,4,5,6]) #pick a type of the event (inheritence pattern)
-    size = random.randrange(cnv_length_min, cnv_length_max) #choose how many SNP the event will span
+    #pick a type of the event (inheritence pattern)
+    if not X == 3:
+        X = random.choice([X, 3, 3])
+    else:
+        X = random.choice([0,1,2,3,4,5,6]) 
+        
+    #choose how many SNP the event will span
+    #size = random.randrange(cnv_length_min, cnv_length_max)
+    size = int(random.gauss(cnv_length_mu, cnv_length_dev))
+        
     for j in range(size):
         if i == length: break
         fnew = []
@@ -93,12 +104,13 @@ while i < length:
 
 #generate "reads"
 for i in range(length):
-    N = int(round(np.random.normal(mean_coverage, dev_coverage)))
+    N = int(round(random.gauss(mean_coverage, dev_coverage)))
     samples = [0, 0, 0, 0]
-    for j in range(N):
+    num_samples = N*mixture/2. * len(F[i]) + N*(1-mixture)/2. * len(M[i])
+    for j in range(int(round(num_samples))):
         if random.random() <= 0.01:
             samples[random.choice(range(4))] += 1
-        elif random.random() > mixture: #from maternal alleles
+        elif random.random() > (mixture * len(F[i])/2.) / (1.-mixture + mixture * len(F[i])/2.): #mixture/2. * len(F[i]): #from maternal alleles
             samples[nucleotides.index(random.choice(M[i]))] += 1
         else: #from fetal alleles
             samples[nucleotides.index(random.choice(F[i]))] += 1

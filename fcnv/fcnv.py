@@ -64,11 +64,12 @@ class FCNV(object):
         self.num_states = len(self.inheritance_patterns) 
         
         # trasition probabilities (uniform for all positions)
-        p_stay = 0.95
-        p_stay3 = 0.975
-        self.transitions = [[math.log((1.-p_stay)/(self.num_states-0.)) for x in range(self.num_states)] for y in range(self.num_states)]
+        p_stay = 0.9
+        p_stay3 = 0.9
+        #self.transitions = [[math.log((1.-p_stay)/(self.num_states-0.)) for x in range(self.num_states)] for y in range(self.num_states)]
+        self.transitions = [[float("-inf") for x in range(self.num_states)] for y in range(self.num_states)]
         for i in range(self.num_states):
-            self.transitions[i][3] = math.log(2.*(1.-p_stay)/(self.num_states-0.))
+            self.transitions[i][3] = math.log(1.-p_stay)
         self.transitions[0][0] = math.log(p_stay)
         self.transitions[1][1] = math.log(p_stay)
         self.transitions[2][2] = math.log(p_stay)
@@ -77,6 +78,14 @@ class FCNV(object):
         self.transitions[6][6] = math.log(p_stay)
         self.transitions[3] = [math.log((1.-p_stay3)/(self.num_states-1)) for x in range(self.num_states)]
         self.transitions[3][3] = math.log(p_stay3)
+        
+        self.main_state = 3
+        #print the table    
+        for k in xrange(self.num_states):
+            for l in xrange(self.num_states):
+                print "%0.4f" % (math.exp(self.transitions[k][l])), 
+            print " "
+            
         
     def logSum(self, x, y):
         '''
@@ -169,10 +178,12 @@ class FCNV(object):
         >>> f.allelesDistribution(['A', 'A'], ['T', 'A'], 0.1)
         [0.92307692307692313, 0.0096153846153846159, 0.0096153846153846159, 0.057692307692307696]
         '''
+        cmix = (mix * len(fetal)/2.) / (1.-mix + mix * len(fetal)/2.)
         dist = []
         for nuc in nucleotides:
-            temp = maternal.count(nuc) / float(len(maternal)) * (1.-mix)
-            temp += fetal.count(nuc) / float(len(fetal)) * (mix)
+            temp = maternal.count(nuc) / float(len(maternal)) * (1.-cmix)
+            temp += fetal.count(nuc) / float(len(fetal)) * (cmix)
+            temp = min(temp, 1.)
             dist.append(temp)
         
         summ = 0.
@@ -274,11 +285,19 @@ class FCNV(object):
                 #porobability of this state is emission * max{previous state * transition}
                 max_prev = float("-inf")
                 arg_max = -1
-                for s in range(num_states):
-                    tmp = table[pos-1][s] + transitions[s][state]
-                    if tmp > max_prev:
+                if not state == self.main_state:
+                    max_prev = table[pos-1][self.main_state] + transitions[self.main_state][state]
+                    arg_max = self.main_state
+                    tmp = table[pos-1][state] + transitions[state][state]
+                    if tmp >= max_prev:
                         max_prev = tmp
-                        arg_max = s
+                        arg_max = state
+                else:
+                    for s in range(num_states):
+                        tmp = table[pos-1][s] + transitions[s][state]
+                        if tmp > max_prev:
+                            max_prev = tmp
+                            arg_max = s
                 table[pos][state] = max_prev + emis_p
                 predecessor[(pos, state)] = arg_max
         
@@ -306,7 +325,7 @@ class FCNV(object):
         
         n = len(samples)
         #DP table dim: seq length+1 x num_states
-        table = [[0. for i in range(num_states)] for j in xrange(n+1)] 
+        table = [[float("-inf") for i in range(num_states)] for j in xrange(n+1)] 
 
         #initital base case
         for i in range(num_states):
@@ -327,9 +346,14 @@ class FCNV(object):
                 
                 #probability of this state is emission * \sum {previous state * transition}
                 summ = "nothing"
-                for s in range(num_states):
-                    tmp = transitions[s][state]+table[pos-1][s]
+                if not state == self.main_state:
+                    summ = table[pos-1][self.main_state] + transitions[self.main_state][state]
+                    tmp = table[pos-1][state] + transitions[state][state]
                     summ = self.logSum(summ, tmp)
+                else:
+                    for s in range(num_states):
+                        tmp =  table[pos-1][s] + transitions[s][state]
+                        summ = self.logSum(summ, tmp)
                 table[pos][state] = emis_p + summ
         
         #p(X) - probability of the observed sequence (samples)
@@ -350,16 +374,15 @@ class FCNV(object):
         
         n = len(samples)
         #DP table dim: seq length+2 x num_states
-        table = [[0. for i in range(num_states)] for j in xrange(n+1)]
+        table = [[float("-inf") for i in range(num_states)] for j in xrange(n+1)]
         
         #initital base case
         for i in range(num_states):
             table[n][i] = 0. #initial state probabilities are 1 -> log(1)=0
             
         #for all SNP positions do:
-        for pos in reversed(xrange(n)):
+        for pos in reversed(range(1, n)):
             #real positions are <1..n+1), the 0 and n+1 are sentinels
-            if pos == 0: continue
             
             #precompute emission probabilities
             emis_p = []
@@ -370,9 +393,14 @@ class FCNV(object):
             for state in range(num_states):
                 #probability of this state is  \sum {emission *previous state * transition_to_here}
                 summ = "nothing"
-                for s in range(num_states):
-                    tmp = transitions[state][s] + table[pos+1][s]+ emis_p[s]
+                if not state == self.main_state:
+                    summ = transitions[state][self.main_state] + table[pos+1][self.main_state] + emis_p[self.main_state]
+                    tmp = transitions[state][state] + table[pos+1][state] + emis_p[state]
                     summ = self.logSum(summ, tmp)
+                else:
+                    for s in range(num_states):
+                        tmp = transitions[state][s] + table[pos+1][s] + emis_p[s]
+                        summ = self.logSum(summ, tmp)
                 table[pos][state] = summ
         
         #p(X) - probability of the observed sequence (samples)
@@ -395,7 +423,7 @@ class FCNV(object):
         fwd, pX1 = self.computeForward(samples, M, P, mixture)
         bck, pX2 = self.computeBackward(samples, M, P, mixture)
         
-        if abs(pX1-pX2) > 0.1:
+        if abs(pX1-pX2) > 0.01:
             print "p(X) from forward and backward DP doesn't match", pX1, pX2
             return
         
@@ -404,7 +432,7 @@ class FCNV(object):
             max_posterior = float("-inf")
             arg_max = -1
             for s in range(self.num_states):
-                # fwd, bck ate in log space (therefore + instead *); p(X) is constant
+                # fwd, bck are in log space (therefore + instead *); p(X) is constant
                 tmp = fwd[pos][s] + bck[pos][s]
                 if tmp > max_posterior:
                     max_posterior = tmp
@@ -424,18 +452,18 @@ class FCNV(object):
         fwd, pX1 = self.computeForward(samples, M, P, mixture)
         bck, pX2 = self.computeBackward(samples, M, P, mixture)
         
-        if abs(pX1-pX2) > 0.1:
+        if abs(pX1-pX2) > 0.01:
             print "p(X) from forward and backward DP doesn't match", pX1, pX2
             return
         
-        path = []
+        table = []
         for pos in xrange(1, n+1):
             tmp = []
             for s in range(self.num_states):
-                # fwd, bck ate in log space (therefore + instead *); p(X) is constant
+                # fwd, bck are in log space (therefore + instead *); p(X) is constant
                 tmp.append((fwd[pos][s] + bck[pos][s], s))
-            path.append(reversed(sorted(tmp)))
-        return path
+            table.append(reversed(sorted(tmp)))
+        return table
         
     def baumWelshForTransitions(self, samples, M, P, mixture):
         '''
@@ -443,28 +471,37 @@ class FCNV(object):
         but implemented only for traning transition probabilities
         '''
         n = len(samples)
-        A = [[0. for x in range(self.num_states)] for y in range(self.num_states)]
+        A = [[float("-inf") for x in range(self.num_states)] for y in range(self.num_states)]
         num_iter = 0
         while True and num_iter < 5:
             num_iter += 1
             #expectation
             fwd, pX1 = self.computeForward(samples, M, P, mixture)
             bck, pX2 = self.computeBackward(samples, M, P, mixture)
-            if abs(pX1-pX2) > 0.1:
+            if abs(pX1-pX2) > 0.01:
                 print "p(X) from forward and backward DP doesn't match", pX1, pX2
                 return  
             
             
-            for k in range(self.num_states):
+            for k in range(self.num_states):            
                 for l in range(self.num_states):
+                    if self.transitions[k][l] == float("-inf"):
+                        A[k][l] = float("-inf")
+                        continue
+                        
                     val = "nothing"
                     for pos in xrange(1, n):
                         emis_p = self.logLikelihoodGivenPattern(samples[pos], M[pos],\
                          P[pos], mixture, self.inheritance_patterns[l])
                         tmp = fwd[pos][k] + self.transitions[k][l] + emis_p + bck[pos+1][l]
+                        if tmp == float("-inf"): continue
                         val = self.logSum(val, tmp)
-                    val -= pX1
-                    A[k][l] = val
+                    
+                    if val == "nothing":
+                        A[k][l] = float("-inf")
+                    else:
+                        val -= pX1
+                        A[k][l] = val
                     #if math.exp(A[k][l]) < 0.1:
                     #    A[k][l] = math.log(0.1)
                          
@@ -473,22 +510,25 @@ class FCNV(object):
             for k in range(self.num_states):
                 summ = "nothing"
                 for m in range(self.num_states):
+                    if A[k][m] == float("-inf"): continue
                     summ = self.logSum(summ, A[k][m])
                 #print summ, math.exp(summ)
                 for l in range(self.num_states):
                     self.transitions[k][l] = A[k][l] - summ
-                    if self.transitions[k][l] < math.log(0.0005):
-                        self.transitions[k][l] = math.log(0.0005)
+                    #if self.transitions[k][l] < math.log(0.0005):
+                    #    self.transitions[k][l] = math.log(0.0005)
             
             change = 0.
             for k in range(self.num_states):
                 summ = "nothing"
                 for m in range(self.num_states):
+                    if A[k][m] == float("-inf"): continue
                     summ = self.logSum(summ, self.transitions[k][m])
                 #print summ
                 for l in range(self.num_states):
-                    self.transitions[k][l] -= summ
-                    change += (self.transitions[k][l] - old_trans[k][l])**2
+                    #self.transitions[k][l] -= summ
+                    if not (self.transitions[k][l] == float("-inf") or old_trans[k][l] == float("-inf")):
+                        change += (self.transitions[k][l] - old_trans[k][l])**2
                     
             print "change: ", change 
             if change < 1: break
@@ -520,30 +560,42 @@ class FCNV(object):
                     for pos in xrange(1, n-1):
                         if path[pos] == k and path[pos+1] == l:
                             val += 1
-                    if val < 3: val = 3
-                    A[k][l] = val
+                    #if val < 1: val = 1
+                    A[k][l] = val + int(k == self.main_state)
+                A[k][k] += 1
+                A[k][self.main_state] += 1 
+                
                     
                          
             #maximization
             old_trans = copy.deepcopy(self.transitions)
             for k in range(self.num_states):
-                summ = math.log(sum(A[k]))
+                summ = sum(A[k])
+                if summ == 0:
+                    summ = float("inf")
+                else: 
+                    summ = math.log(sum(A[k]))
                 #for m in range(self.num_states):
                 #    summ = self.logSum(summ, A[k][m])
                 #print summ, math.exp(summ)
                 for l in range(self.num_states):
-                    self.transitions[k][l] = math.log(A[k][l]) - summ
-                    if self.transitions[k][l] < math.log(0.0005):
-                        self.transitions[k][l] = math.log(0.0005)
+                    if A[k][l] == 0:
+                        self.transitions[k][l] = float("-inf")
+                    else:
+                        self.transitions[k][l] = math.log(A[k][l]) - summ
+                    #if self.transitions[k][l] < math.log(0.0005):
+                    #    self.transitions[k][l] = math.log(0.0005)
                         
             change = 0.
             for k in range(self.num_states):
                 summ = "nothing"
                 for m in range(self.num_states):
+                    if A[k][m] == float("-inf"): continue
                     summ = self.logSum(summ, self.transitions[k][m])
                 for l in range(self.num_states):
-                    self.transitions[k][l] -= summ
-                    change += (self.transitions[k][l] - old_trans[k][l])**2
+                    #self.transitions[k][l] -= summ
+                    if not (self.transitions[k][l] == float("-inf") or old_trans[k][l] == float("-inf")):
+                        change += (self.transitions[k][l] - old_trans[k][l])**2
                     
             print "change: ", change 
             if change < 1: break
@@ -554,7 +606,7 @@ class FCNV(object):
                 print "%0.4f" % (math.exp(self.transitions[k][l])), 
             print " "  
 
-def computeEval(reference, prediction):
+def computeEval(reference, prediction, sensitivity):
     num_real = 0
     num_called = 0
     
@@ -579,8 +631,12 @@ def computeEval(reference, prediction):
                 tmp_length = 0
         
         num_real += 1
-        if max_ok_length >= length/2.:
-           num_called += 1
+        if sensitivity == 0:
+            if max_ok_length >= 1:
+                num_called += 1   
+        else:
+            if max_ok_length >= length/float(sensitivity):
+                num_called += 1
         #else: print  max_ok_length, length, reference[ind], prediction[ind], ctype
     return num_called, num_real
 
@@ -598,19 +654,19 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
     state_correct_pp = [0,0,0,0,0,0,0]
     pp = []
     for i in xrange(len(vp)):
-        state_stats[int(ground_truth[i])] += 1
+        state_stats[ground_truth[i]] += 1
         post = []
         for x in posterior[i]:   
             post.append(x[1])
         pp.append(post[0])
             
         #print ground_truth[i], vp[i], pp[i], '|', post
-        viterbi_correct += int(int(ground_truth[i]) == vp[i])
-        state_correct_vp[int(ground_truth[i])] += int(int(ground_truth[i]) == vp[i])
-        max_posterior_correct += int(int(ground_truth[i]) == post[0])
-        state_correct_pp[int(ground_truth[i])] += int(int(ground_truth[i]) == post[0])
+        viterbi_correct += int(ground_truth[i] == vp[i])
+        state_correct_vp[ground_truth[i]] += int(ground_truth[i] == vp[i])
+        max_posterior_correct += int(ground_truth[i] == post[0])
+        state_correct_pp[ground_truth[i]] += int(ground_truth[i] == post[0])
         
-        x = post.index(int(ground_truth[i]))
+        x = post.index(ground_truth[i])
         posterior_dist[x] += 1
         #print ground_truth[i], vp[i], post, '|', post.index(int(ground_truth[i]))
         
@@ -624,20 +680,22 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
     print "viterbi: ", state_correct_vp
     print "mposter: ", state_correct_pp
     
-    #precision and recall       
-    called_v, real = computeEval(ground_truth, vp)
-    correct_v, claimed_v = computeEval(vp, ground_truth)
-    print "viterbi recall   : ", called_v, '/',  real, " => ", 
-    print "%0.3f" % (called_v*100./real), "%"
-    print "viterbi precision: ", correct_v , '/',  claimed_v, " => ", 
-    print "%0.3f" % (correct_v*100./claimed_v), "%"
-    
-    called_p, real = computeEval(ground_truth, pp)
-    correct_p, claimed_p = computeEval(pp, ground_truth)
-    print "mposter recall   : ", called_p, '/',  real, " => ",
-    print "%0.3f" % (called_p*100./real), "%"
-    print "mposter precision: ", correct_p , '/',  claimed_p, " => ", 
-    print "%0.3f" % (correct_p*100./claimed_p), "%"
+    for i in [0, 2, 4, 8, 16]:
+        #precision and recall
+        print "sensitivity: 1 /", i 
+        called_v, real = computeEval(ground_truth, vp, i)
+        correct_v, claimed_v = computeEval(vp, ground_truth, i)
+        print "viterbi recall   : ", called_v, '/',  real, " => ", 
+        print "%0.3f" % (called_v*100./real), "%"
+        print "viterbi precision: ", correct_v , '/',  claimed_v, " => ", 
+        print "%0.3f" % (correct_v*100./claimed_v), "%"
+        
+        called_p, real = computeEval(ground_truth, pp, i)
+        correct_p, claimed_p = computeEval(pp, ground_truth, i)
+        print "mposter recall   : ", called_p, '/',  real, " => ",
+        print "%0.3f" % (called_p*100./real), "%"
+        print "mposter precision: ", correct_p , '/',  claimed_p, " => ", 
+        print "%0.3f" % (correct_p*100./claimed_p), "%"
     
 def main():
     mixture = 0.1 #proportion of fetal genome in plasma
@@ -660,41 +718,41 @@ def main():
     ground_truth_t = []
     fetal_in = open("fetal_allelesT.txt", 'r')
     for line in fetal_in.readlines():
-        line = line.strip("\n")
+        line = line.rstrip("\n")
         ground_truth_t.append(int(line.split(" ")[-1]))
     fetal_in.close()
     
     ground_truth = []
     fetal_in = open("fetal_alleles.txt", 'r')
     for line in fetal_in.readlines():
-        line = line.strip("\n")
+        line = line.rstrip("\n")
         ground_truth.append(int(line.split(" ")[-1]))
     fetal_in.close()
     
-    print "---------- BEFORE TRAINING --------------"
-    print ">>>> ON TRAINING DATA:"
+    print "------------------ BEFORE TRAINING -------------------"
+    print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TRAINING DATA: >>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples_t, M_t, P_t, mix_t, ground_truth_t)
-    print ">>>> ON TESTING DATA:"
+    print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TESTING DATA: >>>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples, M, P, mix, ground_truth)
-    print "========================================="
-
+    print "=================================================================================="
+    
     def_trans = copy.deepcopy(fcnv.transitions)
-    print "---------- AFTER up to 5 rounds of B-W --------------"
+    print "----------------- AFTER up to 5 rounds of B-W -------------------"
     fcnv.baumWelshForTransitions(samples_t, M_t, P_t, mix_t)
-    print ">>>> ON TRAINING DATA:"
+    print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TRAINING DATA: >>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples_t, M_t, P_t, mix_t, ground_truth_t)
-    print ">>>> ON TESTING DATA:"
+    print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TESTING DATA: >>>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples, M, P, mix, ground_truth)
-    print "========================================="
+    print "=================================================================================="
     
     fcnv.transitions = copy.deepcopy(def_trans)
-    print "----- AFTER up to 5 rounds of Viterbi Training ------"
+    print "----------- AFTER up to 5 rounds of Viterbi Training ------------"
     fcnv.viterbiTrainingForTransitions(samples_t, M_t, P_t, mix_t)
-    print ">>>> ON TRAINING DATA:"
+    print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TRAINING DATA: >>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples_t, M_t, P_t, mix_t, ground_truth_t)
-    print ">>>> ON TESTING DATA:"
+    print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TESTING DATA: >>>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples, M, P, mix, ground_truth)
-    print "========================================="
+    print "=================================================================================="
     
     
     #fcnv.baumWelshForTransitions(samples, M, P, mixture)
