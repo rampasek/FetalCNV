@@ -3,6 +3,11 @@ import math
 import numpypy as np
 import itertools
 import copy
+import sys
+
+#parse command line arguments => suffix of the output files
+suffix = ""
+if len(sys.argv) == 2: suffix = sys.argv[1]
 
 nucleotides = ['A', 'C', 'G', 'T']
 
@@ -64,8 +69,8 @@ class FCNV(object):
         self.num_states = len(self.inheritance_patterns) 
         
         # trasition probabilities (uniform for all positions)
-        p_stay = 0.9
-        p_stay3 = 0.9
+        p_stay = 0.999
+        p_stay3 = 0.999
         #self.transitions = [[math.log((1.-p_stay)/(self.num_states-0.)) for x in range(self.num_states)] for y in range(self.num_states)]
         self.transitions = [[float("-inf") for x in range(self.num_states)] for y in range(self.num_states)]
         for i in range(self.num_states):
@@ -629,6 +634,7 @@ def computeEval(reference, prediction, sensitivity):
                 #print i, prediction[i],  ctype, type(prediction[i]), type(ctype)
                 max_ok_length = max(max_ok_length, tmp_length)
                 tmp_length = 0
+        max_ok_length = max(max_ok_length, tmp_length)
         
         num_real += 1
         if sensitivity == 0:
@@ -670,41 +676,58 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         posterior_dist[x] += 1
         #print ground_truth[i], vp[i], post, '|', post.index(int(ground_truth[i]))
         
-    print 'Viterbi  : ',(viterbi_correct*100.)/len(vp), '% OK'
-    print 'Posterior: ',(max_posterior_correct*100.)/len(vp), '% OK'
     posterior_dist = np.array(posterior_dist)
-    posterior_dist = (posterior_dist*100.)/len(vp)
-    print posterior_dist
-    
+    posterior_dist = (posterior_dist*100.)/len(vp)    
+    print posterior_dist   
     print "stats  : ", state_stats
     print "viterbi: ", state_correct_vp
     print "mposter: ", state_correct_pp
     
-    for i in [0, 2, 4, 8, 16]:
+    print 'Viterbi  : ',(viterbi_correct*100.)/len(vp), '% OK'
+    print 'Posterior: ',(max_posterior_correct*100.)/len(vp), '% OK'
+
+    
+    for i in [2]: #, 2, 4, 8, 16]:
         #precision and recall
         print "sensitivity: 1 /", i 
+        
         called_v, real = computeEval(ground_truth, vp, i)
-        correct_v, claimed_v = computeEval(vp, ground_truth, i)
         print "viterbi recall   : ", called_v, '/',  real, " => ", 
         print "%0.3f" % (called_v*100./real), "%"
+        
+        called_p, real = computeEval(ground_truth, pp, i)       
+        print "mposter recall   : ", called_p, '/',  real, " => ",
+        print "%0.3f" % (called_p*100./real), "%"
+                
+        correct_v, claimed_v = computeEval(vp, ground_truth, i)
         print "viterbi precision: ", correct_v , '/',  claimed_v, " => ", 
         print "%0.3f" % (correct_v*100./claimed_v), "%"
         
-        called_p, real = computeEval(ground_truth, pp, i)
         correct_p, claimed_p = computeEval(pp, ground_truth, i)
-        print "mposter recall   : ", called_p, '/',  real, " => ",
-        print "%0.3f" % (called_p*100./real), "%"
         print "mposter precision: ", correct_p , '/',  claimed_p, " => ", 
         print "%0.3f" % (correct_p*100./claimed_p), "%"
-    
+        
+        #format for LaTeX tabular
+        #print "%0.3f" % ((viterbi_correct*100.)/len(vp)), "\%"
+        #print "%0.3f" % ((max_posterior_correct*100.)/len(vp)), "\%"
+        #print "%0.3f" % (called_v*100./real), "\%"
+        #print "%0.3f" % (called_p*100./real), "\%"
+        #print "%0.3f" % (correct_v*100./claimed_v), "\%"
+        #print "%0.3f" % (correct_p*100./claimed_p), "\%"
 def main():
     mixture = 0.1 #proportion of fetal genome in plasma
     #file_fetal_out = "fetal_prediction.txt"    
     #ffetal = open(file_fetal_out, 'w')
 
     #read the input
-    samples_t, M_t, P_t = readInput("plasma_samplesT.txt", "maternal_allelesT.txt", "paternal_allelesT.txt")
-    samples, M, P = readInput("plasma_samples.txt", "maternal_alleles.txt", "paternal_alleles.txt")
+    samples_t, M_t, P_t = readInput( \
+        "plasma_samplesT" + suffix + ".txt", \
+        "maternal_allelesT" + suffix + ".txt", \
+        "paternal_allelesT" + suffix + ".txt")
+    samples, M, P = readInput( \
+        "plasma_samples" + suffix + ".txt", \
+        "maternal_alleles" + suffix + ".txt", \
+        "paternal_alleles" + suffix + ".txt")
 
     fcnv = FCNV()
     
@@ -716,14 +739,14 @@ def main():
     #return
     
     ground_truth_t = []
-    fetal_in = open("fetal_allelesT.txt", 'r')
+    fetal_in = open("fetal_allelesT" + suffix + ".txt", 'r')
     for line in fetal_in.readlines():
         line = line.rstrip("\n")
         ground_truth_t.append(int(line.split(" ")[-1]))
     fetal_in.close()
     
     ground_truth = []
-    fetal_in = open("fetal_alleles.txt", 'r')
+    fetal_in = open("fetal_alleles" + suffix + ".txt", 'r')
     for line in fetal_in.readlines():
         line = line.rstrip("\n")
         ground_truth.append(int(line.split(" ")[-1]))
