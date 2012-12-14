@@ -1,24 +1,30 @@
 import random
 import math
+import sys
+
+#parse command line arguments => suffix of the output files
+suffix = ""
+if len(sys.argv) == 2: suffix = sys.argv[1]
+    
 
 nucleotides = ['A', 'C', 'G', 'T']
 
-length = 10**5 #how many "SNP" positions to generate
+length = 3*10**5 #how many "SNP" positions to generate
 mixture = 0.1 #proportion of fetal genome in plasma
-mean_coverage = 75 #average coverage of the plasma \mu
+mean_coverage = 80 #average coverage of the plasma \mu
 dev_coverage = 5   #deviation \sigma
 
 #how many SNP an CNV event will span - uniform distrib
 #cnv_length_min = 500
 #cnv_length_max = 1500
-cnv_length_mu = 300
+cnv_length_mu = 500
 cnv_length_dev = 100
 
 
-file_paternal = "paternal_alleles.txt"
-file_maternal = "maternal_alleles.txt"
-file_fetal = "fetal_alleles.txt"
-file_samples = "plasma_samples.txt"
+file_paternal = "paternal_alleles" + suffix + ".txt"
+file_maternal = "maternal_alleles" + suffix + ".txt"
+file_fetal = "fetal_alleles" + suffix + ".txt"
+file_samples = "plasma_samples" + suffix + ".txt"
 
 fpaternal = open(file_paternal, 'w')
 fmaternal = open(file_maternal, 'w')
@@ -31,16 +37,17 @@ P = []
 for i in range(length):
     mnew = []
     pnew = []
-    while mnew == pnew:
+    while True:
         alleles_set = []
         alleles_set.append(random.choice(nucleotides))
         alleles_set.append(random.choice(nucleotides))
-        mnew = []
-        pnew = []
-        mnew.append(random.choice(alleles_set))
-        mnew.append(random.choice(alleles_set)) 
-        pnew.append(random.choice(alleles_set))
-        pnew.append(random.choice(alleles_set))
+        if alleles_set[0] != alleles_set[1]: break
+    mnew = []
+    pnew = []
+    mnew.append(random.choice(alleles_set))
+    mnew.append(random.choice(alleles_set)) 
+    pnew.append(random.choice(alleles_set))
+    pnew.append(random.choice(alleles_set))
     
     #print mnew, pnew, "=========="
     M.append(mnew)
@@ -61,7 +68,7 @@ X = 3
 while i < length:
     #pick a type of the event (inheritence pattern)
     if not X == 3:
-        X = random.choice([X, 3, 3])
+        X = random.choice([3])
     else:
         X = random.choice([0,1,2,3,4,5,6]) 
         
