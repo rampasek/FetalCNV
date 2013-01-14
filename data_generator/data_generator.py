@@ -9,15 +9,15 @@ if len(sys.argv) == 2: suffix = sys.argv[1]
 
 nucleotides = ['A', 'C', 'G', 'T']
 
-length = 3*10**5 #how many "SNP" positions to generate
-mixture = 0.1 #proportion of fetal genome in plasma
-mean_coverage = 80 #average coverage of the plasma \mu
+length = 10**5 #how many "SNP" positions to generate
+mixture = 0.4 #proportion of fetal genome in plasma
+mean_coverage = 150 #average coverage of the plasma \mu
 dev_coverage = 5   #deviation \sigma
 
 #how many SNP an CNV event will span - uniform distrib
 #cnv_length_min = 500
 #cnv_length_max = 1500
-cnv_length_mu = 500
+cnv_length_mu = 1000
 cnv_length_dev = 100
 
 
@@ -113,11 +113,13 @@ while i < length:
 for i in range(length):
     N = int(round(random.gauss(mean_coverage, dev_coverage)))
     samples = [0, 0, 0, 0]
-    num_samples = N*mixture/2. * len(F[i]) + N*(1-mixture)/2. * len(M[i])
+    adjusted_fetal_admix = mixture/2. * len(F[i])
+    adjusted_maternal_admix = (1.-mixture)/2. * len(M[i])
+    num_samples = N*adjusted_fetal_admix + N*adjusted_maternal_admix
     for j in range(int(round(num_samples))):
         if random.random() <= 0.01:
             samples[random.choice(range(4))] += 1
-        elif random.random() > (mixture * len(F[i])/2.) / (1.-mixture + mixture * len(F[i])/2.): #mixture/2. * len(F[i]): #from maternal alleles
+        elif random.random() > adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix): #mixture/2. * len(F[i]): #from maternal alleles
             samples[nucleotides.index(random.choice(M[i]))] += 1
         else: #from fetal alleles
             samples[nucleotides.index(random.choice(F[i]))] += 1

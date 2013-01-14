@@ -5,10 +5,6 @@ import itertools
 import copy
 import sys
 
-#parse command line arguments => suffix of the output files
-suffix = ""
-if len(sys.argv) == 2: suffix = sys.argv[1]
-
 nucleotides = ['A', 'C', 'G', 'T']
 
 def readInput(file_samples_in, file_maternal_in, file_paternal_in):
@@ -86,10 +82,10 @@ class FCNV(object):
         
         self.main_state = 3
         #print the table    
-        for k in xrange(self.num_states):
-            for l in xrange(self.num_states):
-                print "%0.4f" % (math.exp(self.transitions[k][l])), 
-            print " "
+        #for k in xrange(self.num_states):
+        #    for l in xrange(self.num_states):
+        #        print "%0.4f" % (math.exp(self.transitions[k][l])), 
+        #    print " "
             
         
     def logSum(self, x, y):
@@ -120,7 +116,6 @@ class FCNV(object):
         b = min(x, y)
         #dif = b-a
         return a + math.log(1 + math.exp(b-a) )
-        #return a + precise(dif)
     
     def logMultinomial(self, xs, ps):
         '''
@@ -129,7 +124,7 @@ class FCNV(object):
         returns log(Multi(xs | sum(xs), ps))
         >>> f = FCNV()
         >>> f.logMultinomial([1,2,3], [.2,.3,.5])
-        -2.0024805005437063
+        -2.0024805005437072
         '''
         
         def gammaln(n):
@@ -154,7 +149,7 @@ class FCNV(object):
         
         def logFactorial(x):
             '''
-            (NumPy array) -> (NumPy array)
+            (float) -> (float)
             returns ln(x!)
             '''
             if isinstance(x, list):
@@ -176,20 +171,21 @@ class FCNV(object):
 
     def allelesDistribution(self, maternal, fetal, mix):
         '''
-        returns list of nucleotides probabilities at a locus with given
+        returns list of nucleotides probabilities at a position with given
         maternal and fetal alleles, assuming the given mixture of fetal alleles
         
         >>> f = FCNV()
         >>> f.allelesDistribution(['A', 'A'], ['T', 'A'], 0.1)
-        [0.92307692307692313, 0.0096153846153846159, 0.0096153846153846159, 0.057692307692307696]
+        [0.9230769230769231, 0.009615384615384616, 0.009615384615384616, 0.057692307692307696]
         '''
-        cmix = (mix * len(fetal)/2.) / (1.-mix + mix * len(fetal)/2.)
+        adjusted_fetal_admix = mix/2. * len(fetal)
+        adjusted_maternal_admix = (1.-mix)/2. * len(maternal)
+        cmix = adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix)
         dist = []
         for nuc in nucleotides:
-            temp = maternal.count(nuc) / float(len(maternal)) * (1.-cmix)
-            temp += fetal.count(nuc) / float(len(fetal)) * (cmix)
-            temp = min(temp, 1.)
-            dist.append(temp)
+            p = maternal.count(nuc) / float(len(maternal)) * (1.-cmix)
+            p += fetal.count(nuc) / float(len(fetal)) * (cmix)
+            dist.append(p)
         
         summ = 0.
         for x in dist:
@@ -202,11 +198,11 @@ class FCNV(object):
         '''
         >>> f = FCNV()
         >>> f.logLikelihoodGivenPattern([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [1,1])
-        -3.6974187244239021
-        >>> f.logLikelihoodGivenPattern([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [2,1])
-        -3.4838423152150568
+        -3.6974187244239025
+        >>> f.logLikelihoodGivenPattern([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [2,1]) #-3.4838423152150568
+        -3.6507523341244412
         >>> f.logLikelihoodGivenPattern([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [0,2])
-        -3.1614953504205019
+        -3.1614953504205028
         '''
         
         code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(paternal_alleles), mix, tuple(pattern))
@@ -217,10 +213,13 @@ class FCNV(object):
         set_size = 0
         for set_m in itertools.combinations(maternal_alleles, pattern[0]):
             for set_p in itertools.combinations(paternal_alleles, pattern[1]):
-                if not fetal_set.get((set_m + set_p)):
-                    fetal_set[(set_m + set_p)] = 1
+                #joined_tuple = tuple(list(set_m) + list(set_p)) #tuple(sorted(set_m + set_p))
+                joined_tuple = tuple(sorted(set_m + set_p))
+                #print joined_tuple
+                if not fetal_set.get(joined_tuple):
+                    fetal_set[joined_tuple] = 1
                 else:
-                    fetal_set[(set_m + set_p)] +=1
+                    fetal_set[joined_tuple] += 1
                 set_size += 1
                 #print (set_m + set_p), fetal_set[(set_m + set_p)]
                 
@@ -649,6 +648,7 @@ def computeEval(reference, prediction, sensitivity):
 def test(fcnv, samples, M, P, mixture, ground_truth):
     vp, vt = fcnv.viterbiPath(samples, M, P, mixture)
     posterior = fcnv.posteriorDecoding(samples, M, P, mixture)
+    posterior = [list(x) for x in posterior]
         
     print fcnv.inheritance_patterns
     
@@ -675,6 +675,22 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         x = post.index(ground_truth[i])
         posterior_dist[x] += 1
         #print ground_truth[i], vp[i], post, '|', post.index(int(ground_truth[i]))
+    
+    '''
+    for i in xrange(len(vp)):
+        print ground_truth[i], vp[i],  
+        emis = []
+        for j in range(fcnv.num_states):
+            emis_p = fcnv.logLikelihoodGivenPattern(samples[i], M[i], P[i], mixture, fcnv.inheritance_patterns[j])
+            emis.append((emis_p, j))
+        for e in reversed(sorted(emis)):
+            print str(e[1])+":%0.1f" % e[0] ,
+        print " "
+        print "   ",
+        for x in posterior[i]:
+            print str(x[1])+":%0.1f" % x[0] ,
+        print " "
+    '''
         
     posterior_dist = np.array(posterior_dist)
     posterior_dist = (posterior_dist*100.)/len(vp)    
@@ -718,7 +734,11 @@ def main():
     mixture = 0.1 #proportion of fetal genome in plasma
     #file_fetal_out = "fetal_prediction.txt"    
     #ffetal = open(file_fetal_out, 'w')
-
+    
+    #parse command line arguments => suffix of the output files
+    suffix = ""
+    if len(sys.argv) == 2: suffix = sys.argv[1]
+    
     #read the input
     samples_t, M_t, P_t = readInput( \
         "plasma_samplesT" + suffix + ".txt", \
@@ -755,9 +775,10 @@ def main():
     print "------------------ BEFORE TRAINING -------------------"
     print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TRAINING DATA: >>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples_t, M_t, P_t, mix_t, ground_truth_t)
-    print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TESTING DATA: >>>>>>>>>>>>>>>>>>>>>>"
+    '''print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TESTING DATA: >>>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples, M, P, mix, ground_truth)
     print "=================================================================================="
+    
     
     def_trans = copy.deepcopy(fcnv.transitions)
     print "----------------- AFTER up to 5 rounds of B-W -------------------"
@@ -776,7 +797,7 @@ def main():
     print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TESTING DATA: >>>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples, M, P, mix, ground_truth)
     print "=================================================================================="
-    
+    '''
     
     #fcnv.baumWelshForTransitions(samples, M, P, mixture)
     #fcnv.viterbiTrainingForTransitions(samples, M, P, mixture)
