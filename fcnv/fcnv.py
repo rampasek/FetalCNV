@@ -206,13 +206,14 @@ class FCNV(object):
         '''
         
         code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(paternal_alleles), mix, tuple(pattern))
+        #print code
         val = self.logLikelihoodCache.get(code)
         if val: return val
         
         fetal_set = dict()
         set_size = 0
-        for set_m in itertools.combinations(maternal_alleles, pattern[0]):
-            for set_p in itertools.combinations(paternal_alleles, pattern[1]):
+        for set_m in itertools.combinations_with_replacement(maternal_alleles, pattern[0]):
+            for set_p in itertools.combinations_with_replacement(paternal_alleles, pattern[1]):
                 #joined_tuple = tuple(list(set_m) + list(set_p)) #tuple(sorted(set_m + set_p))
                 joined_tuple = tuple(sorted(set_m + set_p))
                 #print joined_tuple
@@ -230,8 +231,8 @@ class FCNV(object):
                 ps = self.allelesDistribution(maternal_alleles, fetal_alleles, mix)
                 tmp = math.log(fetal_set[fetal_alleles]) - log_set_size + self.logMultinomial(nuc_counts, ps)
                 result = self.logSum(result, tmp)
-                #print "%0.5f" %multinomial(nuc_counts, ps), nuc_counts, \
-                #maternal_alleles, fetal_alleles,  ["%0.4f" % i for i in ps]
+                #print "%0.5f" %self.logMultinomial(nuc_counts, ps), nuc_counts, \
+                #maternal_alleles, fetal_alleles,  ["%0.4f" % i for i in ps], fetal_set[fetal_alleles], set_size
         
         self.logLikelihoodCache[code] = result
         return result
@@ -243,7 +244,8 @@ class FCNV(object):
         mix = 0.
         num = 0
         for i in xrange(len(samples)):
-            if M[i][0] == M[i][1] and not P[i][0] == P[i][1]:
+            if M[i][0] == M[i][1] and not P[i][0] == P[i][1] and \
+              (P[i][0] == M[i][0] or P[i][1] == M[i][0]):
                 #print M[i], P[i], samples[i]            
                 type1 = M[i][0]
                 type2 = P[i][0]
@@ -608,7 +610,24 @@ class FCNV(object):
         for k in xrange(self.num_states):
             for l in xrange(self.num_states):
                 print "%0.4f" % (math.exp(self.transitions[k][l])), 
-            print " "  
+            print " "
+            
+    def byLikelihood(self, samples, M, P, mixture):
+        '''
+        posterior probability decoding, for each position returns a list of states
+        ordered by their posterior porobability
+        '''
+        n = len(samples)
+        
+        table = []
+        for pos in xrange(1, n+1):
+            tmp = []
+            for s in range(self.num_states):
+                ll = self.logLikelihoodGivenPattern(samples[pos-1], M[pos-1], \
+                    P[pos-1], mixture, self.inheritance_patterns[s])
+                tmp.append((ll, s))
+            table.append(reversed(sorted(tmp)))
+        return table
 
 def computeEval(reference, prediction, sensitivity):
     num_real = 0
@@ -649,31 +668,56 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
     vp, vt = fcnv.viterbiPath(samples, M, P, mixture)
     posterior = fcnv.posteriorDecoding(samples, M, P, mixture)
     posterior = [list(x) for x in posterior]
-        
+
+    byLL = fcnv.byLikelihood(samples, M, P, mixture)    
+
     print fcnv.inheritance_patterns
     
     viterbi_correct = 0
     max_posterior_correct = 0
+    ll_correct = 0
     posterior_dist = [0,0,0,0,0,0,0]
+    ll_dist = [0,0,0,0,0,0,0]
     state_stats = [0,0,0,0,0,0,0]
     state_correct_vp = [0,0,0,0,0,0,0]
     state_correct_pp = [0,0,0,0,0,0,0]
+    state_correct_ll = [0,0,0,0,0,0,0]
     pp = []
+    tableLH = []
+    avg_distance = 0.
+    distance_set = {}
     for i in xrange(len(vp)):
         state_stats[ground_truth[i]] += 1
         post = []
         for x in posterior[i]:   
             post.append(x[1])
         pp.append(post[0])
+        
+        ll = []
+        ll2 = []
+        for x in byLL[i]:   
+            ll.append(x[1])
+            ll2.append(x[0])
+        tableLH.append(ll2)
             
         #print ground_truth[i], vp[i], pp[i], '|', post
         viterbi_correct += int(ground_truth[i] == vp[i])
         state_correct_vp[ground_truth[i]] += int(ground_truth[i] == vp[i])
         max_posterior_correct += int(ground_truth[i] == post[0])
         state_correct_pp[ground_truth[i]] += int(ground_truth[i] == post[0])
+        ll_correct += int(ground_truth[i] == ll[0])
+        state_correct_ll[ground_truth[i]] += int(ground_truth[i] == ll[0])
         
         x = post.index(ground_truth[i])
         posterior_dist[x] += 1
+        x = ll.index(ground_truth[i])
+        ll_dist[x] += 1
+        avg_distance += ll2[x]-ll2[0]
+        int_distance = int(round(abs(ll2[x]-ll2[0])))
+        if int_distance not in distance_set:
+            distance_set[int_distance] = 1
+        else:
+            distance_set[int_distance] += 1
         #print ground_truth[i], vp[i], post, '|', post.index(int(ground_truth[i]))
     
     '''
@@ -683,6 +727,7 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         for j in range(fcnv.num_states):
             emis_p = fcnv.logLikelihoodGivenPattern(samples[i], M[i], P[i], mixture, fcnv.inheritance_patterns[j])
             emis.append((emis_p, j))
+        print samples[i],
         for e in reversed(sorted(emis)):
             print str(e[1])+":%0.1f" % e[0] ,
         print " "
@@ -690,18 +735,26 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         for x in posterior[i]:
             print str(x[1])+":%0.1f" % x[0] ,
         print " "
-    '''
+        #print tableLH[i]
+    '''    
         
     posterior_dist = np.array(posterior_dist)
     posterior_dist = (posterior_dist*100.)/len(vp)    
-    print posterior_dist   
+    print posterior_dist  
+    ll_dist = np.array(ll_dist)
+    ll_dist = (ll_dist*100.)/len(vp)    
+    print ll_dist
     print "stats  : ", state_stats
     print "viterbi: ", state_correct_vp
     print "mposter: ", state_correct_pp
+    print "byLHood: ", state_correct_ll
+    print "avgDist: ", avg_distance / len(vp) 
+    print "dist_set:", distance_set
+    
     
     print 'Viterbi  : ',(viterbi_correct*100.)/len(vp), '% OK'
     print 'Posterior: ',(max_posterior_correct*100.)/len(vp), '% OK'
-
+    print 'LikeliH. : ',(ll_correct*100.)/len(vp), '% OK'
     
     for i in [2]: #, 2, 4, 8, 16]:
         #precision and recall
@@ -754,7 +807,7 @@ def main():
     mix_t = fcnv.estimateMixture(samples_t, M_t, P_t)
     mix = fcnv.estimateMixture(samples, M, P)
     
-    #mix = mix_t = 0.1 #proportion of fetal genome in plasma
+    #mix = mix_t = 0.15 #proportion of fetal genome in plasma
     print "Est. Mixture: ", mix_t, mix
     #return
     
@@ -775,7 +828,7 @@ def main():
     print "------------------ BEFORE TRAINING -------------------"
     print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TRAINING DATA: >>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples_t, M_t, P_t, mix_t, ground_truth_t)
-    '''print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TESTING DATA: >>>>>>>>>>>>>>>>>>>>>>"
+    print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TESTING DATA: >>>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples, M, P, mix, ground_truth)
     print "=================================================================================="
     
@@ -797,7 +850,7 @@ def main():
     print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TESTING DATA: >>>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples, M, P, mix, ground_truth)
     print "=================================================================================="
-    '''
+    
     
     #fcnv.baumWelshForTransitions(samples, M, P, mixture)
     #fcnv.viterbiTrainingForTransitions(samples, M, P, mixture)
