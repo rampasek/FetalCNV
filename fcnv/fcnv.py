@@ -632,6 +632,8 @@ class FCNV(object):
 def computeEval(reference, prediction, sensitivity):
     num_real = 0
     num_called = 0
+    ok_called = []
+    not_called = []
     
     ind = 0
     while ind < len(reference):
@@ -645,7 +647,9 @@ def computeEval(reference, prediction, sensitivity):
         
         max_ok_length = 0
         tmp_length = 0
+        stats = [0, 0, 0, 0, 0, 0, 0] 
         for i in range(begin_pos, end_pos):
+            stats[prediction[i]] += 1
             if prediction[i] == ctype:
                 tmp_length += 1
             else:
@@ -655,14 +659,53 @@ def computeEval(reference, prediction, sensitivity):
         max_ok_length = max(max_ok_length, tmp_length)
         
         num_real += 1
-        if sensitivity == 0:
-            if max_ok_length >= 1:
-                num_called += 1   
+        if max_ok_length >= length/float(sensitivity):
+            num_called += 1
+            ok_called.append((length, ctype))
         else:
-            if max_ok_length >= length/float(sensitivity):
-                num_called += 1
+            max_predic = -1
+            max_type = -1
+            for i in range(len(stats)):
+                if stats[i] > max_predic:
+                    max_predic = stats[i]
+                    max_type = i
+            not_called.append((length, ctype, max_type))
         #else: print  max_ok_length, length, reference[ind], prediction[ind], ctype
-    return num_called, num_real
+    return num_called, num_real, ok_called, not_called
+
+def categorize(data, by_length, by_type):
+    lengths = [100, 500, 1000, 5000, 10000, 20000, 50000, 100000]
+    num_patterns = 7
+    for item in data:
+        length = item[0]
+        ptype = item[1]
+        gen_len = sorted([(abs(length-l), l) for l in lengths])[0][1]
+        #print length, gen_len
+        if not gen_len in by_length: by_length[gen_len] = 0
+        by_length[gen_len] += 1
+        if not ptype in by_type: by_type[ptype] = 0
+        by_type[ptype] += 1
+
+def computeStats(ok, wrong, pref):
+    lengths = [100, 500, 1000, 5000, 10000, 20000, 50000, 100000]
+    ok_by_length = dict([(i,0) for i in lengths])
+    ok_by_type = dict([(i,0) for i in range(7)])
+    wr_by_length = dict([(i,0) for i in lengths])
+    wr_by_type = dict([(i,0) for i in range(7)])
+    categorize(ok, ok_by_length, ok_by_type)
+    categorize(wrong, wr_by_length, wr_by_type)
+    for l in lengths:
+        o = ok_by_length[l]
+        w = wr_by_length[l]
+        ratio = 100
+        if o+w > 0: ratio = o/float(o+w) *100
+        print pref, l, ": ", o, w, ratio, '%'
+    for t in range(7):
+        o = ok_by_type[t]
+        w = wr_by_type[t]
+        ratio = 100
+        if o+w > 0: ratio = o/float(o+w) *100
+        print pref, t, ": ", o, w, ratio, '%'
 
 def test(fcnv, samples, M, P, mixture, ground_truth):
     vp, vt = fcnv.viterbiPath(samples, M, P, mixture)
@@ -758,31 +801,47 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
     
     for i in [2]: #, 2, 4, 8, 16]:
         #precision and recall
-        print "sensitivity: 1 /", i 
+        print "sensitivity: 1 /", i
         
-        called_v, real = computeEval(ground_truth, vp, i)
+        #recall Viterbi
+        called_v, real, ok_called, not_called = computeEval(ground_truth, vp, i)
         print "viterbi recall   : ", called_v, '/',  real, " => ", 
         print "%0.3f" % (called_v*100./real), "%"
+        print ok_called
+        print not_called
+        computeStats(ok_called, not_called, "VR")
         
-        called_p, real = computeEval(ground_truth, pp, i)       
+        #recall max posterior
+        called_p, real, ok_called, not_called = computeEval(ground_truth, pp, i)       
         print "mposter recall   : ", called_p, '/',  real, " => ",
         print "%0.3f" % (called_p*100./real), "%"
-                
-        correct_v, claimed_v = computeEval(vp, ground_truth, i)
+        print ok_called
+        print not_called
+        computeStats(ok_called, not_called, "PR")
+        
+        #prediction Viterbi 
+        correct_v, claimed_v, ok_prediction, wr_prediction = computeEval(vp, ground_truth, i)
         print "viterbi precision: ", correct_v , '/',  claimed_v, " => ", 
         print "%0.3f" % (correct_v*100./claimed_v), "%"
+        print ok_prediction
+        print wr_prediction
+        computeStats(ok_prediction, wr_prediction, "VP")
         
-        correct_p, claimed_p = computeEval(pp, ground_truth, i)
+        #prediction max posterior
+        correct_p, claimed_p, ok_prediction, wr_prediction = computeEval(pp, ground_truth, i)
         print "mposter precision: ", correct_p , '/',  claimed_p, " => ", 
         print "%0.3f" % (correct_p*100./claimed_p), "%"
+        print ok_prediction
+        print wr_prediction
+        computeStats(ok_prediction, wr_prediction, "PP")
         
         #format for LaTeX tabular
         #print "%0.3f" % ((viterbi_correct*100.)/len(vp)), "\%"
         #print "%0.3f" % ((max_posterior_correct*100.)/len(vp)), "\%"
-        #print "%0.3f" % (called_v*100./real), "\%"
-        #print "%0.3f" % (called_p*100./real), "\%"
-        #print "%0.3f" % (correct_v*100./claimed_v), "\%"
-        #print "%0.3f" % (correct_p*100./claimed_p), "\%"
+        print "%0.3f" % (called_v*100./real), "\%"
+        print "%0.3f" % (called_p*100./real), "\%"
+        print "%0.3f" % (correct_v*100./claimed_v), "\%"
+        print "%0.3f" % (correct_p*100./claimed_p), "\%"
 def main():
     mixture = 0.1 #proportion of fetal genome in plasma
     #file_fetal_out = "fetal_prediction.txt"    
@@ -793,10 +852,12 @@ def main():
     if len(sys.argv) == 2: suffix = sys.argv[1]
     
     #read the input
+    '''
     samples_t, M_t, P_t = readInput( \
         "plasma_samplesT" + suffix + ".txt", \
         "maternal_allelesT" + suffix + ".txt", \
         "paternal_allelesT" + suffix + ".txt")
+    '''
     samples, M, P = readInput( \
         "plasma_samples" + suffix + ".txt", \
         "maternal_alleles" + suffix + ".txt", \
@@ -804,19 +865,21 @@ def main():
 
     fcnv = FCNV()
     
-    mix_t = fcnv.estimateMixture(samples_t, M_t, P_t)
+    #mix_t = fcnv.estimateMixture(samples_t, M_t, P_t)
     mix = fcnv.estimateMixture(samples, M, P)
     
     #mix = mix_t = 0.15 #proportion of fetal genome in plasma
-    print "Est. Mixture: ", mix_t, mix
-    #return
+    #print "Est. Mixture: ", mix_t, mix
+    print "Est. Mixture: ", mix
     
+    '''
     ground_truth_t = []
     fetal_in = open("fetal_allelesT" + suffix + ".txt", 'r')
     for line in fetal_in.readlines():
         line = line.rstrip("\n")
         ground_truth_t.append(int(line.split(" ")[-1]))
     fetal_in.close()
+    '''
     
     ground_truth = []
     fetal_in = open("fetal_alleles" + suffix + ".txt", 'r')
@@ -825,6 +888,10 @@ def main():
         ground_truth.append(int(line.split(" ")[-1]))
     fetal_in.close()
     
+    print "------------------ w/o TRAINING -------------------"
+    test(fcnv, samples, M, P, mix, ground_truth)
+    
+    '''
     print "------------------ BEFORE TRAINING -------------------"
     print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TRAINING DATA: >>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples_t, M_t, P_t, mix_t, ground_truth_t)
@@ -850,7 +917,7 @@ def main():
     print ">>>>>>>>>>>>>>>>>>>>>>>>> ON TESTING DATA: >>>>>>>>>>>>>>>>>>>>>>"
     test(fcnv, samples, M, P, mix, ground_truth)
     print "=================================================================================="
-    
+    '''
     
     #fcnv.baumWelshForTransitions(samples, M, P, mixture)
     #fcnv.viterbiTrainingForTransitions(samples, M, P, mixture)
