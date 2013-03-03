@@ -32,6 +32,9 @@ class FCNV(object):
         # number of possible states per one SNP position
         self.num_states = len(self.inheritance_patterns) 
         
+        # fdsalfjdasl
+        self.history_depth = 3
+        
         # trasition probabilities (uniform for all positions)
         p_stay = 0.999
         p_stay3 = 0.9999
@@ -169,7 +172,7 @@ class FCNV(object):
         #self.distributionCache[code] = dist
         return dist
             
-    def logLikelihoodGivenPattern(self, nuc_counts, maternal_alleles, paternal_alleles, mix, pattern):
+    def logLikelihoodGivenPhasedPattern(self, nuc_counts, maternal_alleles, fetal_alleles, mix):
         '''
         >>> f = FCNV()
         >>> f.logLikelihoodGivenPattern([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [1,1])
@@ -180,38 +183,62 @@ class FCNV(object):
         -3.1614953504205028
         '''
         
-        code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(paternal_alleles), mix, tuple(pattern))
+        code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(fetal_alleles), mix)
         #print code
         val = self.logLikelihoodCache.get(code)
         if val: return val
         
-        fetal_set = dict()
-        set_size = 0
-        for set_m in itertools.combinations_with_replacement(maternal_alleles, pattern[0]):
-            for set_p in itertools.combinations_with_replacement(paternal_alleles, pattern[1]):
-                #joined_tuple = tuple(list(set_m) + list(set_p)) #tuple(sorted(set_m + set_p))
-                joined_tuple = tuple(sorted(set_m + set_p))
-                #print joined_tuple
-                if not fetal_set.get(joined_tuple):
-                    fetal_set[joined_tuple] = 1
-                else:
-                    fetal_set[joined_tuple] += 1
-                set_size += 1
-                #print (set_m + set_p), fetal_set[(set_m + set_p)]
-                
-        result = "nothing"
-        log_set_size = math.log(float(set_size))
-        #print set_size
-        for fetal_alleles in fetal_set:
-                ps = self.allelesDistribution(maternal_alleles, fetal_alleles, mix)
-                tmp = math.log(fetal_set[fetal_alleles]) - log_set_size + self.logMultinomial(nuc_counts, ps)
-                result = self.logSum(result, tmp)
-                #print "%0.5f" %self.logMultinomial(nuc_counts, ps), nuc_counts, \
-                #maternal_alleles, fetal_alleles,  ["%0.4f" % i for i in ps], fetal_set[fetal_alleles], set_size
+        ps = self.allelesDistribution(maternal_alleles, fetal_alleles, mix)
+        result = self.logMultinomial(nuc_counts, ps)
+        #print "%0.5f" %self.logMultinomial(nuc_counts, ps), nuc_counts, \
+        #maternal_alleles, fetal_alleles,  ["%0.4f" % i for i in ps], fetal_set[fetal_alleles]
         
         self.logLikelihoodCache[code] = result
         return result
-    
+        
+    def logLikelihoodGivenPattern(self, samples, M, P, pos, mix, pattern):
+        '''
+        smooth out likelihood by taking max average over previous positions
+        '''
+        #go over all maternal and paternal haplotype patterns possible for given inheritance pattern
+        history_depth = self.history_depth
+        max_ll = float("-inf")
+        likelihood_sum = "nothing"
+        num_configs = 0;
+        for mHpatt in itertools.combinations_with_replacement([0,1], pattern[0]):
+            for pHpatt in itertools.combinations_with_replacement([0,1], pattern[1]):
+                likelihood = 0. #"nothing"
+                num_configs += 1
+                for i in range(pos-history_depth+1, pos+1):
+                    if i < 0: continue
+                    if i >= len(M): continue
+                    fetal_alleles = []
+                    for x in mHpatt: fetal_alleles.append(M[i][x])
+                    for x in pHpatt: fetal_alleles.append(P[i][x])
+                    fetal_alleles = tuple(sorted(fetal_alleles))
+                    ll = self.logLikelihoodGivenPhasedPattern(samples[i], M[i], fetal_alleles, mix)
+                    likelihood += ll #self.logSum(likelihood, ll)
+                max_ll = max(max_ll, likelihood) # - math.log(history_depth))
+                likelihood_sum = self.logSum(likelihood_sum, likelihood) # - math.log(history_depth))
+        return likelihood_sum - math.log(num_configs)
+        '''
+        likelihood_sum = "nothing"
+        max_ll = float("-inf")
+        configs = 0
+        for mHpatt in itertools.combinations_with_replacement([0,1], pattern[0]):
+            for pHpatt in itertools.combinations_with_replacement([0,1], pattern[1]):
+                fetal_alleles = []
+                for x in mHpatt: fetal_alleles.append(maternals[x])
+                for x in pHpatt: fetal_alleles.append(paternals[x])
+                fetal_alleles = tuple(sorted(fetal_alleles))
+                ll = self.logLikelihoodGivenPhasedPattern(counts, maternals, fetal_alleles, mix)
+                
+                likelihood_sum = self.logSum(likelihood_sum, ll)
+                configs += 1
+                max_ll = max(max_ll, ll)
+        return max_ll #likelihood_sum - math.log(configs)
+        '''
+        
     def estimateMixture(self, samples, M, P):
         '''
         estimate mixture of fetal genome in the plasma samples
@@ -248,7 +275,7 @@ class FCNV(object):
         
         #initital base case
         for i in range(num_states):
-            emis_p = self.logLikelihoodGivenPattern(samples[0], M[0], P[0], mixture, patterns[i])
+            emis_p = self.logLikelihoodGivenPattern(samples, M, P, 0, mixture, patterns[i])
             table[1][i] = math.log(1./num_states)+ emis_p #initial state probabilities   
             predecessor[(1, i)] = -1
         
@@ -259,8 +286,7 @@ class FCNV(object):
             #for each SNP consider all inheritance patterns - states of the HMM:
             for state in range(num_states):
                 #emission probability in the given state
-                emis_p = self.logLikelihoodGivenPattern(samples[pos-1], M[pos-1], P[pos-1],\
-                 mixture, patterns[state])
+                emis_p = self.logLikelihoodGivenPattern(samples, M, P, pos-1, mixture, patterns[state])
                 #print emis_p
                 
                 #porobability of this state is emission * max{previous state * transition}
@@ -310,8 +336,7 @@ class FCNV(object):
 
         #initital base case
         for i in range(num_states):
-            emis_p = self.logLikelihoodGivenPattern(samples[0], M[0], P[0],\
-                 mixture, patterns[i])
+            emis_p = self.logLikelihoodGivenPattern(samples, M, P, 0, mixture, patterns[i])
             table[1][i] = math.log(1./num_states)+ emis_p #initial state probabilities
 
         #for all SNP positions do:
@@ -321,8 +346,7 @@ class FCNV(object):
             #for each SNP consider all inheritance patterns - states of the HMM:
             for state in range(num_states):
                 #emission probability in the given state
-                emis_p = self.logLikelihoodGivenPattern(samples[pos-1], M[pos-1], P[pos-1],\
-                 mixture, patterns[state])
+                emis_p = self.logLikelihoodGivenPattern(samples, M, P, pos-1, mixture, patterns[state])
                 #print emis_p
                 
                 #probability of this state is emission * \sum {previous state * transition}
@@ -368,7 +392,7 @@ class FCNV(object):
             #precompute emission probabilities
             emis_p = []
             for s in range(num_states):
-                emis_p.append(self.logLikelihoodGivenPattern(samples[pos], M[pos], P[pos], mixture, patterns[s]) )
+                emis_p.append(self.logLikelihoodGivenPattern(samples, M, P, pos, mixture, patterns[s]) )
             
             #for each SNP consider all inheritance patterns - states of the HMM:
             for state in range(num_states):
@@ -387,7 +411,7 @@ class FCNV(object):
         #p(X) - probability of the observed sequence (samples)
         pX = "nothing"
         for s in range(num_states):
-            emis_p = self.logLikelihoodGivenPattern(samples[0], M[0], P[0], mixture, patterns[s])
+            emis_p = self.logLikelihoodGivenPattern(samples, M, P, 0, mixture, patterns[s])
             tmp = math.log(1./num_states) + table[1][s] + emis_p
             pX = self.logSum(pX, tmp)
         #print "bck: ", math.exp(pX), pX
@@ -472,8 +496,8 @@ class FCNV(object):
                         
                     val = "nothing"
                     for pos in xrange(1, n):
-                        emis_p = self.logLikelihoodGivenPattern(samples[pos], M[pos],\
-                         P[pos], mixture, self.inheritance_patterns[l])
+                        emis_p = self.logLikelihoodGivenPattern(samples, M, P, pos, \
+                            mixture, self.inheritance_patterns[l])
                         tmp = fwd[pos][k] + self.transitions[k][l] + emis_p + bck[pos+1][l]
                         if tmp == float("-inf"): continue
                         val = self.logSum(val, tmp)
@@ -598,8 +622,8 @@ class FCNV(object):
         for pos in xrange(1, n+1):
             tmp = []
             for s in range(self.num_states):
-                ll = self.logLikelihoodGivenPattern(samples[pos-1], M[pos-1], \
-                    P[pos-1], mixture, self.inheritance_patterns[s])
+                ll = self.logLikelihoodGivenPattern(samples, M, P, pos-1, \
+                    mixture, self.inheritance_patterns[s])
                 tmp.append((ll, s))
             table.append(reversed(sorted(tmp)))
         return table

@@ -163,7 +163,7 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         
         #for pure likelihood
         
-        threshold = .5
+        threshold = .1
         x = ll_state.index(ground_truth[i])
         ll_diff = abs(ll_value[x]-ll_value[0])
         if ll_diff < threshold:
