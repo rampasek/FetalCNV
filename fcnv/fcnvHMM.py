@@ -20,6 +20,13 @@ class HMMState(object):
         
         self.inheritance_pattern = ip
         self.phased_pattern = pp
+        
+    def __str__(self):
+        return "IP: {0}, PP: {1}".format(self.inheritance_pattern, self.phased_pattern)
+        
+    def __eq__(self, other):
+        return self.inheritance_pattern == other.inheritance_pattern and \
+            self.phased_pattern == other.phased_pattern
 
 class FCNV(object):
     """Hidden Markov Model for fetal CNV calling"""
@@ -30,12 +37,9 @@ class FCNV(object):
         """Initialize new FCNV object"""
         super(FCNV, self).__init__()
         
-        state = HMMState( (2,1), ((1,1),(0)) )
-        print state.inheritance_pattern
-        
         #cache for log-likelihood values
         self.logLikelihoodCache = {}
-        self.distributionCache = {}
+        #self.distributionCache = {}
            
         '''#precompute lookup table for logSum function: 
         self.logTable1 = []
@@ -52,45 +56,103 @@ class FCNV(object):
             for pats in range(3):
                 if mats+pats in [0,4]: continue
                 self.inheritance_patterns.append((mats, pats))
-                
-        #generate phased variants of the inheritance patterns
+        
+               
+        #generate phased variants of the inheritance patterns and list of HMM States
+        self.states = []
         self.phased_patterns = []
         for ip in self.inheritance_patterns:
             for mPhased in itertools.combinations_with_replacement([0,1], ip[0]):
                 for pPhased in itertools.combinations_with_replacement([0,1], ip[1]):
                     phased_pattern = (tuple(mPhased), tuple(pPhased))
                     self.phased_patterns.append(phased_pattern)
+                    new_state = HMMState(ip, phased_pattern)
+                    self.states.append(new_state)
         
-        self.transitions = self.generateTransitionProb()
         self.main_state = 3
+        self.main_states = []
+        for i, s in enumerate(self.states):
+            if s.inheritance_pattern == (1,1): self.main_states.append(i)
         
+        #generate the table of transition probaboilities
+        self.transitions = self.generateTransitionProb()
+
+        #print the table
         num_states = self.getNumStates()
-        #print the table    
         for k in xrange(num_states):
             for l in xrange(num_states):
-                print "%0.4f" % (math.exp(self.transitions[k][l])), 
+                print "%0.4f" % (math.exp(self.transitions[k][l])),
             print " "
+            
+    
+    def isNormal(self, state):
+        return state.inheritance_pattern == (1,1)
+    
+    def areRecombination(self, state1, state2):
+        if state1.inheritance_pattern != state2.inheritance_pattern:
+            return False
+        eq = 0
+        for hap in range(2):
+            eq += (state1.phased_pattern[hap] == state2.phased_pattern[hap])
+        return (eq > 0)
+    
+    def areAdjacent(self, state1, state2):
+        """Find out whether the two states are adjacent.
+        Adjacency is defined as hamming distance <= 1.
+        
+        """
+        #convert from tuples to lists
+        s = list(state1.phased_pattern)
+        t = list(state2.phased_pattern)
+        for i in range(2):
+            s[i] = list(s[i])
+            t[i] = list(t[i])
+          
+        #enumerate the  neighborhood of s with hamming distance 1
+        #and look for discovery of t
+        match = (s == t)
+        for h in range(2): #over both haplotypes
+            for i, x in enumerate(s[h]): #over all alleles in a haplotype
+                temp = copy.deepcopy(s)
+                temp[h][i] = (x + 1) % 2 #flip this allele
+                match += (temp == t)
+                
+                del temp[h][i] #delete this allele
+                match += (temp == t)
+            for x in range(2):
+                temp = copy.deepcopy(s)
+                temp[h].append(x) #add a new allele
+                match += (temp == t)
+                
+        return (match >= 1)
     
     def generateTransitionProb(self):
         """Generate transition probabilities between HMM states"""
         #number of possible states per one SNP position
         num_states = self.getNumStates()
         
-        #trasition probabilities (uniform for all positions)
-        p_stay = 0.999
-        p_stay3 = 0.9999
-        #self.transitions = [[math.log((1.-p_stay)/(num_states-0.)) for x in range(num_states)] for y in range(num_states)]
-        trans = [[float("-inf") for x in range(num_states)] for y in range(num_states)]
+        #first generate pseudocounts
+        trans = [[0. for x in range(num_states)] for y in range(num_states)]
+        for i, s in enumerate(self.states):
+            for j, t in enumerate(self.states):
+                if s == t:
+                    trans[i][j] = 0.999
+                    if self.isNormal(s): trans[i][j] = 0.9999
+                #if self.isNormal(s) and self.isNormal(t): trans[i][j] += 0.0001
+                if (self.isNormal(s) and not self.isNormal(t)) or \
+                   (not self.isNormal(s) and self.isNormal(t)) :
+                    trans[i][j] += 0.001
+                if self.areRecombination(s, t):
+                    trans[i][j] += 0.0001
+                    
+        
+        #normalize and take logarithm
         for i in range(num_states):
-            trans[i][3] = math.log(1.-p_stay)
-        trans[0][0] = math.log(p_stay)
-        trans[1][1] = math.log(p_stay)
-        trans[2][2] = math.log(p_stay)
-        trans[4][4] = math.log(p_stay)
-        trans[5][5] = math.log(p_stay)
-        trans[6][6] = math.log(p_stay)
-        trans[3] = [math.log((1.-p_stay3)/(num_states-1)) for x in range(num_states)]
-        trans[3][3] = math.log(p_stay3)
+            for j in range(num_states):
+                if trans[i][j] < 10e-8: trans[i][j] = float("-inf")
+                else: trans[i][j] = math.log(trans[i][j])
+            self.logNormalize(trans[i])
+
         return trans
     
     def getNumIP(self):
@@ -103,13 +165,25 @@ class FCNV(object):
         
     def getNumStates(self):
         """Return number of HMM states per one SNP position"""
-        return self.getNumIP()
+        return self.getNumPP()
+    
+    def logNormalize(self, l):
+        """Normalize the given list of log-probabilities.
+        
+        Normalizes the list in place and returns the used scale factor.
+        
+        """
+        sum_ = "nothing"
+        for x in l: sum_ = self.logSum(sum_, x)
+        for i in range(len(l)): l[i] -= sum_
+        return sum_
         
     def logSum(self, x, y):
         """Return sum of two numbers in log space
         i.e. equivalent to log(exp(x)+exp(y))
         
         """
+        '''
         def precise(x):
             return math.log(1 + math.exp(x) )
 
@@ -125,6 +199,7 @@ class FCNV(object):
                 fx = int(math.floor(x))
                 return (x-fx)*(self.logTable2[fx+1] - self.logTable2[fx]) + self.logTable2[fx]
             else: return 0.
+        '''
         
         if x == "nothing": return y
         elif y == "nothing": return x
@@ -135,7 +210,6 @@ class FCNV(object):
         b = min(x, y)
         if a == float("inf") and b == float("-inf"): return float("nan")
         
-        #dif = b-a
         #return a + lookup(b-a):
         return a + math.log(1 + math.exp(b-a) )
     
@@ -236,46 +310,35 @@ class FCNV(object):
         
         '''self.distributionCache[code] = dist'''
         return dist
-            
-    def logLikelihoodGivenPattern(self, nuc_counts, maternal_alleles, paternal_alleles, mix, pattern):
+    
+    
+    #TODO: NEEDS REWRITING !!!!!!!!!!!!!!!!!    
+    def logLHGivenState(self, nuc_counts, maternal_alleles, paternal_alleles, mix, state):
         '''
         >>> f = FCNV()
-        >>> f.logLikelihoodGivenPattern([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [1,1])
+        >>> f.logLHGivenState([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [1,1])
         -3.6974187244239025
-        >>> f.logLikelihoodGivenPattern([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [2,1]) #-3.4838423152150568
+        >>> f.logLHGivenState([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [2,1]) #-3.4838423152150568
         -3.6507523341244412
-        >>> f.logLikelihoodGivenPattern([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [0,2])
+        >>> f.logLHGivenState([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [0,2])
         -3.1614953504205028
         '''
+        pattern = state.phased_pattern
+               
+        fetal_alleles = []
+        for mHpatt in pattern[0]:
+            fetal_alleles.append(maternal_alleles[mHpatt])
+        for pHpatt in pattern[1]:
+            fetal_alleles.append(paternal_alleles[pHpatt])
+        fetal_alleles.sort()
         
         #Caching:
-        code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(paternal_alleles), mix, tuple(pattern))
+        code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(fetal_alleles), mix)
         val = self.logLikelihoodCache.get(code)
         if val: return val
         
-        fetal_set = dict()
-        set_size = 0
-        for set_m in itertools.combinations_with_replacement(maternal_alleles, pattern[0]):
-            for set_p in itertools.combinations_with_replacement(paternal_alleles, pattern[1]):
-                #joined_tuple = tuple(list(set_m) + list(set_p)) #tuple(sorted(set_m + set_p))
-                joined_tuple = tuple(sorted(set_m + set_p))
-                #print joined_tuple
-                if not fetal_set.get(joined_tuple):
-                    fetal_set[joined_tuple] = 1
-                else:
-                    fetal_set[joined_tuple] += 1
-                set_size += 1
-                #print (set_m + set_p), fetal_set[(set_m + set_p)]
-                
-        result = "nothing"
-        log_set_size = math.log(float(set_size))
-        #print set_size
-        for fetal_alleles in fetal_set:
-                ps = self.allelesDistribution(maternal_alleles, fetal_alleles, mix)
-                tmp = math.log(fetal_set[fetal_alleles]) - log_set_size + self.logMultinomial(nuc_counts, ps)
-                result = self.logSum(result, tmp)
-                #print "%0.5f" %self.logMultinomial(nuc_counts, ps), nuc_counts, \
-                #maternal_alleles, fetal_alleles,  ["%0.4f" % i for i in ps], fetal_set[fetal_alleles], set_size
+        ps = self.allelesDistribution(maternal_alleles, fetal_alleles, mix)
+        result = self.logMultinomial(nuc_counts, ps)
         
         self.logLikelihoodCache[code] = result
         return result
@@ -307,61 +370,60 @@ class FCNV(object):
                     mix += (2.*num_type2)/sum_all
         return mix/num
     
+    
     def viterbiPath(self, samples, M, P, mixture):
-        '''
-        Viterbi decoding of the most probable path
-        '''
+        """Viterbi decoding of the most probable path.
+        
+        """
         num_states = self.getNumStates()
-        patterns = self.inheritance_patterns
         transitions = self.transitions
         
         n = len(samples)
-        predecessor = {}
+        predecessor = [[0 for i in range(num_states)] for j in xrange(n+1)] 
         #DP table dim: seq length+1 x num_states
         table = [[0. for i in range(num_states)] for j in xrange(n+1)] 
         
         #initital base case
-        for i in range(num_states):
-            emis_p = self.logLikelihoodGivenPattern(samples[0], M[0], P[0], mixture, patterns[i])
-            table[1][i] = math.log(1./num_states)+ emis_p #initial state probabilities   
-            predecessor[(1, i)] = -1
+        for state_id, state in enumerate(self.states):
+            emis_p = self.logLHGivenState(samples[0], M[0], P[0], mixture, state)
+            table[1][state_id] = math.log(1./num_states) + emis_p #initial state probabilities   
+            predecessor[1][state_id] = -1
         
         #for all SNP positions do:
         for pos in xrange(2, n+1):
             #real positions are <1..n+1), pos 1 is the base case
 
             #for each SNP consider all inheritance patterns - states of the HMM:
-            for state in range(num_states):
+            for state_id, state in enumerate(self.states):
                 #emission probability in the given state
-                emis_p = self.logLikelihoodGivenPattern(samples[pos-1], M[pos-1], P[pos-1],\
-                 mixture, patterns[state])
-                #print emis_p
+                emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, state)
                 
                 #porobability of this state is emission * max{previous state * transition}
                 max_prev = float("-inf")
                 arg_max = -1
-                for s in range(num_states):
-                    if transitions[s][state] == float("-inf"): continue #just for speed-up
-                    tmp = table[pos-1][s] + transitions[s][state]
+                for prev_id in range(num_states):
+                    if transitions[prev_id][state_id] == float("-inf"): continue #just for speed-up
+                    tmp = table[pos-1][prev_id] + transitions[prev_id][state_id]
                     if tmp > max_prev:
                         max_prev = tmp
-                        arg_max = s
-                table[pos][state] = max_prev + emis_p
-                predecessor[(pos, state)] = arg_max
+                        arg_max = prev_id
+                table[pos][state_id] = max_prev + emis_p
+                predecessor[pos][state_id] = arg_max
+            
+            #normalize to sum to 1
+            self.logNormalize(table[pos])
         
         path = [-1 for i in xrange(n+1)]
         maxx = max(table[n])
         path[n] = table[n].index(maxx)
         for i in reversed(xrange(n)):
-            path[i] = predecessor[(i+1, path[i+1])]
+            path[i] = predecessor[i+1][path[i+1]]
         
-        '''
-        print patterns
-        for i in range(len(path)-1):
-            i = i+1
-            print "%2d" %(i), ': ', patterns[path[i]], path[i]
-        '''   
-        return path[1:], table
+        for i in xrange(1, n+1):
+            state = self.states[ path[i] ]
+            path[i] = self.inheritance_patterns.index(state.inheritance_pattern)
+            
+        return path[1:]
     
     def computeForward(self, samples, M, P, mixture):
         '''
@@ -372,43 +434,45 @@ class FCNV(object):
         transitions = self.transitions
         
         n = len(samples)
+        #scale factors
+        scale = [0. for i in xrange(n+1)]
         #DP table dim: seq length+1 x num_states
         table = [[float("-inf") for i in range(num_states)] for j in xrange(n+1)] 
 
         #initital base case
-        for i in range(num_states):
-            emis_p = self.logLikelihoodGivenPattern(samples[0], M[0], P[0],\
-                 mixture, patterns[i])
-            table[1][i] = math.log(1./num_states)+ emis_p #initial state probabilities
+        for state_id, state in enumerate(self.states):
+            emis_p = self.logLHGivenState(samples[0], M[0], P[0], mixture, state)
+            table[1][state_id] = math.log(1./num_states) + emis_p #initial state probabilities
 
         #for all SNP positions do:
         for pos in xrange(2, n+1):
             #real positions are <1..n+1), pos 1 is the base case
 
             #for each SNP consider all inheritance patterns - states of the HMM:
-            for state in range(num_states):
+            for state_id, state in enumerate(self.states):
                 #emission probability in the given state
-                emis_p = self.logLikelihoodGivenPattern(samples[pos-1], M[pos-1], P[pos-1],\
-                 mixture, patterns[state])
-                #print emis_p
+                emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, state)
                 
                 #probability of this state is emission * \sum {previous state * transition}
                 summ = "nothing"
-                for s in range(num_states):
-                    if transitions[s][state] == float("-inf"): continue #just for speed-up
-                    tmp =  table[pos-1][s] + transitions[s][state]
+                for prev_id in range(num_states):
+                    if transitions[prev_id][state_id] == float("-inf"): continue #just for speed-up
+                    tmp =  table[pos-1][prev_id] + transitions[prev_id][state_id]
                     summ = self.logSum(summ, tmp)
-                table[pos][state] = emis_p + summ
-        
+                table[pos][state_id] = emis_p + summ
+            
+            #normalize to sum to 1
+            scale[pos] = self.logNormalize(table[pos])
+            
         #p(X) - probability of the observed sequence (samples)
         pX = "nothing"
         for i in table[n]:
             pX = self.logSum(pX, i)
-        print "fwd: ", math.exp(pX), pX
+        #print "fwd: ", math.exp(pX), pX
 
-        return table, pX
+        return table, pX, scale
         
-    def computeBackward(self, samples, M, P, mixture):
+    def computeBackward(self, samples, M, P, mixture, scale):
         '''
         Posterior decoding: backward algorithm
         '''
@@ -421,41 +485,44 @@ class FCNV(object):
         table = [[float("-inf") for i in range(num_states)] for j in xrange(n+1)]
         
         #initital base case
-        for i in range(num_states):
-            table[n][i] = 0. #initial state probabilities are 1 -> log(1)=0
+        for state_id in range(num_states):
+            table[n][state_id] = 0. #initial state probabilities are 1 -> log(1)=0
             
         #for all SNP positions do:
-        for pos in reversed(range(1, n)):
+        for pos in reversed(xrange(1, n)):
             #real positions are <1..n+1), the 0 and n+1 are sentinels
             
             #precompute emission probabilities
             emis_p = []
-            for s in range(num_states):
-                emis_p.append(self.logLikelihoodGivenPattern(samples[pos], M[pos], P[pos], mixture, patterns[s]) )
+            for state in self.states:
+                emis_p.append(self.logLHGivenState(samples[pos], M[pos], P[pos], mixture, state) )
             
             #for each SNP consider all inheritance patterns - states of the HMM:
-            for state in range(num_states):
-                #probability of this state is  \sum {emission *previous state * transition_to_here}
+            for state_id in range(num_states):
+                #probability of this state is:
+                # \sum {emission_in_'next' * 'next'_state * transition_from_here}
                 summ = "nothing"
-                for s in range(num_states):
-                    if transitions[state][s] == float("-inf"): continue #just for speed-up
-                    tmp = transitions[state][s] + table[pos+1][s] + emis_p[s]
+                for next_id in range(num_states):
+                    if transitions[state_id][next_id] == float("-inf"): continue #just for speed-up
+                    tmp = transitions[state_id][next_id] + table[pos+1][next_id] + emis_p[next_id]
                     summ = self.logSum(summ, tmp)
-                table[pos][state] = summ
-        
+                table[pos][state_id] = summ - scale[pos+1] #pseudonormalize by scaling factor from fwd
+            
+            
         #p(X) - probability of the observed sequence (samples)
         pX = "nothing"
         for s in range(num_states):
-            emis_p = self.logLikelihoodGivenPattern(samples[0], M[0], P[0], mixture, patterns[s])
-            tmp = math.log(1./num_states) + table[1][s] + emis_p
+            emis_p = self.logLHGivenState(samples[0], M[0], P[0], mixture, self.states[s])
+            tmp = math.log(1./num_states) + table[1][s] + emis_p - scale[1] #scale by factor from fwd
             pX = self.logSum(pX, tmp)
         #print "bck: ", math.exp(pX), pX
         
         return table, pX
         
-    
+        
+    #TODO: NEEDS REWRITING !!!!!!!!!!!!!!!!!
     def maxPosteriorDecoding(self, samples, M, P, mixture):
-        """Maximum posterior probability decoding.
+        """Maximum posterior probability decoding. 
         
         Returns list of states -- for each position the one with highest posterior
         probability.
@@ -463,10 +530,10 @@ class FCNV(object):
         """
         n = len(samples)
         
-        fwd, pX1 = self.computeForward(samples, M, P, mixture)
-        bck, pX2 = self.computeBackward(samples, M, P, mixture)
+        fwd, pX1, scale = self.computeForward(samples, M, P, mixture)
+        bck, pX2 = self.computeBackward(samples, M, P, mixture, scale)
         
-        if abs(pX1-pX2) > 0.01:
+        if abs(pX1-pX2) > 10e-8:
             print "p(X) from forward and backward DP doesn't match", pX1, pX2
             return
         
@@ -484,7 +551,8 @@ class FCNV(object):
             path.append(arg_max)
         
         return path
-  
+    
+    
     def posteriorDecoding(self, samples, M, P, mixture):
         """Posterior probability decoding.
         
@@ -494,22 +562,33 @@ class FCNV(object):
         """
         n = len(samples)
         
-        fwd, pX1 = self.computeForward(samples, M, P, mixture)
-        bck, pX2 = self.computeBackward(samples, M, P, mixture)
+        fwd, pX1, scale = self.computeForward(samples, M, P, mixture)
+        bck, pX2 = self.computeBackward(samples, M, P, mixture, scale)
         
-        if abs(pX1-pX2) > 0.01:
+        if abs(pX1-pX2) > 10e-8:
             print "p(X) from forward and backward DP doesn't match", pX1, pX2
             return
         
         table = []
         for pos in xrange(1, n+1):
             tmp = []
-            for s in range(self.getNumStates()):
-                # fwd, bck are in log space (therefore + instead *); p(X) is constant
-                tmp.append((fwd[pos][s] + bck[pos][s], s))
-            table.append(reversed(sorted(tmp)))
+            for ip_id, ip in enumerate(self.inheritance_patterns):
+                #max over corresponding phased patterns
+                max_ = float("-inf")
+                for s_id, s in enumerate(self.states):
+                    if s.inheritance_pattern == ip:
+                        #fwd, bck are in log space (therefore + instead *); p(X) is constant
+                        max_ = max(max_, fwd[pos][s_id] + bck[pos][s_id])
+                        
+                tmp.append((max_, ip_id))
+                
+            tmp.sort(reverse=True)    
+            table.append(tmp)
+            
         return table
         
+        
+    #TODO: NEEDS REWRITING !!!!!!!!!!!!!!!!!    
     def baumWelshForTransitions(self, samples, M, P, mixture):
         """Baum-Welsh EM algorithm for HMM parameter estimation.
         
@@ -525,9 +604,9 @@ class FCNV(object):
         while True and num_iter < 5:
             num_iter += 1
             #expectation
-            fwd, pX1 = self.computeForward(samples, M, P, mixture)
-            bck, pX2 = self.computeBackward(samples, M, P, mixture)
-            if abs(pX1-pX2) > 0.01:
+            fwd, pX1, scale = self.computeForward(samples, M, P, mixture)
+            bck, pX2 = self.computeBackward(samples, M, P, mixture, scale)
+            if abs(pX1-pX2) > 10e-8:
                 print "p(X) from forward and backward DP doesn't match", pX1, pX2
                 return  
             
@@ -540,8 +619,8 @@ class FCNV(object):
                         
                     val = "nothing"
                     for pos in xrange(1, n):
-                        emis_p = self.logLikelihoodGivenPattern(samples[pos], M[pos],\
-                         P[pos], mixture, self.inheritance_patterns[l])
+                        emis_p = self.logLHGivenState(samples[pos], M[pos],\
+                         P[pos], mixture, self.states[l])
                         tmp = fwd[pos][k] + self.transitions[k][l] + emis_p + bck[pos+1][l]
                         if tmp == float("-inf"): continue
                         val = self.logSum(val, tmp)
@@ -587,7 +666,9 @@ class FCNV(object):
             for l in xrange(num_states):
                 print "%0.4f" % (math.exp(self.transitions[k][l])), 
             print " "
-            
+    
+    
+    #TODO: NEEDS REWRITING !!!!!!!!!!!!!!!!!         
     def viterbiTrainingForTransitions(self, samples, M, P, mixture):
         """Viterbi training algorithm for HMM parameter estimation.
         
@@ -658,6 +739,7 @@ class FCNV(object):
             for l in xrange(num_states):
                 print "%0.4f" % (math.exp(self.transitions[k][l])), 
             print " "
+        
             
     def likelihoodDecoding(self, samples, M, P, mixture):
         '''
@@ -669,13 +751,19 @@ class FCNV(object):
         table = []
         for pos in xrange(1, n+1):
             tmp = []
-            for s in range(self.getNumStates()):
-                ll = self.logLikelihoodGivenPattern(samples[pos-1], M[pos-1], \
-                    P[pos-1], mixture, self.inheritance_patterns[s])
-                tmp.append((ll, s))
-            table.append(reversed(sorted(tmp)))
+            for ip_id, ip in enumerate(self.inheritance_patterns):
+                #max over corresponding phased patterns
+                max_ = float("-inf")
+                for s in self.states:
+                    if s.inheritance_pattern == ip:
+                        ll = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, s)
+                        max_ = max(max_, ll)
+                
+                tmp.append((max_ , ip_id))
+                
+            tmp.sort(reverse=True)    
+            table.append(tmp)
         return table
-
 
 if __name__ == "__main__":
     import doctest

@@ -4,15 +4,21 @@ import sys
 import fcnvHMM
 
 def readInput(file_samples_in, file_maternal_in, file_paternal_in):
-    '''
-    reads the input - maternal alleles, paternal alleles, and samples
-    '''
+    """Read the input from files.
+    Read maternal alleles, paternal alleles, and samples per position.
+    
+    Arguments:
+    file names -- strings
+    returns lists of parsed data    
+    
+    """
     def parseHaplotypes(lines):
         X = []
         for line in lines:
             line = line.rstrip("\n")
             X.append(line.split(" "))
         return X
+        
     def parseSamples(lines):
         X = []
         for line in lines:
@@ -36,6 +42,13 @@ def readInput(file_samples_in, file_maternal_in, file_paternal_in):
     return samples, M, P
 
 def computeEval(reference, prediction, sensitivity):
+    """Compute evaluation of referenced anotation versus predicted one.
+    
+    Prediction for one continuous region R of an inheritance pattern is considered
+    correct if there is a continuous part with length at least '1/sensitivity'*len(R)
+    that is predicted correctly.
+    
+    """
     num_real = 0
     num_called = 0
     ok_called = []
@@ -114,10 +127,9 @@ def computeStats(ok, wrong, pref):
         print pref, t, ": ", o, w, ratio, '%'
 
 def test(fcnv, samples, M, P, mixture, ground_truth):
-    vp, vt = fcnv.viterbiPath(samples, M, P, mixture)
+    vp = fcnv.viterbiPath(samples, M, P, mixture)
     posterior = fcnv.posteriorDecoding(samples, M, P, mixture)
-    posterior = [list(x) for x in posterior]
-
+    
     byLL = fcnv.likelihoodDecoding(samples, M, P, mixture)    
 
     print fcnv.inheritance_patterns
@@ -191,25 +203,7 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
             distance_set[int_distance] += 1
         #print ground_truth[i], vp[i], post, '|', post.index(int(ground_truth[i]))
     
-    '''
-    for i in xrange(len(vp)):
-        print ground_truth[i], vp[i],  
-        emis = []
-        for j in range(fcnv.num_states):
-            emis_p = fcnv.logLikelihoodGivenPattern(samples[i], M[i], P[i], mixture, fcnv.inheritance_patterns[j])
-            emis.append((emis_p, j))
-        print samples[i],
-        for e in reversed(sorted(emis)):
-            print str(e[1])+":%0.1f" % e[0] ,
-        print " "
-        print "   ",
-        for x in posterior[i]:
-            print str(x[1])+":%0.1f" % x[0] ,
-        print " "
-        #print tableLH[i]
-    '''    
-        
-    #np.set_printoptions(precision=3)
+    
     posterior_dist = np.array(posterior_dist)
     posterior_dist = (posterior_dist*100.)/len(vp)    
     print posterior_dist  
@@ -367,21 +361,6 @@ def main():
     #print fcnv.computeForward(samples, M, P, mixture)
     #print fcnv.computeBackward(samples, M, P, mixture)
     #pp = fcnv.maxPosteriorDecoding(samples, M, P, mixture)
-
-    #test(fcnv, samples, M, P, mixture, "fetal_alleles.txt")
-    
-    '''
-    n=74+1
-    summ = "nothing"
-    for x1 in xrange(0, n):
-      for x2 in xrange(0, n-x1):
-        for x3 in xrange(0, n-x1-x2):
-          for x4 in xrange(0, n-x1-x2-x3):
-            if x1+x2+x3+x4 == n-1:
-              tmp = fcnv.logLikelihoodGivenPattern([x1, x2, x3, x4], ['T', 'T'], ['T', 'A'], 0.15, [1,2])
-              summ = fcnv.logSum(summ, tmp)
-    print summ, math.exp(summ)
-    '''
     
 if __name__ == "__main__":
     import doctest
