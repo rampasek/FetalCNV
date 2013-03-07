@@ -23,6 +23,16 @@ class HMMState(object):
         
     def __str__(self):
         return "IP: {0}, PP: {1}".format(self.inheritance_pattern, self.phased_pattern)
+        '''
+        dic = ["1", "2"]
+        nms = ["M", "P"]
+        result = ""
+        for h in range(2):
+            for x in self.phased_pattern[h]:
+                result += " " + nms[h] + dic[x]
+            if h == 0: result += " |"
+        return result
+        '''
         
     def __eq__(self, other):
         return self.inheritance_pattern == other.inheritance_pattern and \
@@ -135,15 +145,18 @@ class FCNV(object):
         trans = [[0. for x in range(num_states)] for y in range(num_states)]
         for i, s in enumerate(self.states):
             for j, t in enumerate(self.states):
-                if s == t:
+                if s == t: #remain in this state
                     trans[i][j] = 0.999
                     if self.isNormal(s): trans[i][j] = 0.9999
-                #if self.isNormal(s) and self.isNormal(t): trans[i][j] += 0.0001
-                if (self.isNormal(s) and not self.isNormal(t)) or \
-                   (not self.isNormal(s) and self.isNormal(t)) :
-                    trans[i][j] += 0.001
-                if self.areRecombination(s, t):
+                elif self.isNormal(s) and self.isNormal(t): #recombination in normal IP
                     trans[i][j] += 0.0001
+                elif self.isNormal(s) ^ self.isNormal(t): #CNV <-> normal IP
+                    if self.areAdjacent(s, t) \
+                       or s.inheritance_pattern in [(2,0), (0,2)] \
+                       or t.inheritance_pattern in [(2,0), (0,2)]:
+                        trans[i][j] += 0.001
+                elif self.areRecombination(s, t): #recombination within CNV
+                    trans[i][j] += 0.00001
                     
         
         #normalize and take logarithm
@@ -312,7 +325,7 @@ class FCNV(object):
         return dist
     
     
-    #TODO: NEEDS REWRITING !!!!!!!!!!!!!!!!!    
+    #TODO: NEEDS OPTIMIZATION !!!!!!!!!!!!!!!!!    
     def logLHGivenState(self, nuc_counts, maternal_alleles, paternal_alleles, mix, state):
         '''
         >>> f = FCNV()

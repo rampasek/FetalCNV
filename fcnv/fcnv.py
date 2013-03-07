@@ -174,7 +174,6 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         posterior_dist[x] += 1
         
         #for pure likelihood
-        
         threshold = .5
         x = ll_state.index(ground_truth[i])
         ll_diff = abs(ll_value[x]-ll_value[0])
@@ -216,9 +215,9 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         ll_misclass[i] = 100.*ll_misclass[i]/float(state_stats[i])
         for j in range(len(ll_misclass[i])): ll_misclass[i][j] = round(ll_misclass[i][j]*100)/100.
     print ll_misclass
-    print "mistakes for state3: "
-    for x in range(7):
-        print x,":", state3_stats[x]
+    #print "mistakes for state3: "
+    #for x in range(7):
+    #    print x,":", state3_stats[x]
     print "stats  : ", state_stats
     print "viterbi: ", state_correct_vp
     print "mposter: ", state_correct_pp
