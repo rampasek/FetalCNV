@@ -41,7 +41,7 @@ def readInput(file_samples_in, file_maternal_in, file_paternal_in):
     
     return samples, M, P
 
-def computeEval(reference, prediction, sensitivity):
+def computeEval(reference, prediction, sensitivity, num_patt):
     """Compute evaluation of referenced anotation versus predicted one.
     
     Prediction for one continuous region R of an inheritance pattern is considered
@@ -66,7 +66,7 @@ def computeEval(reference, prediction, sensitivity):
         
         max_ok_length = 0
         tmp_length = 0
-        stats = [0, 0, 0, 0, 0, 0, 0] 
+        stats = [0 for x in range(num_patt)]
         for i in range(begin_pos, end_pos):
             stats[prediction[i]] += 1
             if prediction[i] == ctype:
@@ -94,23 +94,25 @@ def computeEval(reference, prediction, sensitivity):
 
 def categorize(data, by_length, by_type):
     lengths = [100, 500, 1000, 5000, 10000, 20000, 50000, 100000]
-    num_patterns = 7
     for item in data:
         length = item[0]
         ptype = item[1]
         gen_len = sorted([(abs(length-l), l) for l in lengths])[0][1]
         #print length, gen_len
+        
+        #by length
         if not gen_len in by_length: by_length[gen_len] = 0
-        by_length[gen_len] += 1
+        if ptype != 3: by_length[gen_len] += 1 #don't count normal IP into CNV length stats
+        #by type
         if not ptype in by_type: by_type[ptype] = 0
         by_type[ptype] += 1
 
-def computeStats(ok, wrong, pref):
+def computeStats(ok, wrong, pref, num_patt):
     lengths = [100, 500, 1000, 5000, 10000, 20000, 50000, 100000]
     ok_by_length = dict([(i,0) for i in lengths])
-    ok_by_type = dict([(i,0) for i in range(7)])
+    ok_by_type = dict([(i,0) for i in range(num_patt)])
     wr_by_length = dict([(i,0) for i in lengths])
-    wr_by_type = dict([(i,0) for i in range(7)])
+    wr_by_type = dict([(i,0) for i in range(num_patt)])
     categorize(ok, ok_by_length, ok_by_type)
     categorize(wrong, wr_by_length, wr_by_type)
     for l in lengths:
@@ -119,7 +121,7 @@ def computeStats(ok, wrong, pref):
         ratio = 0
         if o+w > 0: ratio = o/float(o+w) *100
         print pref, l, ": ", o, w, ratio, '%'
-    for t in range(7):
+    for t in range(num_patt):
         o = ok_by_type[t]
         w = wr_by_type[t]
         ratio = 0
@@ -129,28 +131,28 @@ def computeStats(ok, wrong, pref):
 def test(fcnv, samples, M, P, mixture, ground_truth):
     vp = fcnv.viterbiPath(samples, M, P, mixture)
     posterior = fcnv.posteriorDecoding(samples, M, P, mixture)
-    
     byLL = fcnv.likelihoodDecoding(samples, M, P, mixture)    
 
     print fcnv.inheritance_patterns
+    num_patt = fcnv.getNumIP()
     
     viterbi_correct = 0
     max_posterior_correct = 0
     ll_correct = 0
     #states distributions for posterior and pure likelihood
-    posterior_dist = [0,0,0,0,0,0,0]
-    ll_dist = [0,0,0,0,0,0,0]
+    posterior_dist = [0 for x in range(num_patt)]
+    ll_dist = [0 for x in range(num_patt)]
     #other stats
-    state_stats = [0,0,0,0,0,0,0]
-    state_correct_vp = [0,0,0,0,0,0,0]
-    state_correct_pp = [0,0,0,0,0,0,0]
-    state_correct_ll = [0,0,0,0,0,0,0]
+    state_stats = [0 for x in range(num_patt)]
+    state_correct_vp = [0 for x in range(num_patt)]
+    state_correct_pp = [0 for x in range(num_patt)]
+    state_correct_ll = [0 for x in range(num_patt)]
     pp = []
     tableLH = []
     avg_distance = 0.
     distance_set = {}
-    ll_misclass = [[0]*7 for x in range(7)]
-    state3_stats = [{ (0,0):0, (0,1):0, (1,0):0, (1,1):0 } for x in range(7)]
+    ll_misclass = [[0]*num_patt for x in range(num_patt)]
+    state3_stats = [{ (0,0):0, (0,1):0, (1,0):0, (1,1):0 } for x in range(num_patt)]
     for i in xrange(len(vp)):
         state_stats[ground_truth[i]] += 1
         post = []
@@ -185,7 +187,7 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
             state_correct_ll[ground_truth[i]] += 1
         else:            
             ll_dist[x] += 1
-            for j in range(7):
+            for j in range(num_patt):
                 if ll_value[x] - ll_value[j] < 0.01:
                 #if abs(ll_value[0] - ll_value[j]) < 1.:
                     ll_misclass[ground_truth[i]][ll_state[j]] += 1
@@ -235,36 +237,36 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         print "sensitivity: 1 /", i
         
         #recall Viterbi
-        called_v, real, ok_called, not_called = computeEval(ground_truth, vp, i)
+        called_v, real, ok_called, not_called = computeEval(ground_truth, vp, i, num_patt)
         print "viterbi recall   : ", called_v, '/',  real, " => ", 
         print "%0.3f" % (called_v*100./real), "%"
         print ok_called
         print not_called
-        computeStats(ok_called, not_called, "VR")
+        computeStats(ok_called, not_called, "VR", num_patt)
         
         #recall max posterior
-        called_p, real, ok_called, not_called = computeEval(ground_truth, pp, i)       
+        called_p, real, ok_called, not_called = computeEval(ground_truth, pp, i, num_patt)       
         print "mposter recall   : ", called_p, '/',  real, " => ",
         print "%0.3f" % (called_p*100./real), "%"
         print ok_called
         print not_called
-        computeStats(ok_called, not_called, "PR")
+        computeStats(ok_called, not_called, "PR", num_patt)
         
         #prediction Viterbi 
-        correct_v, claimed_v, ok_prediction, wr_prediction = computeEval(vp, ground_truth, i)
+        correct_v, claimed_v, ok_prediction, wr_prediction = computeEval(vp, ground_truth, i, num_patt)
         print "viterbi precision: ", correct_v , '/',  claimed_v, " => ", 
         print "%0.3f" % (correct_v*100./claimed_v), "%"
         print ok_prediction
         print wr_prediction
-        computeStats(ok_prediction, wr_prediction, "VP")
+        computeStats(ok_prediction, wr_prediction, "VP", num_patt)
         
         #prediction max posterior
-        correct_p, claimed_p, ok_prediction, wr_prediction = computeEval(pp, ground_truth, i)
+        correct_p, claimed_p, ok_prediction, wr_prediction = computeEval(pp, ground_truth, i, num_patt)
         print "mposter precision: ", correct_p , '/',  claimed_p, " => ", 
         print "%0.3f" % (correct_p*100./claimed_p), "%"
         print ok_prediction
         print wr_prediction
-        computeStats(ok_prediction, wr_prediction, "PP")
+        computeStats(ok_prediction, wr_prediction, "PP", num_patt)
         
         #format for LaTeX tabular
         #print "%0.3f" % ((viterbi_correct*100.)/len(vp)), "\%"

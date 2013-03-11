@@ -325,7 +325,7 @@ class FCNV(object):
         return dist
     
     
-    #TODO: NEEDS OPTIMIZATION !!!!!!!!!!!!!!!!!    
+    #TODO: NEEDS OPTIMIZATION if possible !!!!!!!!!!!!!!!!!    
     def logLHGivenState(self, nuc_counts, maternal_alleles, paternal_alleles, mix, state):
         '''
         >>> f = FCNV()
@@ -533,7 +533,6 @@ class FCNV(object):
         return table, pX
         
         
-    #TODO: NEEDS REWRITING !!!!!!!!!!!!!!!!!
     def maxPosteriorDecoding(self, samples, M, P, mixture):
         """Maximum posterior probability decoding. 
         
@@ -561,7 +560,8 @@ class FCNV(object):
                     max_posterior = tmp
                     arg_max = s
             #print max_posterior
-            path.append(arg_max)
+            max_IP = self.states[ arg_max ].inheritance_pattern
+            path.append( self.inheritance_patterns.index(max_IP) )
         
         return path
     
