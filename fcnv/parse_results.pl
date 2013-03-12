@@ -44,7 +44,10 @@ for (my $fileNum = $beginFNum; $fileNum <= $endFNum; $fileNum++) {
  	my $filename = "$filenamePrefix$fileNum.txt";
  	#print $filename, "\n";
  	my $file;
-    open $file, "<$filename" or die "Cannot open $filename: $!" unless !$filename;
+    unless (open $file, "<$filename") {
+        warn "Cannot open $filename: $!" unless !$filename;
+        next;
+    }
 
     my $active = 0;
     my $counter = 1;
