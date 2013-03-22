@@ -91,7 +91,7 @@ class FCNV(object):
         num_states = self.getNumStates()
         for k in xrange(num_states):
             for l in xrange(num_states):
-                print "%0.4f" % (math.exp(self.transitions[k][l])),
+                print "%.5f" % (math.exp(self.transitions[k][l])),
             print " "
             
     
@@ -141,31 +141,66 @@ class FCNV(object):
         #number of possible states per one SNP position
         num_states = self.getNumStates()
         
-        #first generate pseudocounts
+        '''#first generate pseudocounts
         trans = [[0. for x in range(num_states)] for y in range(num_states)]
         for i, s in enumerate(self.states):
             for j, t in enumerate(self.states):
-                if s == t: #remain in this state
-                    trans[i][j] = 0.999
-                    if self.isNormal(s): trans[i][j] = 0.9999
+                if i == j: #remain in this state
+                    trans[i][j] = 0.9999
+                    if self.isNormal(s): trans[i][j] = 0.99999
                 elif self.isNormal(s) and self.isNormal(t): #recombination in normal IP
                     trans[i][j] += 0.0001
                 elif self.isNormal(s) ^ self.isNormal(t): #CNV <-> normal IP
                     if self.areAdjacent(s, t) \
                        or s.inheritance_pattern in [(2,0), (0,2)] \
                        or t.inheritance_pattern in [(2,0), (0,2)]:
-                        trans[i][j] += 0.001
+                        trans[i][j] += 0.0005
                 elif self.areRecombination(s, t): #recombination within CNV
                     trans[i][j] += 0.00001
-                    
+                    trans[i][i] -= 0.0005
+         '''           
+        
+        #precompute statistics
+        num_recombs = [0 for x in range(self.getNumIP())]
+        num_cnvs = 0
+        for state in self.states:
+            num_recombs[self.inheritance_patterns.index(state.inheritance_pattern)] += 1
+            num_cnvs += (not self.isNormal(state))
+        
+        
+        trans = [[0. for x in range(num_states)] for y in range(num_states)]
+        for ip in self.inheritance_patterns:
+            
+            if ip == (1, 1): #generate Normal states transitions                
+                for i, state1 in enumerate(self.states):
+                    if state1.inheritance_pattern != ip: continue
+                    for j, state2 in enumerate(self.states):
+                        if i == j: #stay in the state
+                            trans[i][i] = 0.9499
+                        elif state2.inheritance_pattern == ip: #to recombination of the same IP
+                            trans[i][j] = 0.05 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
+                        elif state2.inheritance_pattern != ip: #to a CNV state
+                            trans[i][j] = 0.0001 / 6. / num_recombs[self.inheritance_patterns.index(state2.inheritance_pattern)]
+            else: #generate CNV states transitions
+                for i, state1 in enumerate(self.states):
+                    if state1.inheritance_pattern != ip: continue
+                    for j, state2 in enumerate(self.states):
+                        if i == j: #stay in the state
+                            trans[i][i] = 0.949
+                        elif state2.inheritance_pattern == ip: #to recombination of the same IP
+                            trans[i][j] = 0.05 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
+                        elif state2.inheritance_pattern == (1, 1): #back to normal IP
+                            trans[i][j] = 0.001 / 4.
+                        else:
+                            trans[i][j] = 0.
         
         #normalize and take logarithm
         for i in range(num_states):
             for j in range(num_states):
-                if trans[i][j] < 10e-8: trans[i][j] = float("-inf")
+                if trans[i][j] < 10e-10: trans[i][j] = float("-inf")
                 else: trans[i][j] = math.log(trans[i][j])
             self.logNormalize(trans[i])
-
+        
         return trans
     
     def getNumIP(self):
@@ -592,7 +627,15 @@ class FCNV(object):
                     if s.inheritance_pattern == ip:
                         #fwd, bck are in log space (therefore + instead *); p(X) is constant
                         max_ = max(max_, fwd[pos][s_id] + bck[pos][s_id])
-                        
+                
+                '''#sum over corresponding phased patterns
+                sum_ = "nothing"
+                for s_id, s in enumerate(self.states):
+                    if s.inheritance_pattern == ip:
+                        #fwd, bck are in log space (therefore + instead *); p(X) is constant
+                        sum_ = self.logSum(sum_, fwd[pos][s_id] + bck[pos][s_id])
+                '''
+                    
                 tmp.append((max_, ip_id))
                 
             tmp.sort(reverse=True)    
@@ -772,6 +815,14 @@ class FCNV(object):
                         ll = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, s)
                         max_ = max(max_, ll)
                 
+                '''#sum over corresponding phased patterns
+                sum_ = "nothing"
+                for s in self.states:
+                    if s.inheritance_pattern == ip:
+                        ll = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, s)
+                        sum_ = self.logSum(sum_, ll)
+                '''        
+
                 tmp.append((max_ , ip_id))
                 
             tmp.sort(reverse=True)    
