@@ -79,6 +79,21 @@ class FCNV(object):
                     new_state = HMMState(ip, phased_pattern)
                     self.states.append(new_state)
         
+        #generate silent states
+        normalIP = (1,1)
+        for ip in self.inheritance_patterns:
+            if ip == normalIP: continue
+            new_state = HMMState(ip, ("out"))
+            self.states.append(new_state)
+        self.states.append( HMMState(normalIP, ("in")) )
+        
+        self.states.append( HMMState(normalIP, ("out")) )
+        for ip in self.inheritance_patterns:
+            if ip == normalIP: continue
+            new_state = HMMState(ip, ("in"))
+            self.states.append(new_state)
+        
+        #DEPRECATED
         self.main_state = 3
         self.main_states = []
         for i, s in enumerate(self.states):
@@ -93,10 +108,24 @@ class FCNV(object):
             for l in xrange(num_states):
                 print "%.5f" % (math.exp(self.transitions[k][l])),
             print " "
-            
+         
+    def getNumIP(self):
+        """Return number of inheritance patterns"""
+        return len(self.inheritance_patterns)
+        
+    def getNumPP(self):
+        """Return number of phased inheritance patterns"""
+        return len(self.phased_patterns)
+        
+    def getNumStates(self):
+        """Return number of HMM states per one SNP position"""
+        return len(self.states)   
     
     def isNormal(self, state):
         return state.inheritance_pattern == (1,1)
+        
+    def isReal(self, state):
+        return isinstance(state.inheritance_pattern, tuple)
     
     def areRecombination(self, state1, state2):
         if state1.inheritance_pattern != state2.inheritance_pattern:
@@ -105,6 +134,20 @@ class FCNV(object):
         for hap in range(2):
             eq += (state1.phased_pattern[hap] == state2.phased_pattern[hap])
         return (eq > 0)
+    
+    def getCorrespondingInState(self, state):
+        for st in self.states[self.getNumPP():]:
+            if st.inheritance_pattern == state.inheritance_pattern and \
+               st.phased_pattern == "in":
+                return st
+        return None
+        
+    def getCorrespondingOutState(self, state):
+        for st in self.states[self.getNumPP():]:
+            if st.inheritance_pattern == state.inheritance_pattern and \
+               st.phased_pattern == "out":
+                return st
+        return None
     
     def areAdjacent(self, state1, state2):
         """Find out whether the two states are adjacent.
@@ -140,59 +183,72 @@ class FCNV(object):
         """Generate transition probabilities between HMM states"""
         #number of possible states per one SNP position
         num_states = self.getNumStates()
-        
-        '''#first generate pseudocounts
-        trans = [[0. for x in range(num_states)] for y in range(num_states)]
-        for i, s in enumerate(self.states):
-            for j, t in enumerate(self.states):
-                if i == j: #remain in this state
-                    trans[i][j] = 0.9999
-                    if self.isNormal(s): trans[i][j] = 0.99999
-                elif self.isNormal(s) and self.isNormal(t): #recombination in normal IP
-                    trans[i][j] += 0.0001
-                elif self.isNormal(s) ^ self.isNormal(t): #CNV <-> normal IP
-                    if self.areAdjacent(s, t) \
-                       or s.inheritance_pattern in [(2,0), (0,2)] \
-                       or t.inheritance_pattern in [(2,0), (0,2)]:
-                        trans[i][j] += 0.0005
-                elif self.areRecombination(s, t): #recombination within CNV
-                    trans[i][j] += 0.00001
-                    trans[i][i] -= 0.0005
-         '''           
+        num_real_states = self.getNumPP() 
         
         #precompute statistics
         num_recombs = [0 for x in range(self.getNumIP())]
         num_cnvs = 0
-        for state in self.states:
+        for state in self.states[:num_real_states]:
             num_recombs[self.inheritance_patterns.index(state.inheritance_pattern)] += 1
             num_cnvs += (not self.isNormal(state))
         
         
         trans = [[0. for x in range(num_states)] for y in range(num_states)]
+        #first generate transitions from the real states
         for ip in self.inheritance_patterns:
             
-            if ip == (1, 1): #generate Normal states transitions                
-                for i, state1 in enumerate(self.states):
+            if ip == (1, 1): #generate Normal states transitions\
+                pstay = 0.9499
+                precomb = 0.05 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
+                pgo = 0.0001
+                for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
-                    for j, state2 in enumerate(self.states):
+                    #states "inside the IP component"
+                    for j, state2 in enumerate(self.states[:num_real_states]):
                         if i == j: #stay in the state
-                            trans[i][i] = 0.9499
+                            trans[i][i] = pstay
                         elif state2.inheritance_pattern == ip: #to recombination of the same IP
-                            trans[i][j] = 0.05 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
-                        elif state2.inheritance_pattern != ip: #to a CNV state
-                            trans[i][j] = 0.0001 / 6. / num_recombs[self.inheritance_patterns.index(state2.inheritance_pattern)]
+                            trans[i][j] = precomb
+                    #to the silent exit node    
+                    outState = self.getCorrespondingOutState(state1)
+                    trans[i][self.states.index(outState)] = pgo
+                    
             else: #generate CNV states transitions
-                for i, state1 in enumerate(self.states):
+                pstay = 0.949
+                precomb = 0.05 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
+                pgo = 0.001
+                for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
-                    for j, state2 in enumerate(self.states):
+                    #states "inside the IP component"
+                    for j, state2 in enumerate(self.states[:num_real_states]):
                         if i == j: #stay in the state
-                            trans[i][i] = 0.949
+                            trans[i][i] = pstay
                         elif state2.inheritance_pattern == ip: #to recombination of the same IP
-                            trans[i][j] = 0.05 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
-                        elif state2.inheritance_pattern == (1, 1): #back to normal IP
-                            trans[i][j] = 0.001 / 4.
-                        else:
-                            trans[i][j] = 0.
+                            trans[i][j] = precomb
+                    #to the silent exit node    
+                    outState = self.getCorrespondingOutState(state1)
+                    trans[i][self.states.index(outState)] = pgo
+        
+        #now generate transitions from the silent states
+        inNormal = self.getCorrespondingInState( HMMState((1,1), ()) )
+        for i, state1 in enumerate(self.states[num_real_states:]):
+            #if it is a silent exit node
+            if state1.phased_pattern == "out":
+                if self.isNormal(state1):
+                    prob = 1. / (self.getNumIP() - 1)
+                    for j, state2 in enumerate(self.states[num_real_states:]):
+                        if state2.phased_pattern == "in" and \
+                         state2.inheritance_pattern != state1.inheritance_pattern:
+                            trans[num_real_states + i][num_real_states + j] = prob
+                else:
+                    trans[num_real_states + i][self.states.index(inNormal)] = 1.
+                    
+            #if it is a silent starting node
+            elif state1.phased_pattern == "in":
+                prob = 1. / num_recombs[self.inheritance_patterns.index(state1.inheritance_pattern)]
+                for j, state2 in enumerate(self.states[:num_real_states]):
+                    if state2.inheritance_pattern == state1.inheritance_pattern:
+                        trans[num_real_states + i][j] = prob
         
         #normalize and take logarithm
         for i in range(num_states):
@@ -202,18 +258,6 @@ class FCNV(object):
             self.logNormalize(trans[i])
         
         return trans
-    
-    def getNumIP(self):
-        """Return number of inheritance patterns"""
-        return len(self.inheritance_patterns)
-        
-    def getNumPP(self):
-        """Return number of phased inheritance patterns"""
-        return len(self.phased_patterns)
-        
-    def getNumStates(self):
-        """Return number of HMM states per one SNP position"""
-        return self.getNumPP()
     
     def logNormalize(self, l):
         """Normalize the given list of log-probabilities.
@@ -424,29 +468,30 @@ class FCNV(object):
         
         """
         num_states = self.getNumStates()
+        num_real_states = self.getNumPP() 
         transitions = self.transitions
         
         n = len(samples)
         predecessor = [[0 for i in range(num_states)] for j in xrange(n+1)] 
         #DP table dim: seq length+1 x num_states
-        table = [[0. for i in range(num_states)] for j in xrange(n+1)] 
+        table = [[float("-inf") for i in range(num_states)] for j in xrange(n+1)] 
         
         #initital base case
-        for state_id, state in enumerate(self.states):
+        for state_id, state in enumerate(self.states[:num_real_states]):
             emis_p = self.logLHGivenState(samples[0], M[0], P[0], mixture, state)
-            table[1][state_id] = math.log(1./num_states) + emis_p #initial state probabilities   
+            table[1][state_id] = math.log(1./num_real_states) + emis_p #initial state probabilities   
             predecessor[1][state_id] = -1
         
         #for all SNP positions do:
         for pos in xrange(2, n+1):
             #real positions are <1..n+1), pos 1 is the base case
 
-            #for each SNP consider all inheritance patterns - states of the HMM:
-            for state_id, state in enumerate(self.states):
+            #(i) compute new values for all phased patterns - "real" states of the HMM:
+            for state_id, state in enumerate(self.states[:num_real_states]):
                 #emission probability in the given state
                 emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, state)
                 
-                #porobability of this state is emission * max{previous state * transition}
+                #porobability of this state is `emission * max{previous state * transition}`
                 max_prev = float("-inf")
                 arg_max = -1
                 for prev_id in range(num_states):
@@ -458,14 +503,33 @@ class FCNV(object):
                 table[pos][state_id] = max_prev + emis_p
                 predecessor[pos][state_id] = arg_max
             
+            #(ii, iii) transitions from 'real' states and silent states with lower id to silent states
+            #note: the states in self.states are already ordered such that a transistion from a silent 
+            #   state to another silent state always points to a state with heigher index
+            for state_id, state in enumerate(self.states[num_real_states:]):
+                state_id += num_real_states
+                #porobability of this state is `max{(actual real state or silent state with lower id) * transition}`
+                max_prev = float("-inf")
+                arg_max = -1
+                for prev_id in range(state_id + 1):
+                    if transitions[prev_id][state_id] == float("-inf"): continue #just for speed-up
+                    tmp = table[pos][prev_id] + transitions[prev_id][state_id]
+                    if tmp > max_prev:
+                        max_prev = tmp
+                        arg_max = prev_id
+                table[pos][state_id] = max_prev
+                predecessor[pos][state_id] = arg_max
+            
             #normalize to sum to 1
             self.logNormalize(table[pos])
         
         path = [-1 for i in xrange(n+1)]
         maxx = max(table[n])
         path[n] = table[n].index(maxx)
+        while path[n] >= num_real_states: path[n] = predecessor[n][path[n]]
         for i in reversed(xrange(n)):
             path[i] = predecessor[i+1][path[i+1]]
+            while path[i] >= num_real_states: path[i] = predecessor[i][path[i]]
         
         for i in xrange(1, n+1):
             state = self.states[ path[i] ]
@@ -478,6 +542,7 @@ class FCNV(object):
         Posterior decoding: forward algorithm
         '''
         num_states = self.getNumStates()
+        num_real_states = self.getNumPP()
         patterns = self.inheritance_patterns
         transitions = self.transitions
         
@@ -488,20 +553,30 @@ class FCNV(object):
         table = [[float("-inf") for i in range(num_states)] for j in xrange(n+1)] 
 
         #initital base case
-        for state_id, state in enumerate(self.states):
+        #real states
+        for state_id, state in enumerate(self.states[:num_real_states]):
             emis_p = self.logLHGivenState(samples[0], M[0], P[0], mixture, state)
-            table[1][state_id] = math.log(1./num_states) + emis_p #initial state probabilities
-
+            table[1][state_id] = math.log(1./num_real_states) + emis_p #initial state probabilities
+        #silent states
+        for state_id in range(num_real_states, num_states):
+            summ = "nothing"
+            for prev_id in range(state_id):
+                if transitions[prev_id][state_id] == float("-inf"): continue #just for speed-up
+                tmp =  table[1][prev_id] + transitions[prev_id][state_id]
+                summ = self.logSum(summ, tmp)
+            table[1][state_id] = summ
+        scale[1] = self.logNormalize(table[1])
+        
         #for all SNP positions do:
         for pos in xrange(2, n+1):
             #real positions are <1..n+1), pos 1 is the base case
-
-            #for each SNP consider all inheritance patterns - states of the HMM:
-            for state_id, state in enumerate(self.states):
+            
+            #(i) compute new values for all phased patterns - "real" states of the HMM:
+            for state_id, state in enumerate(self.states[:num_real_states]):
                 #emission probability in the given state
                 emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, state)
                 
-                #probability of this state is emission * \sum {previous state * transition}
+                #probability of this state is `emission * \sum {previous state * transition}`
                 summ = "nothing"
                 for prev_id in range(num_states):
                     if transitions[prev_id][state_id] == float("-inf"): continue #just for speed-up
@@ -509,12 +584,27 @@ class FCNV(object):
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = emis_p + summ
             
+            #(ii, iii) transitions from 'real' states and silent states with *lower* id to silent states
+            #note: the states in self.states are already ordered such that a transistion from a silent 
+            #   state to another silent state always points to a state with heigher index
+            for state_id, state in enumerate(self.states[num_real_states:]):
+                state_id += num_real_states
+                
+                #probability of this state is `\sum {(actual real state or silent state with lower id) * transition}`
+                summ = "nothing"
+                for prev_id in range(state_id):
+                    if transitions[prev_id][state_id] == float("-inf"): continue #just for speed-up
+                    tmp =  table[pos][prev_id] + transitions[prev_id][state_id]
+                    summ = self.logSum(summ, tmp)
+                table[pos][state_id] = summ
+            
+            
             #normalize to sum to 1
             scale[pos] = self.logNormalize(table[pos])
             
         #p(X) - probability of the observed sequence (samples)
         pX = "nothing"
-        for i in table[n]:
+        for i in table[n][:num_real_states]:
             pX = self.logSum(pX, i)
         #print "fwd: ", math.exp(pX), pX
 
@@ -525,6 +615,7 @@ class FCNV(object):
         Posterior decoding: backward algorithm
         '''
         num_states = self.getNumStates()
+        num_real_states = self.getNumPP()
         patterns = self.inheritance_patterns
         transitions = self.transitions
         
@@ -542,26 +633,50 @@ class FCNV(object):
             
             #precompute emission probabilities
             emis_p = []
-            for state in self.states:
+            for state in self.states[:num_real_states]:
                 emis_p.append(self.logLHGivenState(samples[pos], M[pos], P[pos], mixture, state) )
-            
-            #for each SNP consider all inheritance patterns - states of the HMM:
+                
+            #(i) transitions from all states to 'real' states of the HMM:
             for state_id in range(num_states):
-                #probability of this state is:
                 # \sum {emission_in_'next' * 'next'_state * transition_from_here}
                 summ = "nothing"
-                for next_id in range(num_states):
+                for next_id in range(num_real_states):
                     if transitions[state_id][next_id] == float("-inf"): continue #just for speed-up
                     tmp = transitions[state_id][next_id] + table[pos+1][next_id] + emis_p[next_id]
+                    #if next_id < num_real_states: tmp += emis_p[next_id] #if a real state, count in the emission
                     summ = self.logSum(summ, tmp)
-                table[pos][state_id] = summ - scale[pos+1] #pseudonormalize by scaling factor from fwd
+                table[pos][state_id] = summ
             
+            #(iii) add transitions from silent to silent states with *higher* id (*no emission*)
+            for state_id in reversed(range(num_real_states, num_states)):
+                #\sum {'next'_state * transition_from_here} (no emission)
+                summ = "nothing"
+                for next_id in reversed(range(state_id, num_states)):
+                    if transitions[state_id][next_id] == float("-inf"): continue #just for speed-up
+                    
+                    tmp = transitions[state_id][next_id] + table[pos][next_id]
+                    summ = self.logSum(summ, tmp)
+                table[pos][state_id] = self.logSum(summ, table[pos][state_id])
             
+            #(ii) add transitions from 'real' states to silent states (*no emission*)
+            for state_id in range(num_real_states):
+                #\sum {'next'_state * transition_from_here} (no emission)
+                summ = "nothing"
+                for next_id in range(num_real_states, num_states):
+                    if transitions[state_id][next_id] == float("-inf"): continue #just for speed-up
+                    tmp = transitions[state_id][next_id] + table[pos][next_id]
+                    summ = self.logSum(summ, tmp)
+                table[pos][state_id] = self.logSum(summ, table[pos][state_id])
+            
+            #pseudonormalize by scaling factor from fwd
+            for state_id in range(num_states):
+                table[pos][state_id] -= scale[pos+1] 
+        
         #p(X) - probability of the observed sequence (samples)
         pX = "nothing"
-        for s in range(num_states):
+        for s in range(num_real_states):
             emis_p = self.logLHGivenState(samples[0], M[0], P[0], mixture, self.states[s])
-            tmp = math.log(1./num_states) + table[1][s] + emis_p - scale[1] #scale by factor from fwd
+            tmp = math.log(1./num_real_states) + table[1][s] + emis_p - scale[1] #scale by factor from fwd
             pX = self.logSum(pX, tmp)
         #print "bck: ", math.exp(pX), pX
         
@@ -588,7 +703,7 @@ class FCNV(object):
         for pos in xrange(1, n+1):
             max_posterior = float("-inf")
             arg_max = -1
-            for s in range(self.getNumStates()):
+            for s in range(self.getNumPP()):
                 # fwd, bck are in log space (therefore + instead *); p(X) is constant
                 tmp = fwd[pos][s] + bck[pos][s]
                 if tmp > max_posterior:
@@ -609,6 +724,7 @@ class FCNV(object):
         
         """
         n = len(samples)
+        num_real_states = self.getNumPP()
         
         fwd, pX1, scale = self.computeForward(samples, M, P, mixture)
         bck, pX2 = self.computeBackward(samples, M, P, mixture, scale)
@@ -623,7 +739,7 @@ class FCNV(object):
             for ip_id, ip in enumerate(self.inheritance_patterns):
                 #max over corresponding phased patterns
                 max_ = float("-inf")
-                for s_id, s in enumerate(self.states):
+                for s_id, s in enumerate(self.states[:num_real_states]):
                     if s.inheritance_pattern == ip:
                         #fwd, bck are in log space (therefore + instead *); p(X) is constant
                         max_ = max(max_, fwd[pos][s_id] + bck[pos][s_id])
@@ -803,6 +919,7 @@ class FCNV(object):
         of the data in corresponding state, i.e. by emission porobabilities
         '''
         n = len(samples)
+        num_real_states = self.getNumPP()
         
         table = []
         for pos in xrange(1, n+1):
@@ -810,7 +927,7 @@ class FCNV(object):
             for ip_id, ip in enumerate(self.inheritance_patterns):
                 #max over corresponding phased patterns
                 max_ = float("-inf")
-                for s in self.states:
+                for s in self.states[:num_real_states]:
                     if s.inheritance_pattern == ip:
                         ll = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, s)
                         max_ = max(max_, ll)
