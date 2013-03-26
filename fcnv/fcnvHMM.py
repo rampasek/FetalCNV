@@ -47,6 +47,12 @@ class FCNV(object):
         """Initialize new FCNV object"""
         super(FCNV, self).__init__()
         
+        #run intern tests
+        self.neg_inf = float('-inf')
+        self.inf = float('inf')
+        self.nan = float('nan')
+        self.testLogSum()
+        
         #cache for log-likelihood values
         self.logLikelihoodCache = {}
         #self.distributionCache = {}
@@ -279,7 +285,7 @@ class FCNV(object):
         #normalize and take logarithm
         for i in range(num_states):
             for j in range(num_states):
-                if trans[i][j] < 10e-10: trans[i][j] = float("-inf")
+                if trans[i][j] < 10e-10: trans[i][j] = self.neg_inf
                 else: trans[i][j] = math.log(trans[i][j])
             self.logNormalize(trans[i])
         
@@ -291,10 +297,10 @@ class FCNV(object):
         Normalizes the list in place and returns the used scale factor.
         
         """
-        sum_ = float("-inf")
+        sum_ = self.neg_inf
         for x in l: sum_ = self.logSum(sum_, x)
         for i in range(len(l)): 
-            if l[i] != float("-inf"): l[i] -= sum_
+            if l[i] != self.neg_inf: l[i] -= sum_
         return sum_
         
     def logSum(self, x, y):
@@ -320,16 +326,34 @@ class FCNV(object):
             else: return 0.
         '''
         
-        if x == float("-inf") and y == float("-inf"): return float("-inf")
-        elif x == float("inf") and y == float("inf"): return float("inf")
+        if x == self.neg_inf and y == self.neg_inf: return self.neg_inf
+        elif x == self.inf and y == self.inf: return self.inf
+        elif math.isnan(x) or math.isnan(y): return self.nan
         
         a = max(x, y)
         b = min(x, y)
-        if a == float("inf") and b == float("-inf"): return float("nan")
-        elif b == float("-inf"): return a
-        
-        #return a + lookup(b-a):
         return a + math.log(1 + math.exp(b-a) )
+    
+    def testLogSum(self):
+        # From the numpy documentation
+        prob1 = math.log(1e-50)
+        prob2 = math.log(2.5e-50)
+        prob12 = self.logSum(prob1, prob2)
+        assert prob12 == -113.87649168120691
+        assert math.exp(prob12) == 3.5000000000000057e-50
+        assert self.logSum(0, 0) == math.log(2)
+        assert self.logSum(float('-inf'), 0) == 0
+        #assert self.logSum(12345678, 12345678) == float('inf')
+
+        assert math.isnan(self.logSum(float('nan'), 1))
+        assert math.isnan(self.logSum(1, float('nan')))
+        assert math.isnan(self.logSum(float('nan'), float('inf')))
+        assert math.isnan(self.logSum(float('inf'), float('nan')))
+        assert self.logSum(float('-inf'), float('-inf')) == float('-inf')
+        assert self.logSum(float('-inf'), float('inf')) == float('inf')
+        assert self.logSum(float('inf'), float('-inf')) == float('inf')
+        assert self.logSum(float('inf'), float('inf')) == float('inf')
+
     
     def logMultinomial(self, xs, ps):
         """Calculate probability mass function of multinomial distribution
@@ -500,7 +524,7 @@ class FCNV(object):
         n = len(samples)
         predecessor = [[0 for i in range(num_states)] for j in xrange(n+1)] 
         #DP table dim: seq length+1 x num_states
-        table = [[float("-inf") for i in range(num_states)] for j in xrange(n+1)] 
+        table = [[self.neg_inf for i in range(num_states)] for j in xrange(n+1)] 
         
         start_id, start_state = self.getStartState()
         exit_id, exit_state = self.getExitState()
@@ -512,7 +536,7 @@ class FCNV(object):
         #propagate over all silent states
         for state_id, state in enumerate(self.states[num_real_states:]):
             state_id += num_real_states
-            if transitions[start_id][state_id] == float("-inf"): continue #just for speed-up
+            if transitions[start_id][state_id] == self.neg_inf: continue #just for speed-up
             table[0][state_id] = table[0][start_id] + transitions[start_id][state_id]
             predecessor[0][state_id] = -1
          
@@ -527,10 +551,10 @@ class FCNV(object):
                 emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, state)
                 
                 #porobability of this state is `emission * max{previous state * transition}`
-                max_prev = float("-inf")
+                max_prev = self.neg_inf
                 arg_max = -1
                 for prev_id in range(num_states):
-                    if transitions[prev_id][state_id] == float("-inf"): continue #just for speed-up
+                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
                     tmp = table[pos-1][prev_id] + transitions[prev_id][state_id]
                     if tmp > max_prev:
                         max_prev = tmp
@@ -544,10 +568,10 @@ class FCNV(object):
             for state_id, state in enumerate(self.states[num_real_states:]):
                 state_id += num_real_states
                 #porobability of this state is `max{(actual real state or silent state with lower id) * transition}`
-                max_prev = float("-inf")
+                max_prev = self.neg_inf
                 arg_max = -1
                 for prev_id in range(state_id + 1):
-                    if transitions[prev_id][state_id] == float("-inf"): continue #just for speed-up
+                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
                     tmp = table[pos][prev_id] + transitions[prev_id][state_id]
                     if tmp > max_prev:
                         max_prev = tmp
@@ -585,7 +609,7 @@ class FCNV(object):
         #scale factors
         scale = [0. for i in xrange(n+1)]
         #DP table dim: seq length+1 x num_states
-        table = [[float("-inf") for i in range(num_states)] for j in xrange(n+1)] 
+        table = [[self.neg_inf for i in range(num_states)] for j in xrange(n+1)] 
         
         start_id, start_state = self.getStartState()
         exit_id, exit_state = self.getExitState()
@@ -597,7 +621,7 @@ class FCNV(object):
         #propagate over all silent states
         for state_id, state in enumerate(self.states[num_real_states:]):
             state_id += num_real_states
-            if transitions[start_id][state_id] == float("-inf"): continue #just for speed-up
+            if transitions[start_id][state_id] == self.neg_inf: continue #just for speed-up
             table[0][state_id] = table[0][start_id] + transitions[start_id][state_id]
         
         '''DYNAMIC PROGRAMMING'''
@@ -611,9 +635,9 @@ class FCNV(object):
                 emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, state)
                 
                 #probability of this state is `emission * \sum {previous state * transition}`
-                summ = float("-inf")
+                summ = self.neg_inf
                 for prev_id in range(num_states):
-                    if transitions[prev_id][state_id] == float("-inf"): continue #just for speed-up
+                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
                     tmp =  table[pos-1][prev_id] + transitions[prev_id][state_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = emis_p + summ
@@ -625,9 +649,9 @@ class FCNV(object):
                 state_id += num_real_states
                 
                 #probability of this state is `\sum {(actual real state or silent state with lower id) * transition}`
-                summ = float("-inf")
+                summ = self.neg_inf
                 for prev_id in range(state_id):
-                    if transitions[prev_id][state_id] == float("-inf"): continue #just for speed-up
+                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
                     tmp =  table[pos][prev_id] + transitions[prev_id][state_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = summ
@@ -654,7 +678,7 @@ class FCNV(object):
 
         n = len(samples)
         #DP table dim: seq length+2 x num_states
-        table = [[float("-inf") for i in range(num_states)] for j in xrange(n+1)]
+        table = [[self.neg_inf for i in range(num_states)] for j in xrange(n+1)]
         
         start_id, start_state = self.getStartState()
         exit_id, exit_state = self.getExitState()
@@ -666,9 +690,9 @@ class FCNV(object):
         #(iii) add transitions from silent to silent states with *higher* id (*no emission*)
         for state_id in reversed(range(num_real_states, num_states)):
             #\sum {'next'_state * transition_from_here} (no emission)
-            summ = float("-inf")
+            summ = self.neg_inf
             for next_id in reversed(range(state_id, num_states)):
-                if transitions[state_id][next_id] == float("-inf"): continue #just for speed-up
+                if transitions[state_id][next_id] == self.neg_inf: continue #just for speed-up
                 tmp = transitions[state_id][next_id] + table[n][next_id]
                 summ = self.logSum(summ, tmp)
             table[n][state_id] = self.logSum(summ, table[n][state_id])
@@ -676,9 +700,9 @@ class FCNV(object):
         #(ii) add transitions from 'real' states to silent states (*no emission*)
         for state_id in range(num_real_states):
             #\sum {'next'_state * transition_from_here} (no emission)
-            summ = float("-inf")
+            summ = self.neg_inf
             for next_id in range(num_real_states, num_states):
-                if transitions[state_id][next_id] == float("-inf"): continue #just for speed-up
+                if transitions[state_id][next_id] == self.neg_inf: continue #just for speed-up
                 tmp = transitions[state_id][next_id] + table[n][next_id]
                 summ = self.logSum(summ, tmp)
             table[n][state_id] = self.logSum(summ, table[n][state_id])
@@ -696,9 +720,9 @@ class FCNV(object):
             #(i) transitions from all states to 'real' states of the HMM:
             for state_id in range(num_states):
                 # \sum {emission_in_'next' * 'next'_state * transition_from_here}
-                summ = float("-inf")
+                summ = self.neg_inf
                 for next_id in range(num_real_states):
-                    if transitions[state_id][next_id] == float("-inf"): continue #just for speed-up
+                    if transitions[state_id][next_id] == self.neg_inf: continue #just for speed-up
                     tmp = transitions[state_id][next_id] + table[pos+1][next_id] + emis_p[next_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = summ
@@ -706,9 +730,9 @@ class FCNV(object):
             #(iii) add transitions from silent to silent states with *higher* id (*no emission*)
             for state_id in reversed(range(num_real_states, num_states)):
                 #\sum {'next'_state * transition_from_here} (no emission)
-                summ = float("-inf")
+                summ = self.neg_inf
                 for next_id in reversed(range(state_id, num_states)):
-                    if transitions[state_id][next_id] == float("-inf"): continue #just for speed-up
+                    if transitions[state_id][next_id] == self.neg_inf: continue #just for speed-up
                     tmp = transitions[state_id][next_id] + table[pos][next_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = self.logSum(summ, table[pos][state_id])
@@ -716,9 +740,9 @@ class FCNV(object):
             #(ii) add transitions from 'real' states to silent states (*no emission*)
             for state_id in range(num_real_states):
                 #\sum {'next'_state * transition_from_here} (no emission)
-                summ = float("-inf")
+                summ = self.neg_inf
                 for next_id in range(num_real_states, num_states):
-                    if transitions[state_id][next_id] == float("-inf"): continue #just for speed-up
+                    if transitions[state_id][next_id] == self.neg_inf: continue #just for speed-up
                     tmp = transitions[state_id][next_id] + table[pos][next_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = self.logSum(summ, table[pos][state_id])
@@ -753,7 +777,7 @@ class FCNV(object):
         
         path = []
         for pos in xrange(1, n+1):
-            max_posterior = float("-inf")
+            max_posterior = self.neg_inf
             arg_max = -1
             for s in range(self.getNumPP()):
                 # fwd, bck are in log space (therefore + instead *); p(X) is constant
@@ -790,14 +814,14 @@ class FCNV(object):
             tmp = []
             for ip_id, ip in enumerate(self.inheritance_patterns):
                 #max over corresponding phased patterns
-                max_ = float("-inf")
+                max_ = self.neg_inf
                 for s_id, s in enumerate(self.states[:num_real_states]):
                     if s.inheritance_pattern == ip:
                         #fwd, bck are in log space (therefore + instead *); p(X) is constant
                         max_ = max(max_, fwd[pos][s_id] + bck[pos][s_id])
                 
                 '''#sum over corresponding phased patterns
-                sum_ = "nothing"
+                sum_ = self.neg_inf
                 for s_id, s in enumerate(self.states):
                     if s.inheritance_pattern == ip:
                         #fwd, bck are in log space (therefore + instead *); p(X) is constant
@@ -823,7 +847,7 @@ class FCNV(object):
         """
         num_states = self.getNumStates()
         n = len(samples)
-        A = [[float("-inf") for x in range(num_states)] for y in range(num_states)]
+        A = [[self.neg_inf for x in range(num_states)] for y in range(num_states)]
         num_iter = 0
         while True and num_iter < 5:
             num_iter += 1
@@ -837,20 +861,20 @@ class FCNV(object):
             
             for k in range(num_states):            
                 for l in range(num_states):
-                    if self.transitions[k][l] == float("-inf"):
-                        A[k][l] = float("-inf")
+                    if self.transitions[k][l] == self.neg_inf:
+                        A[k][l] = self.neg_inf
                         continue
                         
-                    val = float("-inf")
+                    val = self.neg_inf
                     for pos in xrange(1, n):
                         emis_p = self.logLHGivenState(samples[pos], M[pos],\
                          P[pos], mixture, self.states[l])
                         tmp = fwd[pos][k] + self.transitions[k][l] + emis_p + bck[pos+1][l]
-                        if tmp == float("-inf"): continue
+                        if tmp == self.neg_inf: continue
                         val = self.logSum(val, tmp)
                     
-                    if val == float("-inf"):
-                        A[k][l] = float("-inf")
+                    if val == self.neg_inf:
+                        A[k][l] = self.neg_inf
                     else:
                         val -= pX1
                         A[k][l] = val
@@ -860,9 +884,9 @@ class FCNV(object):
             #maximization
             old_trans = copy.deepcopy(self.transitions)
             for k in range(num_states):
-                summ = float("-inf")
+                summ = self.neg_inf
                 for m in range(num_states):
-                    if A[k][m] == float("-inf"): continue
+                    if A[k][m] == self.neg_inf: continue
                     summ = self.logSum(summ, A[k][m])
                 #print summ, math.exp(summ)
                 for l in range(num_states):
@@ -872,14 +896,14 @@ class FCNV(object):
             
             change = 0.
             for k in range(num_states):
-                summ = float("-inf")
+                summ = self.neg_inf
                 for m in range(num_states):
-                    if A[k][m] == float("-inf"): continue
+                    if A[k][m] == self.neg_inf: continue
                     summ = self.logSum(summ, self.transitions[k][m])
                 #print summ
                 for l in range(num_states):
                     #self.transitions[k][l] -= summ
-                    if not (self.transitions[k][l] == float("-inf") or old_trans[k][l] == float("-inf")):
+                    if not (self.transitions[k][l] == self.neg_inf or old_trans[k][l] == self.neg_inf):
                         change += (self.transitions[k][l] - old_trans[k][l])**2
                     
             print "change: ", change 
@@ -938,7 +962,7 @@ class FCNV(object):
                 #print summ, math.exp(summ)
                 for l in range(num_states):
                     if A[k][l] == 0:
-                        self.transitions[k][l] = float("-inf")
+                        self.transitions[k][l] = self.neg_inf
                     else:
                         self.transitions[k][l] = math.log(A[k][l]) - summ
                     #if self.transitions[k][l] < math.log(0.0005):
@@ -946,13 +970,13 @@ class FCNV(object):
                         
             change = 0.
             for k in range(num_states):
-                summ = float("-inf")
+                summ = self.neg_inf
                 for m in range(num_states):
-                    if A[k][m] == float("-inf"): continue
+                    if A[k][m] == self.neg_inf: continue
                     summ = self.logSum(summ, self.transitions[k][m])
                 for l in range(num_states):
                     #self.transitions[k][l] -= summ
-                    if not (self.transitions[k][l] == float("-inf") or old_trans[k][l] == float("-inf")):
+                    if not (self.transitions[k][l] == self.neg_inf or old_trans[k][l] == self.neg_inf):
                         change += (self.transitions[k][l] - old_trans[k][l])**2
                     
             print "change: ", change 
@@ -978,14 +1002,14 @@ class FCNV(object):
             tmp = []
             for ip_id, ip in enumerate(self.inheritance_patterns):
                 #max over corresponding phased patterns
-                max_ = float("-inf")
+                max_ = self.neg_inf
                 for s in self.states[:num_real_states]:
                     if s.inheritance_pattern == ip:
                         ll = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, s)
                         max_ = max(max_, ll)
                 
                 '''#sum over corresponding phased patterns
-                sum_ = "nothing"
+                sum_ = self.neg_inf
                 for s in self.states:
                     if s.inheritance_pattern == ip:
                         ll = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, s)
