@@ -129,6 +129,7 @@ def computeStats(ok, wrong, pref, num_patt):
         print pref, t, ": ", o, w, ratio, '%'
 
 def test(fcnv, samples, M, P, mixture, ground_truth):
+    el = fcnv.extendedLabeling(samples, M, P, mixture)
     vp = fcnv.viterbiPath(samples, M, P, mixture)
     posterior = fcnv.posteriorDecoding(samples, M, P, mixture)
     byLL = fcnv.likelihoodDecoding(samples, M, P, mixture)    
@@ -136,6 +137,7 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
     print fcnv.inheritance_patterns
     num_patt = fcnv.getNumIP()
     
+    labeling_correct = 0
     viterbi_correct = 0
     max_posterior_correct = 0
     ll_correct = 0
@@ -144,6 +146,7 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
     ll_dist = [0 for x in range(num_patt)]
     #other stats
     state_stats = [0 for x in range(num_patt)]
+    state_correct_el = [0 for x in range(num_patt)]
     state_correct_vp = [0 for x in range(num_patt)]
     state_correct_pp = [0 for x in range(num_patt)]
     state_correct_ll = [0 for x in range(num_patt)]
@@ -168,6 +171,8 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         tableLH.append(ll_value)
             
         #print ground_truth[i], vp[i], pp[i], '|', post
+        labeling_correct += int(ground_truth[i] == el[i])
+        state_correct_el[ground_truth[i]] += int(ground_truth[i] == el[i])
         viterbi_correct += int(ground_truth[i] == vp[i])
         state_correct_vp[ground_truth[i]] += int(ground_truth[i] == vp[i])
         max_posterior_correct += int(ground_truth[i] == post[0])
@@ -221,13 +226,14 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
     #for x in range(7):
     #    print x,":", state3_stats[x]
     print "stats  : ", state_stats
+    print "mplabel: ", state_correct_el
     print "viterbi: ", state_correct_vp
     print "mposter: ", state_correct_pp
     print "byLHood: ", state_correct_ll
     print "avgDist: ", avg_distance / len(vp) 
     print "dist_set:", distance_set
     
-    
+    print 'Labeling : ',(labeling_correct*100.)/len(vp), '% OK'
     print 'Viterbi  : ',(viterbi_correct*100.)/len(vp), '% OK'
     print 'Posterior: ',(max_posterior_correct*100.)/len(vp), '% OK'
     print 'LikeliH. : ',(ll_correct*100.)/len(vp), '% OK'
@@ -235,6 +241,14 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
     for i in [2]: #, 2, 4, 8, 16]:
         #precision and recall
         print "sensitivity: 1 /", i
+        
+        #recall Labeling
+        called_l, real, ok_called, not_called = computeEval(ground_truth, el, i, num_patt)
+        print "mplabel recall   : ", called_l, '/',  real, " => ", 
+        print "%0.3f" % (called_l*100./real), "%"
+        print ok_called
+        print not_called
+        computeStats(ok_called, not_called, "LR", num_patt)
         
         #recall Viterbi
         called_v, real, ok_called, not_called = computeEval(ground_truth, vp, i, num_patt)
@@ -252,7 +266,15 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         print not_called
         computeStats(ok_called, not_called, "PR", num_patt)
         
-        #prediction Viterbi 
+        #precision Labeling 
+        correct_l, claimed_l, ok_prediction, wr_prediction = computeEval(el, ground_truth, i, num_patt)
+        print "mplabel precision: ", correct_l , '/',  claimed_l, " => ", 
+        print "%0.3f" % (correct_l*100./claimed_l), "%"
+        print ok_prediction
+        print wr_prediction
+        computeStats(ok_prediction, wr_prediction, "LP", num_patt)
+        
+        #precision Viterbi 
         correct_v, claimed_v, ok_prediction, wr_prediction = computeEval(vp, ground_truth, i, num_patt)
         print "viterbi precision: ", correct_v , '/',  claimed_v, " => ", 
         print "%0.3f" % (correct_v*100./claimed_v), "%"
@@ -260,7 +282,7 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         print wr_prediction
         computeStats(ok_prediction, wr_prediction, "VP", num_patt)
         
-        #prediction max posterior
+        #precision max posterior
         correct_p, claimed_p, ok_prediction, wr_prediction = computeEval(pp, ground_truth, i, num_patt)
         print "mposter precision: ", correct_p , '/',  claimed_p, " => ", 
         print "%0.3f" % (correct_p*100./claimed_p), "%"
@@ -271,8 +293,10 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         #format for LaTeX tabular
         #print "%0.3f" % ((viterbi_correct*100.)/len(vp)), "\%"
         #print "%0.3f" % ((max_posterior_correct*100.)/len(vp)), "\%"
+        print "%0.3f" % (called_l*100./real), "\%"
         print "%0.3f" % (called_v*100./real), "\%"
         print "%0.3f" % (called_p*100./real), "\%"
+        print "%0.3f" % (correct_l*100./claimed_v), "\%"
         print "%0.3f" % (correct_v*100./claimed_v), "\%"
         print "%0.3f" % (correct_p*100./claimed_p), "\%"
         

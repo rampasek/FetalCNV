@@ -117,7 +117,7 @@ class FCNV(object):
         num_states = self.getNumStates()
         for k in xrange(num_states):
             for l in xrange(num_states):
-                print "%.5f" % (math.exp(self.transitions[k][l])),
+                print "%.4f" % (math.exp(self.transitions[k][l])),
             print " "
          
     def getNumIP(self):
@@ -432,7 +432,7 @@ class FCNV(object):
         '''#Caching:
         code = (tuple(maternal), tuple(fetal), mix)
         val = self.distributionCache.get(code)
-        if val: return val
+        if val != None: return val
         '''
 
         adjusted_fetal_admix = mix/2. * len(fetal)
@@ -477,7 +477,7 @@ class FCNV(object):
         #Caching:
         code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(fetal_alleles), mix)
         val = self.logLikelihoodCache.get(code)
-        if val: return val
+        if val != None: return val
         
         ps = self.allelesDistribution(maternal_alleles, fetal_alleles, mix)
         result = self.logMultinomial(nuc_counts, ps)
@@ -592,6 +592,222 @@ class FCNV(object):
         
         for i in xrange(1, n+1):
             state = self.states[ path[i] ]
+            path[i] = self.inheritance_patterns.index(state.inheritance_pattern)
+            
+        return path[1:]
+        
+        
+    def getP(self, v, u, j, i, samples, M, P, mixture):
+        #base case
+        if i == j: return float(v == u)
+        
+        #caching:
+        code = (v, u, j)
+        val = self.PCache.get(code)
+        if val != None: return val
+        
+        num_real_states = self.getNumPP()
+        transitions = self.transitions
+        states = self.states
+        logSum = self.logSum
+        
+        #for silent *v*
+        if v >= num_real_states:
+            summ = self.neg_inf
+            for w in range(num_real_states):
+                if transitions[v][w] == self.neg_inf: continue
+                if states[v].inheritance_pattern != \
+                   states[w].inheritance_pattern: continue
+                tmp = transitions[v][w] + self.getP(w, u, j, i, samples, M, P, mixture)
+                summ = logSum(summ, tmp)
+            result = summ
+            
+        #for real *v*
+        else:
+            emis_p = self.logLHGivenState(samples[j-1], M[j-1], P[j-1], mixture, states[v])
+            summ = self.neg_inf
+            for w in range(num_real_states):
+                if transitions[v][w] == self.neg_inf: continue
+                if states[v].inheritance_pattern != \
+                   states[w].inheritance_pattern: continue
+                tmp = transitions[v][w] + self.getP(w, u, j+1, i, samples, M, P, mixture)
+                summ = logSum(summ, tmp)
+            result = summ + emis_p
+        
+        
+        self.PCache[code] = result
+        return result
+    
+    def preCompute(self, v, u, j, i, samples, M, P, mixture):
+        code = (v, u, j)
+        if i == j:
+            self.PCache[code] = float(v == u)
+        else:
+            num_real_states = self.getNumPP()
+            transitions = self.transitions
+            states = self.states
+            logSum = self.logSum
+            
+            #for silent *v*
+            if v >= num_real_states:
+                summ = self.neg_inf
+                for w in range(num_real_states):
+                    if transitions[v][w] == self.neg_inf: continue
+                    if states[v].inheritance_pattern != \
+                       states[w].inheritance_pattern: continue
+                    tmp = transitions[v][w] + self.PCache.get((w, u, j))
+                    summ = logSum(summ, tmp)
+                result = summ
+                
+            #for real *v*
+            else:
+                emis_p = self.logLHGivenState(samples[j-1], M[j-1], P[j-1], mixture, states[v])
+                summ = self.neg_inf
+                for w in range(num_real_states):
+                    if transitions[v][w] == self.neg_inf: continue
+                    #if states[v].inheritance_pattern != \
+                    #   states[w].inheritance_pattern: continue
+                    tmp = transitions[v][w] + self.PCache.get((w, u, j+1))
+                    summ = logSum(summ, tmp)
+                result = summ + emis_p
+            self.PCache[code] = result
+    
+    def extendedLabeling(self, samples, M, P, mixture):
+        """
+        Most probable extended labeling.
+        """
+        import sys
+        print >> sys.stderr, "BEGIN"
+        num_states = self.getNumStates()
+        num_real_states = self.getNumPP() 
+        transitions = self.transitions
+        states = self.states
+        getP = self.getP
+        
+        
+        n = len(samples)
+        predecessor = [[0 for i in range(num_states)] for j in xrange(n+1)]
+        jump = [[0 for i in range(num_states)] for j in xrange(n+1)]  
+        #DP table dim: seq length+1 x num_states
+        table = [[self.neg_inf for i in range(num_states)] for j in xrange(n+1)] 
+        
+        start_id, start_state = self.getStartState()
+        exit_id, exit_state = self.getExitState()
+        
+        
+        '''INITIALIZE'''
+        #the start state probability is 1 -> log(1)=0
+        table[0][start_id] = 0. 
+        #propagate over all silent states
+        for state_id, state in enumerate(self.states[num_real_states:]):
+            state_id += num_real_states
+            if transitions[start_id][state_id] == self.neg_inf: continue #just for speed-up
+            table[0][state_id] = table[0][start_id] + transitions[start_id][state_id]
+            predecessor[0][state_id] = -1
+            jump[0][state_id] = 0
+         
+        '''DYNAMIC PROGRAMMING'''
+        #for all SNP positions do:
+        for pos in xrange(1, n+1):
+            #real positions are <1..n+1), pos 1 is the base case
+            self.PCache = {}
+            print >> sys.stderr, pos, 
+            
+            '''
+            preCompute = self.preCompute
+            for j in reversed(xrange(1,  pos+1)):
+                i = pos
+                for v in xrange(num_states):
+                    for u in xrange(num_real_states):
+                        preCompute(v, u, j, i, samples, M, P, mixture)
+            '''            
+            
+            
+            
+            #(i) compute new values for all phased patterns - "real" states of the HMM:
+            for state_id, state in enumerate(states[:num_real_states]):
+                max_prev = self.neg_inf
+                arg_max = -1
+                jump_from = -1
+                
+                
+                #if the pravious transition is the critical edge:
+                #emission probability in current state
+                emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, state)
+                #porobability of this state is `emission * max{previous state * transition}`
+                for prev_id in range(num_states):
+                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
+                    tmp = table[pos-1][prev_id] + transitions[prev_id][state_id] + emis_p
+                    if tmp > max_prev:
+                        max_prev = tmp
+                        arg_max = prev_id
+                        jump_from = pos-1             
+                
+                #where the previous critical edge is:
+                for j in reversed(xrange(1,  pos)):
+                    #between which states the critical edge is:
+                    for to_id in range(num_real_states, num_states):
+                        #the 'jumped' region after critical edge must have one lable
+                        if states[to_id].inheritance_pattern != \
+                           states[state_id].inheritance_pattern: continue
+                        for from_id in range(num_real_states, num_states):
+                            #there must be an edge
+                            if transitions[from_id][to_id] == self.neg_inf: continue
+                            #to be a critical edge, it must change the label
+                            if states[from_id].inheritance_pattern == \
+                               states[to_id].inheritance_pattern: continue
+                            
+                            #tmp = table[j-1][from_id] + transitions[from_id][to_id] + self.PCache.get((to_id, state_id, j))
+                            tmp = table[j-1][from_id] + transitions[from_id][to_id] + getP(to_id, state_id, j, pos, samples, M, P, mixture)
+                            if tmp > max_prev:
+                                max_prev = tmp
+                                arg_max = prev_id
+                                jump_from = j-1
+                
+                #record the max value and traceback info
+                table[pos][state_id] = max_prev
+                predecessor[pos][state_id] = arg_max
+                jump[pos][state_id] = jump_from
+            
+            #(ii, iii) transitions from 'real' states and silent states with lower id to silent states
+            #note: the states in self.states are already ordered such that a transistion from a silent 
+            #   state to another silent state always points to a state with heigher index
+            for state_id, state in enumerate(states[num_real_states:]):
+                state_id += num_real_states
+                #porobability of this state is `max{(actual real state or silent state with lower id) * transition}`
+                max_prev = self.neg_inf
+                arg_max = -1
+                jump_from = -1
+                for prev_id in range(state_id + 1):
+                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
+                    tmp = table[pos][prev_id] + transitions[prev_id][state_id]
+                    if tmp > max_prev:
+                        max_prev = tmp
+                        arg_max = prev_id
+                        jump_from = pos
+                table[pos][state_id] = max_prev
+                predecessor[pos][state_id] = arg_max
+                jump[pos][state_id] = jump_from
+            
+            #normalize to sum to 1
+            #self.logNormalize(table[pos])
+        
+        '''RESULT'''
+        print >> sys.stderr, "COMPUTING BACKTRACE"
+        path = [-1 for i in xrange(n+1)]
+        path[n] = exit_id 
+        while path[n] >= num_real_states or path[n]!=start_id: path[n] = predecessor[n][path[n]]
+        pos = n
+        for x in range(jump[pos][path[pos]]+1, pos): path[x] = path[pos]
+        while predecessor[pos][path[pos]] > -1:
+            new_pos = jump[pos][path[pos]]
+            path[new_pos] = predecessor[pos][path[pos]]
+            pos = new_pos
+            while path[pos] >= num_real_states or path[pos]!=start_id: path[pos] = predecessor[pos][path[pos]]
+            for x in range(jump[pos][path[pos]]+1, pos): path[x] = path[pos]
+        
+        for i in xrange(1, n+1):
+            state = states[ path[i] ]
             path[i] = self.inheritance_patterns.index(state.inheritance_pattern)
             
         return path[1:]
