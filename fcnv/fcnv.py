@@ -16,7 +16,7 @@ def readInput(file_samples_in, file_maternal_in, file_paternal_in):
         X = []
         for line in lines:
             line = line.rstrip("\n")
-            X.append(line.split(" "))
+            X.append(tuple(line.split(" ")))
         return X
         
     def parseSamples(lines):
@@ -25,7 +25,7 @@ def readInput(file_samples_in, file_maternal_in, file_paternal_in):
             l = line.rstrip("\n").split(" ")
             for i in range(len(l)):
                 l[i] = int(l[i])
-            X.append(l)
+            X.append(tuple(l))
         return X
 
     fpaternal = open(file_paternal_in, 'r')
@@ -130,6 +130,7 @@ def computeStats(ok, wrong, pref, num_patt):
 
 def test(fcnv, samples, M, P, mixture, ground_truth):
     el = fcnv.extendedLabeling(samples, M, P, mixture)
+    #el = fcnv.mixedDecoding(samples, M, P, mixture)
     vp = fcnv.viterbiPath(samples, M, P, mixture)
     posterior = fcnv.posteriorDecoding(samples, M, P, mixture)
     byLL = fcnv.likelihoodDecoding(samples, M, P, mixture)    
@@ -296,7 +297,7 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         print "%0.3f" % (called_l*100./real), "\%"
         print "%0.3f" % (called_v*100./real), "\%"
         print "%0.3f" % (called_p*100./real), "\%"
-        print "%0.3f" % (correct_l*100./claimed_v), "\%"
+        print "%0.3f" % (correct_l*100./claimed_l), "\%"
         print "%0.3f" % (correct_v*100./claimed_v), "\%"
         print "%0.3f" % (correct_p*100./claimed_p), "\%"
         
@@ -352,6 +353,7 @@ def main():
     
     print "------------------ w/o TRAINING -------------------"
     test(fcnv, samples, M, P, mix, ground_truth)
+    #test(fcnv, samples[:500], M[:500], P[:500], mix, ground_truth[:500])
     
     '''
     print "------------------ BEFORE TRAINING -------------------"

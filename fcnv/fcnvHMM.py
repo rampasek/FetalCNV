@@ -3,7 +3,42 @@ import math
 import numpypy as np
 import itertools
 import copy
+import functools
 
+class memoized(object):
+       """Decorator that caches a function's return value each time it is called.
+       If called later with the same arguments, the cached value is returned, and
+       not re-evaluated.
+       """
+       def __init__(self, func):
+          self.func = func
+          self.cache = {}
+          
+       def __call__(self, *args):
+          try:
+             return self.cache[args]
+          except KeyError:
+             value = self.func(*args)
+             self.cache[args] = value
+             return value
+          except TypeError:
+             # uncachable -- for instance, passing a list as an argument.
+             # Better to not cache than to blow up entirely.
+             print 'memo arg TypeError', args
+             return self.func(*args)
+             
+       def __repr__(self):
+          """Return the function's docstring."""
+          return self.func.__doc__
+          
+       def __get__(self, obj, objtype):
+          """Support instance methods."""
+          fn = functools.partial(self.__call__, obj)
+          fn.reset = self.reset
+          return fn
+          
+       def reset(self):
+          self.cache = {}
 
 class HMMState(object):
     """Class to represent a particular phased inheritance pattern."""
@@ -41,7 +76,7 @@ class HMMState(object):
 class FCNV(object):
     """Hidden Markov Model for fetal CNV calling"""
     
-    nucleotides = ['A', 'C', 'G', 'T']
+    nucleotides = ['A', 'C', 'G', 'T'] 
     
     def __init__(self):
         """Initialize new FCNV object"""
@@ -119,22 +154,36 @@ class FCNV(object):
             for l in xrange(num_states):
                 print "%.4f" % (math.exp(self.transitions[k][l])),
             print " "
-         
+            
+        #create list of neighbors (adjacency list) from the transitions (matrix)
+        self.adjacency_out = [ [] for x in range(num_states)]
+        self.adjacency_in = [ [] for x in range(num_states)]
+        for i in range(num_states):
+            for j in range(num_states):
+                if self.transitions[i][j] != self.neg_inf:
+                    self.adjacency_out[i].append(j)
+                    self.adjacency_in[j].append(i)
+    
+    @memoized     
     def getNumIP(self):
         """Return number of inheritance patterns"""
         return len(self.inheritance_patterns)
-        
+    
+    @memoized     
     def getNumPP(self):
         """Return number of phased inheritance patterns"""
         return len(self.phased_patterns)
-        
+    
+    @memoized    
     def getNumStates(self):
         """Return number of HMM states per one SNP position"""
         return len(self.states)   
     
+    @memoized 
     def isNormal(self, state):
         return state.inheritance_pattern == (1,1)
-        
+    
+    @memoized   
     def isReal(self, state):
         return isinstance(state.inheritance_pattern, tuple)
     
@@ -146,25 +195,31 @@ class FCNV(object):
             eq += (state1.phased_pattern[hap] == state2.phased_pattern[hap])
         return (eq > 0)
     
+    @memoized
     def getCorrespondingInState(self, state):
-        for st in self.states[self.getNumPP():]:
+        num_real_states = self.getNumPP()
+        for st_id, st in enumerate(self.states[num_real_states:]):
             if st.inheritance_pattern == state.inheritance_pattern and \
                st.phased_pattern == "in":
-                return st
+                return num_real_states + st_id, st
         return None
-        
+    
+    @memoized    
     def getCorrespondingOutState(self, state):
-        for st in self.states[self.getNumPP():]:
+        num_real_states = self.getNumPP()
+        for st_id, st in enumerate(self.states[num_real_states:]):
             if st.inheritance_pattern == state.inheritance_pattern and \
                st.phased_pattern == "out":
-                return st
+                return num_real_states + st_id, st
         return None
-        
+    
+    @memoized    
     def getStartState(self):
         for i, state in enumerate(self.states):
             if state.inheritance_pattern == "s": return i, state
         return None
-        
+    
+    @memoized   
     def getExitState(self):
         for i, state in enumerate(self.states):
             if state.inheritance_pattern == "t": return i, state
@@ -231,8 +286,8 @@ class FCNV(object):
                         elif state2.inheritance_pattern == ip: #to recombination of the same IP
                             trans[i][j] = precomb
                     #to the silent exit node    
-                    outState = self.getCorrespondingOutState(state1)
-                    trans[i][self.states.index(outState)] = pgo
+                    outState_id= self.getCorrespondingOutState(state1)[0]
+                    trans[i][outState_id] = pgo
                     
             else: #generate CNV states transitions
                 pstay = 0.949
@@ -247,11 +302,11 @@ class FCNV(object):
                         elif state2.inheritance_pattern == ip: #to recombination of the same IP
                             trans[i][j] = precomb
                     #to the silent exit node    
-                    outState = self.getCorrespondingOutState(state1)
-                    trans[i][self.states.index(outState)] = pgo
+                    outState_id = self.getCorrespondingOutState(state1)[0]
+                    trans[i][outState_id] = pgo
         
         #now generate transitions from the silent states
-        inNormal = self.getCorrespondingInState( HMMState((1,1), ()) )
+        inNormal_id = self.getCorrespondingInState( HMMState((1,1), ()) )[0]
         for i, state1 in enumerate(self.states[num_real_states:]):
             i += num_real_states
             #if it is the start node
@@ -263,7 +318,7 @@ class FCNV(object):
             #if it is a silent exit node
             elif state1.phased_pattern == "out":
                 exit_prob = 1. / self.getNumIP()
-                j, st = self.getExitState()
+                j = self.getExitState()[0]
                 trans[i][j] = exit_prob
                         
                 if self.isNormal(state1):
@@ -273,7 +328,7 @@ class FCNV(object):
                          state2.inheritance_pattern != state1.inheritance_pattern:
                             trans[i][num_real_states + j] = prob
                 else:
-                    trans[i][self.states.index(inNormal)] = 1. - exit_prob
+                    trans[i][inNormal_id] = 1. - exit_prob
                     
             #if it is a silent starting node
             elif state1.phased_pattern == "in":
@@ -395,11 +450,11 @@ class FCNV(object):
             returns list(floats)
                 
             """
-            if isinstance(x, list):
+            if isinstance(x, tuple):
                 res = []
                 for val in x:
                     res.append(gammaln(val+1))
-                return res
+                return tuple(res)
             else: 
                 return gammaln(x+1)
         
@@ -414,7 +469,8 @@ class FCNV(object):
             result += xs[i] * math.log(ps[i])
             
         return result
-
+    
+    @memoized
     def allelesDistribution(self, maternal, fetal, mix):
         """Compute nucleotides distribution in maternal plasma for a position with
         given maternal and fetal alleles, assuming the given fetal admixture.
@@ -454,7 +510,7 @@ class FCNV(object):
         return dist
     
     
-    #TODO: NEEDS OPTIMIZATION if possible !!!!!!!!!!!!!!!!!    
+    #TODO: NEEDS OPTIMIZATION if possible !!!!!!!!!!!!!!!!!
     def logLHGivenState(self, nuc_counts, maternal_alleles, paternal_alleles, mix, state):
         '''
         >>> f = FCNV()
@@ -476,10 +532,10 @@ class FCNV(object):
         
         #Caching:
         code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(fetal_alleles), mix)
-        val = self.logLikelihoodCache.get(code)
-        if val != None: return val
-        
-        ps = self.allelesDistribution(maternal_alleles, fetal_alleles, mix)
+        try: return self.logLikelihoodCache[code]
+        except KeyError: pass
+
+        ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
         result = self.logMultinomial(nuc_counts, ps)
         
         self.logLikelihoodCache[code] = result
@@ -580,7 +636,7 @@ class FCNV(object):
                 predecessor[pos][state_id] = arg_max
             
             #normalize to sum to 1
-            self.logNormalize(table[pos])
+            #self.logNormalize(table[pos])
         
         '''RESULT'''
         path = [-1 for i in xrange(n+1)]
@@ -593,51 +649,11 @@ class FCNV(object):
         for i in xrange(1, n+1):
             state = self.states[ path[i] ]
             path[i] = self.inheritance_patterns.index(state.inheritance_pattern)
-            
+        
+        print "Viterbi path probability: ", table[n][exit_id]    
         return path[1:]
         
-        
-    def getP(self, v, u, j, i, samples, M, P, mixture):
-        #base case
-        if i == j: return float(v == u)
-        
-        #caching:
-        code = (v, u, j)
-        val = self.PCache.get(code)
-        if val != None: return val
-        
-        num_real_states = self.getNumPP()
-        transitions = self.transitions
-        states = self.states
-        logSum = self.logSum
-        
-        #for silent *v*
-        if v >= num_real_states:
-            summ = self.neg_inf
-            for w in range(num_real_states):
-                if transitions[v][w] == self.neg_inf: continue
-                if states[v].inheritance_pattern != \
-                   states[w].inheritance_pattern: continue
-                tmp = transitions[v][w] + self.getP(w, u, j, i, samples, M, P, mixture)
-                summ = logSum(summ, tmp)
-            result = summ
-            
-        #for real *v*
-        else:
-            emis_p = self.logLHGivenState(samples[j-1], M[j-1], P[j-1], mixture, states[v])
-            summ = self.neg_inf
-            for w in range(num_real_states):
-                if transitions[v][w] == self.neg_inf: continue
-                if states[v].inheritance_pattern != \
-                   states[w].inheritance_pattern: continue
-                tmp = transitions[v][w] + self.getP(w, u, j+1, i, samples, M, P, mixture)
-                summ = logSum(summ, tmp)
-            result = summ + emis_p
-        
-        
-        self.PCache[code] = result
-        return result
-    
+    '''    
     def preCompute(self, v, u, j, i, samples, M, P, mixture):
         code = (v, u, j)
         if i == j:
@@ -671,16 +687,140 @@ class FCNV(object):
                     summ = logSum(summ, tmp)
                 result = summ + emis_p
             self.PCache[code] = result
+    '''
+    @memoized
+    def getPRec(self, v, u, j, i):
+        transitions = self.transitions
+        logSum = self.logSum
+        adjacency_out = self.adjacency_out
+        num_real_states = self.getNumPP()
+        states = self.states
+        
+        if states[v].inheritance_pattern != states[u].inheritance_pattern: return self.neg_inf
+        #base case
+        if j == i:
+            if u == v and v < num_real_states:
+                return self.logLHGivenState(self.samples[j-1], self.M[j-1], self.P[j-1], self.mixture, states[u])
+            elif v >= num_real_states:
+                return transitions[v][u] + self.logLHGivenState(self.samples[j-1], self.M[j-1], self.P[j-1], self.mixture, states[u])
+            else:
+                return self.neg_inf
+        
+        #if a silent state
+        if v >= num_real_states:
+            summ = self.neg_inf
+            for w in adjacency_out[v]:
+                if states[v].inheritance_pattern != \
+                   states[w].inheritance_pattern: continue
+                tmp = transitions[v][w] + self.getPRec(w, u, j, i)
+                summ = logSum(summ, tmp)
+            return summ
+                
+        #real state
+        emis_p = self.logLHGivenState(self.samples[j-1], self.M[j-1], self.P[j-1], self.mixture, states[v])
+        summ = self.neg_inf
+        for w in adjacency_out[v]:
+            if states[v].inheritance_pattern != \
+               states[w].inheritance_pattern: continue
+            tmp = emis_p + transitions[v][w] + self.getPRec(w, u, j+1, i)
+            summ = logSum(summ, tmp)
+        return summ
+        
+    
+    def computeValueFor(self, v, u, j, i):
+        #caching:
+        code = (v, u, j)
+        PCache = self.PCache
+        try: return PCache[code]
+        except KeyError: pass
+        
+        transitions = self.transitions
+        logSum = self.logSum
+        adjacency_out = self.adjacency_out
+        num_real_states = self.getNumPP()
+        
+        emis_p = self.logLHGivenState(self.samples[j-1], self.M[j-1], self.P[j-1], self.mixture, self.states[v])
+        summ = self.neg_inf
+        for w in adjacency_out[v]:
+            if w >= num_real_states: continue
+            #if transitions[v][w] == self.neg_inf: continue
+            #if states[v].inheritance_pattern != \
+            #   states[w].inheritance_pattern: continue
+            if j+1 == i:
+                if u == w and u < num_real_states:
+                    probP = self.logLHGivenState(self.samples[j], self.M[j], self.P[j], self.mixture, self.states[u])
+                else:
+                    probP = self.neg_inf
+            else:
+                probP = PCache[(w, u, j+1)]
+            tmp = transitions[v][w] + probP #self.getP(w, u, j+1, i, samples, M, P, mixture)
+            summ = logSum(summ, tmp)
+        result = summ + emis_p
+        
+        PCache[code] = result
+        return result
+        
+    
+    def getP(self, v, u, j, i):
+        #caching:
+        code = (v, u, j)
+        PCache = self.PCache
+        try: return PCache[code]
+        except KeyError: pass
+        
+        num_real_states = self.getNumPP()
+        transitions = self.transitions
+        adjacency_out = self.adjacency_out
+        
+        #base case
+        if j == i:
+            if u == v and v < num_real_states:
+                result = self.logLHGivenState(self.samples[j-1], self.M[j-1], self.P[j-1], self.mixture, self.states[u])
+            elif v >= num_real_states:
+                result = transitions[v][u] + self.logLHGivenState(self.samples[j-1], self.M[j-1], self.P[j-1], self.mixture, self.states[u])
+            else:
+                result = self.neg_inf
+            PCache[code] = result
+            return result
+        
+        #for silent *v*
+        if v >= num_real_states:
+            '''print "X", 
+            summ = self.neg_inf
+            for w in adjacency_out[v]:
+                #if transitions[v][w] == self.neg_inf: continue
+                #if states[v].inheritance_pattern != \
+                #   states[w].inheritance_pattern: continue
+                if w < num_real_states: tmp = transitions[v][w] + self.computeValueFor(w, u, j, i)
+                else: tmp = transitions[v][w] + PCache[(w, u, j)]
+                summ = self.logSum(summ, tmp)
+            result = summ
+            '''
+            result = self.neg_inf            
+            
+        #for real *v*
+        else:
+            result = self.computeValueFor(v, u, j, i)
+
+        PCache[code] = result
+        return result
     
     def extendedLabeling(self, samples, M, P, mixture):
         """
         Most probable extended labeling.
         """
-        import sys
-        print >> sys.stderr, "BEGIN"
+        #import sys
+        #print >> sys.stderr, "BEGIN"
+        
+        self.samples = samples
+        self.M = M
+        self.P = P
+        self.mixture = mixture
         num_states = self.getNumStates()
         num_real_states = self.getNumPP() 
         transitions = self.transitions
+        adjacency_out = self.adjacency_out
+        adjacency_in = self.adjacency_in
         states = self.states
         getP = self.getP
         
@@ -703,15 +843,16 @@ class FCNV(object):
             state_id += num_real_states
             if transitions[start_id][state_id] == self.neg_inf: continue #just for speed-up
             table[0][state_id] = table[0][start_id] + transitions[start_id][state_id]
-            predecessor[0][state_id] = -1
+            predecessor[0][state_id] = start_id
             jump[0][state_id] = 0
          
         '''DYNAMIC PROGRAMMING'''
         #for all SNP positions do:
         for pos in xrange(1, n+1):
             #real positions are <1..n+1), pos 1 is the base case
-            self.PCache = {}
-            print >> sys.stderr, pos, 
+            #self.PCache = {}
+            self.getPRec.reset()
+            #print >> sys.stderr, pos, 
             
             '''
             preCompute = self.preCompute
@@ -720,8 +861,7 @@ class FCNV(object):
                 for v in xrange(num_states):
                     for u in xrange(num_real_states):
                         preCompute(v, u, j, i, samples, M, P, mixture)
-            '''            
-            
+            '''
             
             
             #(i) compute new values for all phased patterns - "real" states of the HMM:
@@ -730,39 +870,42 @@ class FCNV(object):
                 arg_max = -1
                 jump_from = -1
                 
-                
+                '''
                 #if the pravious transition is the critical edge:
                 #emission probability in current state
                 emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, state)
                 #porobability of this state is `emission * max{previous state * transition}`
-                for prev_id in range(num_states):
-                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
+                for prev_id in adjacency_in[state_id]: #range(num_states)
+                    #if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
                     tmp = table[pos-1][prev_id] + transitions[prev_id][state_id] + emis_p
                     if tmp > max_prev:
                         max_prev = tmp
                         arg_max = prev_id
                         jump_from = pos-1             
+                '''
                 
                 #where the previous critical edge is:
-                for j in reversed(xrange(1,  pos)):
+                for j in reversed(xrange(1, pos+1)):
                     #between which states the critical edge is:
-                    for to_id in range(num_real_states, num_states):
-                        #the 'jumped' region after critical edge must have one lable
-                        if states[to_id].inheritance_pattern != \
-                           states[state_id].inheritance_pattern: continue
-                        for from_id in range(num_real_states, num_states):
-                            #there must be an edge
-                            if transitions[from_id][to_id] == self.neg_inf: continue
-                            #to be a critical edge, it must change the label
-                            if states[from_id].inheritance_pattern == \
-                               states[to_id].inheritance_pattern: continue
-                            
-                            #tmp = table[j-1][from_id] + transitions[from_id][to_id] + self.PCache.get((to_id, state_id, j))
-                            tmp = table[j-1][from_id] + transitions[from_id][to_id] + getP(to_id, state_id, j, pos, samples, M, P, mixture)
-                            if tmp > max_prev:
-                                max_prev = tmp
-                                arg_max = prev_id
-                                jump_from = j-1
+                    #if abs(pos-j)>200 : break
+                    
+                    #the 'jumped' region after critical edge must have one lable
+                    to_id = self.getCorrespondingInState(states[state_id])[0]
+                           
+                    paths_prob = self.getPRec(to_id, state_id, j, pos) #getP(to_id, state_id, j, pos)
+                    #backup_prob = self.getPRec(to_id, state_id, j, pos)
+                    #if abs(paths_prob - backup_prob)>1e-4: print "PRUSEEEERRRR", to_id, state_id, j, pos, " :", paths_prob, backup_prob
+                    for from_id in adjacency_in[to_id]:
+                        #to be a critical edge, it must change the label
+                        if states[from_id].inheritance_pattern == \
+                           states[to_id].inheritance_pattern: continue
+                        
+                        #tmp = table[j-1][from_id] + transitions[from_id][to_id] + self.PCache.get((to_id, state_id, j))
+                        tmp = table[j-1][from_id] + transitions[from_id][to_id] + paths_prob
+                        if tmp > max_prev:
+                            max_prev = tmp
+                            arg_max = from_id
+                            jump_from = j-1
                 
                 #record the max value and traceback info
                 table[pos][state_id] = max_prev
@@ -778,8 +921,9 @@ class FCNV(object):
                 max_prev = self.neg_inf
                 arg_max = -1
                 jump_from = -1
-                for prev_id in range(state_id + 1):
-                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
+                for prev_id in adjacency_in[state_id]: #prev_id in range(state_id + 1):
+                    #if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
+                    if prev_id > state_id: continue #update silent states in increasing ID order
                     tmp = table[pos][prev_id] + transitions[prev_id][state_id]
                     if tmp > max_prev:
                         max_prev = tmp
@@ -793,23 +937,31 @@ class FCNV(object):
             #self.logNormalize(table[pos])
         
         '''RESULT'''
-        print >> sys.stderr, "COMPUTING BACKTRACE"
+        #print >> sys.stderr, "COMPUTING BACKTRACE"
         path = [-1 for i in xrange(n+1)]
+        
         path[n] = exit_id 
-        while path[n] >= num_real_states or path[n]!=start_id: path[n] = predecessor[n][path[n]]
         pos = n
-        for x in range(jump[pos][path[pos]]+1, pos): path[x] = path[pos]
-        while predecessor[pos][path[pos]] > -1:
+        while pos > 0:
+            #print >> sys.stderr, "pos:", pos, "jump:", jump[pos][path[pos]]
             new_pos = jump[pos][path[pos]]
             path[new_pos] = predecessor[pos][path[pos]]
             pos = new_pos
-            while path[pos] >= num_real_states or path[pos]!=start_id: path[pos] = predecessor[pos][path[pos]]
-            for x in range(jump[pos][path[pos]]+1, pos): path[x] = path[pos]
+            while path[pos] >= num_real_states and path[pos]!=start_id:
+                #print >> sys.stderr, "pos:", pos, ": ", path[pos], "->", predecessor[pos][path[pos]]
+                path[pos] = predecessor[pos][path[pos]]
+            #print >> sys.stderr, path[pos]
+            for x in range(jump[pos][path[pos]]+1, pos):
+                path[x] = path[pos]
+                #print >> sys.stderr, "path", x, ": ", path[x]
         
+        #print path[1:]
         for i in xrange(1, n+1):
             state = states[ path[i] ]
             path[i] = self.inheritance_patterns.index(state.inheritance_pattern)
-            
+        
+        #print path[1:]
+        print "labeling probability: ", table[n][exit_id]
         return path[1:]
     
     def computeForward(self, samples, M, P, mixture):
@@ -1021,20 +1173,26 @@ class FCNV(object):
         fwd, pX1, scale = self.computeForward(samples, M, P, mixture)
         bck, pX2 = self.computeBackward(samples, M, P, mixture, scale)
         
+        #print pX1, pX2, sum(scale)
+        
         if abs(pX1-pX2) > 10e-8:
             print "p(X) from forward and backward DP doesn't match", pX1, pX2
             return
         
         table = []
+        over90 = 0
+        numall = 0
         for pos in xrange(1, n+1):
             tmp = []
+            tmp2 = []
             for ip_id, ip in enumerate(self.inheritance_patterns):
                 #max over corresponding phased patterns
                 max_ = self.neg_inf
                 for s_id, s in enumerate(self.states[:num_real_states]):
                     if s.inheritance_pattern == ip:
                         #fwd, bck are in log space (therefore + instead *); p(X) is constant
-                        max_ = max(max_, fwd[pos][s_id] + bck[pos][s_id])
+                        #max_ = max(max_, fwd[pos][s_id] + bck[pos][s_id])
+                        max_ = max(max_, fwd[pos][s_id] + bck[pos][s_id] - pX1)
                 
                 '''#sum over corresponding phased patterns
                 sum_ = self.neg_inf
@@ -1045,11 +1203,66 @@ class FCNV(object):
                 '''
                     
                 tmp.append((max_, ip_id))
-                
-            tmp.sort(reverse=True)    
-            table.append(tmp)
+                tmp2.append([max_, ip_id])
             
+            sum_ = self.neg_inf
+            for x in tmp2:
+                sum_ = self.logSum(sum_, x[0])
+            for i in range(len(tmp2)):
+                tmp2[i][0] -= sum_
+                tmp2[i][0] = int(math.exp(tmp2[i][0])*1000)
+            tmp2.sort(reverse=True)
+            #print tmp2
+            if tmp2[0][0] >= 900: over90 += 1
+            numall += 1
+            
+            tmp.sort(reverse=True)
+            table.append(tmp)
+        
+        print over90, numall, "that is:", over90/float(numall)
         return table
+    
+    def mixedDecoding(self, samples, M, P, mixture):
+        posterior = self.likelihoodDecoding(samples, M, P, mixture)
+        n = len(M)
+        prediction = [-1 for i in xrange(n)]
+        
+        last = -1
+        for i, pp in enumerate(posterior):
+            column = pp
+            
+            #compute sum
+            sum_ = self.neg_inf
+            for x in column:
+                sum_ = self.logSum(sum_, x[0])
+            
+            #normalize
+            for j in range(len(column)):
+                column[j] = list(column[j])
+                column[j][0] -= sum_
+                column[j][0] = math.exp(column[j][0])
+            #column.sort(reverse=True)
+            
+            #if high confidency, then take that prediction
+            if column[0][0] >= 0.5 or i == n-1:
+                if last + 1 == i:
+                    #print column
+                    prediction[i] = column[0][1]
+                    last = i
+                else: #else run max prob labeling
+                    last += 1
+                    #a = max(last-5, 0)
+                    #b = min(n, i+6)
+                    #path = self.extendedLabeling(samples[a:b], M[a:b], P[a:b], mixture)
+                    print i - last + 1, 
+                    path = self.viterbiPath(samples[last:i+1], M[last:i+1], P[last:i+1], mixture)
+                    for pos in range(last, i+1):
+                        prediction[pos] = path[pos-last]
+                    last = i
+                    
+        print prediction
+        return prediction    
+            
         
         
     #TODO: NEEDS REWRITING !!!!!!!!!!!!!!!!!    
