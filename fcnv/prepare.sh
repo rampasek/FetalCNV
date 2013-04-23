@@ -15,29 +15,41 @@ fi
 #exit
 #<<comment
 # (1) remove PCR duplicates
-echo "processing maternal reads:"
-samtools view -bu $1 $5 | samtools rmdup - - > __M.part.bam
-samtools index __M.part.bam
+echo "removing PCR duplicates:"
+samtools view -bu $1 $5 | samtools rmdup - - > __M.part.bam &
+samtools view -bu $2 $5 | samtools rmdup - - > __P.part.bam &
+samtools view -bu $3 $5 | samtools rmdup - - > __F.part.bam &
+wait
+samtools index __M.part.bam &
+samtools index __P.part.bam &
+samtools index __F.part.bam &
+wait
 
-echo "processing paternal reads:"
-samtools view -bu $2 $5 | samtools rmdup - - > __P.part.bam
-samtools index __P.part.bam
-
-echo "processing fetal reads:"
-samtools view -bu $3 $5 | samtools rmdup - - > __F.part.bam
-samtools index __F.part.bam
 echo "-------- step 1 done ----------"
 
 # (2) genotype M, P, F
+
 for file in __M.part __P.part __F.part
 do
     echo "genotyping $file"
-    samtools mpileup -uD -r $5 -f $4 $file.bam | bcftools view -bvcg - > $file.genotype.raw.bcf
-    bcftools view $file.genotype.raw.bcf | vcfutils.pl varFilter -D100 > $file.genotype.vcf
-    # ???? what limit for depth of coverage to use?
-    #extract only SNPs with reasonable quality score
-    cat $file.genotype.vcf | ./extract_snps.awk -v qlimit=50 > $file.snps.vcf
+    samtools mpileup -uD -r $5 -f $4 $file.bam | bcftools view -bvcg - > $file.genotype.raw.bcf &
 done
+wait
+
+for file in __M.part __P.part __F.part
+do
+    bcftools view $file.genotype.raw.bcf | vcfutils.pl varFilter -D100 > $file.genotype.vcf &
+    # ???? what limit for depth of coverage to use?
+done
+wait
+
+for file in __M.part __P.part __F.part
+do
+    #extract only SNPs with reasonable quality score
+    cat $file.genotype.vcf | ./extract_snps.awk -v qlimit=50 > $file.snps.vcf &
+done
+wait
+
 echo "-------- step 2 done ----------"
 #comment
 
@@ -65,26 +77,38 @@ echo "we need $M_multiplier x M and $F_multiplier x F reads"
 
 #sample reads to simulate plasma reads
 temp_file='__temp.sam'
+file_count=-1
 samtools view -H __M.part.bam > $temp_file
 samtools view -H __F.part.bam >> $temp_file
+
 for gnm in M F; do
     frac=$gnm'_multiplier'
     frac=${!frac}
     #echo "+++> $frac"
 
     while [ $(bc <<< "$frac >= 1") -eq 1 ]; do
-        samtools view __$gnm.part.bam >> $temp_file
+        file_count=$(($file_count+1))
+        samtools view __$gnm.part.bam > $temp_file$file_count &
 
         frac=`echo "scale=5; $frac - 1"|bc`
         #echo $frac
     done
     if [ $(bc <<< "$frac > 0") -eq 1 ]; then
-        samtools view -s $frac __$gnm.part.bam >> $temp_file
+        file_count=$(($file_count+1))
+        samtools view -s $frac __$gnm.part.bam > $temp_file$file_count &
     fi    
 done
+wait
 
+#concatenate the temp files
+for (( c=0; c<=$file_count; c++ ))
+do
+    cat $temp_file$c >> $temp_file
+done
+
+#turn the sam file into a bam, sort and index it too
 samtools view -Sbu $temp_file | samtools sort - plasma.sort
-rm $temp_file
+rm $temp_file*
 plasma_file='plasma.sort.bam'
 samtools index $plasma_file
 echo "-------- step 3 done ----------"
@@ -100,7 +124,7 @@ python2 process_vcfs.py __M.part.snps.vcf __P.part.snps.vcf __F.part.snps.vcf $p
 echo "-------- step 4 done ----------"
 
 # CLEAN-UP
-rm __*.*
+#rm __*.*
 
 
 
