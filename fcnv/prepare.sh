@@ -13,7 +13,7 @@ fi
 
 #echo "continued"
 #exit
-#<<comment
+<<comment
 # (1) remove PCR duplicates
 echo "removing PCR duplicates:"
 samtools view -bu $1 $5 | samtools rmdup - - > __M.part.bam &
@@ -51,7 +51,7 @@ done
 wait
 
 echo "-------- step 2 done ----------"
-#comment
+comment
 
 # (3) mix reads to get plasma-like reads
 for gnm in M F; do
@@ -106,21 +106,22 @@ do
     cat $temp_file$c >> $temp_file
 done
 
-#turn the sam file into a bam, sort and index it too
-samtools view -Sbu $temp_file | samtools sort - plasma.sort
+#sort the sam file: turn it to a bam, sort, convert back to sam
+samtools view -Sbu $temp_file | samtools sort - __plasma.sort
 rm $temp_file*
-plasma_file='plasma.sort.bam'
-samtools index $plasma_file
+plasma_file='plasma.sort.sam'
+samtools view -q 20  __plasma.sort.bam > $plasma_file
+rm __plasma.sort.bam
 echo "-------- step 3 done ----------"
 
 # (4) get nucleotides counts for individual SNP positions (union of the SNP positions found in (2)
 # when genotyping the parental genomes)
 
-plasma_snps='__plasma_mapped.vcf'
-samtools mpileup -uD -f /filer/hg19/hg19.fa plasma.sort.bam | bcftools view -cg - | ./extract_snps.awk -v qlimit=0 > $plasma_snps
+#plasma_snps='__plasma_mapped.vcf'
+#samtools mpileup -uD -f /filer/hg19/hg19.fa plasma.sort.bam | bcftools view -cg - | ./extract_snps.awk -v qlimit=0 > $plasma_snps
 
 echo "combining"
-python2 process_vcfs.py __M.part.snps.vcf __P.part.snps.vcf __F.part.snps.vcf $plasma_snps
+time pypy process_vcfs.py __M.part.snps.vcf __P.part.snps.vcf __F.part.snps.vcf $plasma_file
 echo "-------- step 4 done ----------"
 
 # CLEAN-UP

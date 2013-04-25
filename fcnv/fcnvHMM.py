@@ -150,10 +150,10 @@ class FCNV(object):
 
         #print the table
         num_states = self.getNumStates()
-        for k in xrange(num_states):
-            for l in xrange(num_states):
-                print "%.4f" % (math.exp(self.transitions[k][l])),
-            print " "
+        #for k in xrange(num_states):
+        #    for l in xrange(num_states):
+        #        print "%.4f" % (math.exp(self.transitions[k][l])),
+        #    print " "
             
         #create list of neighbors (adjacency list) from the transitions (matrix)
         self.adjacency_out = [ [] for x in range(num_states)]
@@ -554,18 +554,22 @@ class FCNV(object):
         mix = 0.
         num = 0
         for i in xrange(len(samples)):
-            if M[i][0] == M[i][1] and not P[i][0] == P[i][1] and \
-              (P[i][0] == M[i][0] or P[i][1] == M[i][0]):
+            #if mother is homozygous A and father has at least one alternative B
+            if M[i][0] == M[i][1] and (P[i][0] != M[i][0] or P[i][1] != M[i][0]):
                 #print M[i], P[i], samples[i]            
                 type1 = M[i][0]
                 type2 = P[i][0]
                 if type1 == type2: type2 = P[i][1]
-                num_type2 = samples[i][self.nucleotides.index(type2)]
-
-                if not num_type2 == 0:
-                    sum_all = sum(samples[i])
-                    num += 1
-                    mix += (2.*num_type2)/sum_all
+                try:
+                    num_type2 = samples[i][self.nucleotides.index(type2)]
+                except: 
+                    print "ERROR unexpected allele: ", type2
+                    
+                #only if it looks like the child inherited the allele B
+                #if num_type2 != 0: 
+                sum_all = sum(samples[i])
+                num += 1
+                mix += (2.*num_type2)/sum_all
         return mix/num
     
     
@@ -1186,7 +1190,7 @@ class FCNV(object):
             tmp = []
             tmp2 = []
             for ip_id, ip in enumerate(self.inheritance_patterns):
-                #max over corresponding phased patterns
+                '''#max over corresponding phased patterns
                 max_ = self.neg_inf
                 for s_id, s in enumerate(self.states[:num_real_states]):
                     if s.inheritance_pattern == ip:
@@ -1200,7 +1204,7 @@ class FCNV(object):
                     if s.inheritance_pattern == ip:
                         #fwd, bck are in log space (therefore + instead *); p(X) is constant
                         sum_ = self.logSum(sum_, fwd[pos][s_id] + bck[pos][s_id])
-                '''
+                max_ = sum_
                     
                 tmp.append((max_, ip_id))
                 tmp2.append([max_, ip_id])

@@ -129,9 +129,10 @@ def computeStats(ok, wrong, pref, num_patt):
         print pref, t, ": ", o, w, ratio, '%'
 
 def test(fcnv, samples, M, P, mixture, ground_truth):
-    el = fcnv.extendedLabeling(samples, M, P, mixture)
-    #el = fcnv.mixedDecoding(samples, M, P, mixture)
+    #el = fcnv.extendedLabeling(samples, M, P, mixture)
+    #el = fcnv.mixedDecoding(samples, M, P, mixture) 
     vp = fcnv.viterbiPath(samples, M, P, mixture)
+    el = vp #skip experimenting with posterior labeling:)
     posterior = fcnv.posteriorDecoding(samples, M, P, mixture)
     byLL = fcnv.likelihoodDecoding(samples, M, P, mixture)    
 
@@ -303,7 +304,7 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         
         
 def main():
-    mixture = 0.1 #proportion of fetal genome in plasma
+    mix = 0.1 #proportion of fetal genome in plasma
     #file_fetal_out = "fetal_prediction.txt"    
     #ffetal = open(file_fetal_out, 'w')
     
