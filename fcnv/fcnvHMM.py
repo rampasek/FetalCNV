@@ -1190,7 +1190,7 @@ class FCNV(object):
             tmp = []
             tmp2 = []
             for ip_id, ip in enumerate(self.inheritance_patterns):
-                '''#max over corresponding phased patterns
+                #max over corresponding phased patterns
                 max_ = self.neg_inf
                 for s_id, s in enumerate(self.states[:num_real_states]):
                     if s.inheritance_pattern == ip:
@@ -1205,6 +1205,7 @@ class FCNV(object):
                         #fwd, bck are in log space (therefore + instead *); p(X) is constant
                         sum_ = self.logSum(sum_, fwd[pos][s_id] + bck[pos][s_id])
                 max_ = sum_
+                '''
                     
                 tmp.append((max_, ip_id))
                 tmp2.append([max_, ip_id])
