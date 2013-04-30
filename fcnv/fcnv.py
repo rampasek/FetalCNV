@@ -135,7 +135,11 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
     el = vp #skip experimenting with posterior labeling:)
     posterior = fcnv.posteriorDecoding(samples, M, P, mixture)
     byLL = fcnv.likelihoodDecoding(samples, M, P, mixture)    
-
+    
+    if True:
+        fout = file("prediction.txt", 'w')
+    
+    
     print fcnv.inheritance_patterns
     num_patt = fcnv.getNumIP()
     
@@ -171,6 +175,9 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
             ll_state.append(x[1])
             ll_value.append(x[0])
         tableLH.append(ll_value)
+        
+        #print the results
+        print >>fout, samples[i], M[i], P[i], vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
             
         #print ground_truth[i], vp[i], pp[i], '|', post
         labeling_correct += int(ground_truth[i] == el[i])

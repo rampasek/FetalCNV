@@ -1,6 +1,6 @@
 import random
 import math
-import numpypy as np
+#import numpypy as np
 import itertools
 import copy
 import functools
@@ -274,9 +274,9 @@ class FCNV(object):
         for ip in self.inheritance_patterns:
             
             if ip == (1, 1): #generate Normal states transitions\
-                pstay = 0.9499
-                precomb = 0.05 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
-                pgo = 0.0001
+                pstay = 0.99949
+                precomb = 0.0005 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
+                pgo = 0.00001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -290,9 +290,9 @@ class FCNV(object):
                     trans[i][outState_id] = pgo
                     
             else: #generate CNV states transitions
-                pstay = 0.949
-                precomb = 0.05 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
-                pgo = 0.001
+                pstay = 0.99949
+                precomb = 0.0005 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
+                pgo = 0.00001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -498,19 +498,38 @@ class FCNV(object):
         for nuc in self.nucleotides:
             p = maternal.count(nuc) / float(len(maternal)) * (1.-cmix)
             p += fetal.count(nuc) / float(len(fetal)) * (cmix)
+            #if p < 0.01: p = 0.01
             dist.append(p)
-        
-        summ = 0.
-        for x in dist:
-            summ += 0.01 + x #add noise
-        for i in range(len(dist)):
-            dist[i] = (dist[i] + 0.01) / summ #normalize
+            
+        #normalize
+        #summ = sum(dist)
+        #dist = [dist[i] / summ for i in range(len(dist)) ]
         
         '''self.distributionCache[code] = dist'''
         return dist
     
+    def logGaussian(self, x, ps, cov_vector):
+        '''
+        log probability of x ~ N(mu, cov)
+        '''
+        D = len(x)
+        N = sum(x)
+        xm = [ x[i] - N*ps[i] for i in range(D) ]
+        
+        det = 1.
+        for i in range(D): det *= cov_vector[i]
+            
+        px = - (D * math.log(2*math.pi)) /2.
+        px += - math.log(det) /2.
+        
+        #compute the 'exponent' part #px += -(np.dot(np.dot(xm.T, inv), xm)) /2.
+        part1 = [ xm[i] / cov_vector[i] for i in range(D) ]
+        part2 = sum([ part1[i] * xm[i] for i in range(D) ])
+        px += - part2 /2.
+        
+        return px
     
-    #TODO: NEEDS OPTIMIZATION if possible !!!!!!!!!!!!!!!!!
+    #TODO: NEEDS OPTIMIZATION if possible !!    !!!!!!!!!!!!!!!
     def logLHGivenState(self, nuc_counts, maternal_alleles, paternal_alleles, mix, state):
         '''
         >>> f = FCNV()
@@ -536,7 +555,30 @@ class FCNV(object):
         except KeyError: pass
 
         ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
-        result = self.logMultinomial(nuc_counts, ps)
+        #result = self.logMultinomial(nuc_counts, ps)
+        N = sum(nuc_counts)
+        cov_vector = []
+        for i in range(4):
+            c = N*ps[i] 
+            if c < 0.1: c = 0.1 
+            cov_vector.append(c)
+        result = self.logGaussian(nuc_counts, ps, cov_vector)
+        if result < -15: result = -15
+        
+        if random.random()> 0.999:
+            print "---------------------------------------"
+            print nuc_counts, maternal_alleles, paternal_alleles, fetal_alleles, mix, state
+            print ps
+            
+            nps = ps
+            N = sum(nuc_counts)
+            nps = [ nps[i]*N for i in range(4)]
+            ps = [ps[i] + 0.01 for i in range(4)]
+            for i in range(4):
+                if ps[i] == 0: ps[i] = 0.01
+            a = sum(ps)
+            ps = [ps[i] / a for i in range(4)]
+            print ps, nps, cov_vector, result, '   ', self.logMultinomial(nuc_counts, ps)
         
         self.logLikelihoodCache[code] = result
         return result
@@ -566,10 +608,12 @@ class FCNV(object):
                     print "ERROR unexpected allele: ", type2
                     
                 #only if it looks like the child inherited the allele B
-                #if num_type2 != 0: 
-                sum_all = sum(samples[i])
-                num += 1
-                mix += (2.*num_type2)/sum_all
+                if num_type2 != 0: 
+                    sum_all = sum(samples[i])
+                    num += 1
+                    mix += (2.*num_type2)/sum_all
+                else:
+                    num += 0.5
         return mix/num
     
     
@@ -640,7 +684,7 @@ class FCNV(object):
                 predecessor[pos][state_id] = arg_max
             
             #normalize to sum to 1
-            #self.logNormalize(table[pos])
+            self.logNormalize(table[pos])
         
         '''RESULT'''
         path = [-1 for i in xrange(n+1)]

@@ -13,7 +13,7 @@ fi
 
 #echo "continued"
 #exit
-<<comment
+#<<comment
 # (1) remove PCR duplicates
 echo "removing PCR duplicates:"
 samtools view -bu $1 $5 | samtools rmdup - - > __M.part.bam &
@@ -51,7 +51,7 @@ done
 wait
 
 echo "-------- step 2 done ----------"
-comment
+#comment
 
 # (3) mix reads to get plasma-like reads
 for gnm in M F; do
@@ -64,8 +64,8 @@ for gnm in M F; do
         echo "  >> got ${!count_var} and ${!coverage_var}"
 done
 
-target_coverage=80
-mixture=0.1
+target_coverage=200
+mixture=0.10
 
 M_multiplier=`echo "scale=5; ($target_coverage * (1.0  - $mixture)) / $M_coverage"|bc`
 F_multiplier=`echo "scale=5; ($target_coverage * $mixture) / $F_coverage"|bc`
@@ -88,14 +88,16 @@ for gnm in M F; do
 
     while [ $(bc <<< "$frac >= 1") -eq 1 ]; do
         file_count=$(($file_count+1))
-        samtools view __$gnm.part.bam > $temp_file$file_count &
+        #echo $frac $gnm
+        samtools view __$gnm.part.bam | awk -v f=$frac '{OFS="\t"; $1=$1"."f; print $0}' > $temp_file$file_count &
 
         frac=`echo "scale=5; $frac - 1"|bc`
         #echo $frac
     done
     if [ $(bc <<< "$frac > 0") -eq 1 ]; then
         file_count=$(($file_count+1))
-        samtools view -s $frac __$gnm.part.bam > $temp_file$file_count &
+        #echo $frac $gnm
+        samtools view -s $frac __$gnm.part.bam | awk -v f=$frac '{OFS="\t"; $1=$1"."f; print $0}' > $temp_file$file_count &
     fi    
 done
 wait
