@@ -274,9 +274,10 @@ class FCNV(object):
         for ip in self.inheritance_patterns:
             
             if ip == (1, 1): #generate Normal states transitions\
-                pstay = 0.99949
-                precomb = 0.0005 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
-                pgo = 0.00001
+                #pstay = 0.499
+                #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
+                pstay = precomb = 0.999 / 6.
+                pgo = 0.001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -290,9 +291,10 @@ class FCNV(object):
                     trans[i][outState_id] = pgo
                     
             else: #generate CNV states transitions
-                pstay = 0.99949
-                precomb = 0.0005 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
-                pgo = 0.00001
+                #pstay = 0.499
+                #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
+                pstay = precomb = 0.999 / 6.
+                pgo = 0.001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -342,7 +344,7 @@ class FCNV(object):
             for j in range(num_states):
                 if trans[i][j] < 10e-10: trans[i][j] = self.neg_inf
                 else: trans[i][j] = math.log(trans[i][j])
-            self.logNormalize(trans[i])
+            #self.logNormalize(trans[i])
         
         return trans
     
@@ -470,7 +472,7 @@ class FCNV(object):
             
         return result
     
-    @memoized
+    #memoized
     def allelesDistribution(self, maternal, fetal, mix):
         """Compute nucleotides distribution in maternal plasma for a position with
         given maternal and fetal alleles, assuming the given fetal admixture.
@@ -492,7 +494,7 @@ class FCNV(object):
         '''
 
         adjusted_fetal_admix = mix/2. * len(fetal)
-        adjusted_maternal_admix = (1.-mix) / 2. * len(maternal)
+        adjusted_maternal_admix = (1.-mix)/ 2. * len(maternal)
         cmix = adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix)
         dist = []
         for nuc in self.nucleotides:
@@ -506,6 +508,25 @@ class FCNV(object):
         #dist = [dist[i] / summ for i in range(len(dist)) ]
         
         '''self.distributionCache[code] = dist'''
+        return dist
+        
+    def allelesDistributionMeans(self, maternal, fetal, mix):
+        """        
+        Arguments:
+        maternal -- maternal alleles
+        paternal -- paternal alleles
+        mix -- fetal admixture ratio
+        returns list(floats) -- list of nucleotides probabilities
+        """
+        adjusted_fetal_admix = mix/2. * len(fetal)
+        adjusted_maternal_admix = (1.-mix) / 2. * len(maternal)
+        cmix = adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix)
+        dist = []
+        for nuc in self.nucleotides:
+            p = maternal.count(nuc) / float(len(maternal)) * (1.-mix)
+            p += fetal.count(nuc) / float(len(fetal)) * adjusted_fetal_admix
+            dist.append(p)
+
         return dist
     
     def logGaussian(self, x, ps, cov_vector):
@@ -530,7 +551,7 @@ class FCNV(object):
         return px
     
     #TODO: NEEDS OPTIMIZATION if possible !!    !!!!!!!!!!!!!!!
-    def logLHGivenState(self, nuc_counts, maternal_alleles, paternal_alleles, mix, state):
+    def logLHGivenState(self, nuc_counts, maternal_alleles, paternal_alleles, mix, state, multinom = False):
         '''
         >>> f = FCNV()
         >>> f.logLHGivenState([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [1,1])
@@ -551,34 +572,42 @@ class FCNV(object):
         
         #Caching:
         code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(fetal_alleles), mix)
-        try: return self.logLikelihoodCache[code]
-        except KeyError: pass
+        #try: return self.logLikelihoodCache[code]
+        #except KeyError: pass
 
-        ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
+        ps = self.allelesDistributionMeans(maternal_alleles, tuple(fetal_alleles), mix)
         #result = self.logMultinomial(nuc_counts, ps)
-        N = sum(nuc_counts)
-        cov_vector = []
-        for i in range(4):
-            c = N*ps[i] 
-            if c < 0.1: c = 0.1 
-            cov_vector.append(c)
-        result = self.logGaussian(nuc_counts, ps, cov_vector)
-        if result < -15: result = -15
-        
-        if random.random()> 0.999:
-            print "---------------------------------------"
-            print nuc_counts, maternal_alleles, paternal_alleles, fetal_alleles, mix, state
-            print ps
-            
-            nps = ps
-            N = sum(nuc_counts)
-            nps = [ nps[i]*N for i in range(4)]
-            ps = [ps[i] + 0.01 for i in range(4)]
+        if multinom:
+            ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
             for i in range(4):
                 if ps[i] == 0: ps[i] = 0.01
             a = sum(ps)
             ps = [ps[i] / a for i in range(4)]
-            print ps, nps, cov_vector, result, '   ', self.logMultinomial(nuc_counts, ps)
+            return self.logMultinomial(tuple(nuc_counts), tuple(ps))
+
+
+        N = sum(nuc_counts)
+        cov_vector = []
+        for i in range(4):
+            c = N*ps[i] 
+            if c < 0.7: c = 0.7
+            cov_vector.append(c)
+        result = self.logGaussian(nuc_counts, ps, cov_vector)
+        if result < -15: result = -15
+        
+        if random.random()> 1:
+            print "---------------------------------------"
+            print nuc_counts, maternal_alleles, paternal_alleles, fetal_alleles, mix, state
+            print ps
+            
+            N = sum(nuc_counts)
+            nps = [ ps[i]*N for i in range(4)]
+            ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
+            for i in range(4):
+                if ps[i] == 0: ps[i] = 0.01
+            a = sum(ps)
+            ps = [ps[i] / a for i in range(4)]
+            print ps, nps, cov_vector, result, '   ', self.logMultinomial(nuc_counts, tuple(ps))
         
         self.logLikelihoodCache[code] = result
         return result
@@ -1499,8 +1528,61 @@ class FCNV(object):
             tmp.sort(reverse=True)    
             table.append(tmp)
         return table
+    
+    def doTheShit(self):
+        daMem = []
+        alleles = [ 'A', 'T' ] 
+        for M1 in alleles:
+            for M2 in alleles:
+                for F1 in alleles:
+                    for F2 in alleles:
+                        for P1 in alleles:
+                            for P2 in alleles:
+                                M = [M1, M2]
+                                P = [P1, P2]
+                                F = [F1, F2]
+                                counts = [90*(M1=='A')+90*(M2=='A')+10*(F1=='A')+10*(F2=='A'), 0, 0, 90*(M1=='T')+90*(M2=='T')+10*(F1=='T')+10*(F2=='T')]
+                                tmp = self.maxLikelyState(counts, M, P, 0.1);
+                                daMem.append((M, P, F, counts, tmp))
+        return daMem
+                        
+    
+    def maxLikelyState(self, nuc_counts, M, P, mixture):
+        '''
+        blah blah
+        import fcnvHMM; f = fcnvHMM.FCNV()
+        tmp = f.maxLikelyState((100,0,0,100), ('A','T'), ('A','T'), 0.1)
+
+        '''
+        num_real_states = self.getNumPP()
+        
+        tmp = []
+        for ip_id, ip in enumerate(self.inheritance_patterns):
+            #max over corresponding phased patterns
+            max_ = self.neg_inf
+            for s in self.states[:num_real_states]:
+                if s.inheritance_pattern == ip:
+                    ll = self.logLHGivenState(nuc_counts, M, P, mixture, s)
+                    ll2 =self.logLHGivenState(nuc_counts, M, P, mixture, s, True)
+                    max_ = max(max_, ll)
+
+                    tmp.append((ll, ll2, s.phased_pattern, s.inheritance_pattern))
+            
+        tmp.sort(reverse=True)    
+
+        return tmp
 
 if __name__ == "__main__":
     import doctest
-    doctest.testmod()
+    #doctest.testmod()
+    
+    f = FCNV()
+    #print "\n".join(map(str, f.doTheShit()))
+    mem = f.doTheShit()
+    for i, x in enumerate(mem):
+        print i, ">>  ", " ".join(map(str,x[:4]))
+        for a in x[4]:
+            print "         ", a[0], a[1], str(a[2])+"\t"+str(a[3]), '**'*(a[3] == (1,1))
+    
+    
     

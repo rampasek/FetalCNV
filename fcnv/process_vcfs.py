@@ -25,6 +25,7 @@ def mapping_parser(m):
     d['pos'] = int(m[3])    # pos
     d['cigar'] = m[5]       # cigar string
     d['seq'] = m[9]         # sequence
+    d['qual'] = m[10]       # qual
     
     return d
 
@@ -60,7 +61,9 @@ def pile_up(read, data):
         elif o[0] in 'ND': pos_db += o[1]
         elif o[0] in 'M=X':
             for i in range(o[1]):
-                add_support(pos_db, read['seq'][pos_qr], data)
+                #if the read position is of sufficient quality, record this info
+                if ord(read['qual'][pos_qr]) >= 33+20:
+                    add_support(pos_db, read['seq'][pos_qr].upper(), data)
                 pos_db += 1
                 pos_qr += 1
 
@@ -78,7 +81,9 @@ def add_support(pos, nuc, data):
     '''
     pos = str(pos)
     if not pos in data: return #if we don't need info for this position
-    if not nuc in 'ACGT': return
+    if not nuc in 'ACGT': 
+        print "Unrecognized symbol in SEQ:", nuc
+        return
     try:
         data[pos][nuc] += 1
     except:
@@ -105,6 +110,7 @@ def main():
     out_files[P] = open("P_alleles.txt", "w")
     out_files[F] = open("F_alleles.txt", "w")
     out_files[PLASMA] = open("plasma_samples.txt", "w")
+    out_pos_file = open("positions.txt", "w")
     
     #allele counts in plasma samples for particular positions
     data = dict()
@@ -145,22 +151,36 @@ def main():
         for i in [M, P, F]:
             for a in [0, 1]:
                 if alleles[i][a] == '.': alleles[i][a] = ref_allele
+
+        #check for homozygous alternative sites
+        for i in [M, P, F]:
+            #if there is a SNP in the data at this position
+            if min_chr == snps[i][0] and min_pos == snps[i][1]:
+                info = snps[i]
+                if len(info) <= 2: continue
+                #parse out genotype config info
+                gt = info[9].split(':')[0]
+                #if homozygous alternative
+                if gt[0] == '1':
+                    alleles[i][0] = snps[i][4]
+                if gt[2] == '1':
+                    alleles[i][1] = snps[i][4]
         
         #get allele counts in reads
-        allele_counts = [[-1, -1] for i in [M, P, F]]
-        for i in [M, P, F]:
-            info = snps[i]
-            if len(info) <= 2: continue
-            #parse out number of supporting reads for reference allele fwd and bck strand, alternate allele fwd and bck strand
-            DP = dict( [x.split('=') for x in info[7].split(';')] )['DP4'].split(',')
-            DP = map(int, DP)
-            allele_counts[i][0] = sum(DP[0:2]) #num of supporting reads for reference allele
-            allele_counts[i][1] = sum(DP[2:4]) #num of supporting reads for alternate allele
+        #allele_counts = [[-1, -1] for i in [M, P, F]]
+        #for i in [M, P, F]:
+        #    info = snps[i]
+        #    if len(info) <= 2: continue
+        #    #parse out number of supporting reads for reference allele fwd and bck strand, alternate allele fwd and bck strand
+        #    DP = dict( [x.split('=') for x in info[7].split(';')] )['DP4'].split(',')
+        #    DP = map(int, DP)
+        #    allele_counts[i][0] = sum(DP[0:2]) #num of supporting reads for reference allele
+        #    allele_counts[i][1] = sum(DP[2:4]) #num of supporting reads for alternate allele
         
         #if reference allele has no support => the site is homozygous alternative
-        for i in [M, P, F]:
-            if allele_counts[i][0] == 0:
-                alleles[i][0] = alleles[i][1]
+        #for i in [M, P, F]:
+        #    if allele_counts[i][0] == 0:
+        #        alleles[i][0] = alleles[i][1]
         
         #ignore homozygous alternative sites that are the same in both M, P, and F:
         #ref_support = 0
@@ -170,15 +190,17 @@ def main():
         #if ref_support != 0:
             #print min_chr, min_pos, "M:", alleles[M], allele_counts[M], "P:", alleles[P], allele_counts[P], \
             # "plasma:", alleles[PLASMA], allele_counts[PLASMA]
+           
+        if True or alleles[M][0] != alleles[M][1]:
+            #output M, P, F alleles at this SNP locus
+            for i in [M, P]:
+                print >>out_files[i], alleles[i][0], alleles[i][1]
+            print >>out_files[F], alleles[F][0], alleles[F][1], 3
             
-        #output M, P, F alleles at this SNP locus
-        for i in [M, P]:
-            print >>out_files[i], alleles[i][0], alleles[i][1]
-        print >>out_files[F], alleles[F][0], alleles[F][1], 3
-        
-        #take note that for this position we need to get allele counts in plasma samaples
-        add_pos(min_pos, data)
-        
+            #take note that for this position we need to get allele counts in plasma samaples
+            add_pos(min_pos, data)
+            print >>out_pos_file, min_pos, ": M", alleles[M], " P:", alleles[P], " F:", alleles[F]
+            
         #read input: next SNP
         for i in [M, P, F]:
             if min_chr >= snps[i][0] and min_pos >= snps[i][1]:

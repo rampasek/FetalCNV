@@ -46,7 +46,7 @@ wait
 for file in __M.part __P.part __F.part
 do
     #extract only SNPs with reasonable quality score
-    cat $file.genotype.vcf | ./extract_snps.awk -v qlimit=50 > $file.snps.vcf &
+    cat $file.genotype.vcf | ./extract_snps.awk -v qlimit=100 > $file.snps.vcf &
 done
 wait
 
@@ -64,7 +64,7 @@ for gnm in M F; do
         echo "  >> got ${!count_var} and ${!coverage_var}"
 done
 
-target_coverage=200
+target_coverage=80
 mixture=0.10
 
 M_multiplier=`echo "scale=5; ($target_coverage * (1.0  - $mixture)) / $M_coverage"|bc`

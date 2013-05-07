@@ -337,7 +337,7 @@ def main():
     fcnv = fcnvHMM.FCNV()
     
     #mix_t = fcnv.estimateMixture(samples_t, M_t, P_t)
-    mix = fcnv.estimateMixture(samples, M, P)
+    #mix = fcnv.estimateMixture(samples, M, P)
     
     #mix = mix_t = 0.15 #proportion of fetal genome in plasma
     #print "Est. Mixture: ", mix_t, mix
