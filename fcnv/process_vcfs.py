@@ -1,7 +1,6 @@
 #!/usr/bin/python2
 
 import argparse
-import subprocess
 import random
 
 #SAM bitewise flags
@@ -118,7 +117,11 @@ def main():
     #read SNPs from M, P, F vcf files
     snps = [[] for i in [M, P, F]]
     for i in [M, P, F]:
-        snps[i] = in_files[i].readline().split('\t')
+        #skip the header
+        line = in_files[i].readline()
+        while len(line) > 0 and line[0] == '#': line = in_files[i].readline()
+        #split
+        snps[i] = line.split('\t')
     
     #output genotypes for all positions in UNION of M and P SNP positions
     while len(snps[M])>2 or len(snps[P])>2: #while there is a SNP positions in M or P
@@ -152,8 +155,8 @@ def main():
             for a in [0, 1]:
                 if alleles[i][a] == '.': alleles[i][a] = ref_allele
 
-        #check for homozygous alternative sites
-        for i in [M, P, F]:
+        #check for homozygous alternative sites in Fetal VCF
+        for i in [F]:
             #if there is a SNP in the data at this position
             if min_chr == snps[i][0] and min_pos == snps[i][1]:
                 info = snps[i]
@@ -165,31 +168,18 @@ def main():
                     alleles[i][0] = snps[i][4]
                 if gt[2] == '1':
                     alleles[i][1] = snps[i][4]
-        
-        #get allele counts in reads
-        #allele_counts = [[-1, -1] for i in [M, P, F]]
-        #for i in [M, P, F]:
-        #    info = snps[i]
-        #    if len(info) <= 2: continue
-        #    #parse out number of supporting reads for reference allele fwd and bck strand, alternate allele fwd and bck strand
-        #    DP = dict( [x.split('=') for x in info[7].split(';')] )['DP4'].split(',')
-        #    DP = map(int, DP)
-        #    allele_counts[i][0] = sum(DP[0:2]) #num of supporting reads for reference allele
-        #    allele_counts[i][1] = sum(DP[2:4]) #num of supporting reads for alternate allele
-        
-        #if reference allele has no support => the site is homozygous alternative
-        #for i in [M, P, F]:
-        #    if allele_counts[i][0] == 0:
-        #        alleles[i][0] = alleles[i][1]
-        
-        #ignore homozygous alternative sites that are the same in both M, P, and F:
-        #ref_support = 0
-        #for i in [M, P, F]:
-        #    if min_chr == snps[i][0] and min_pos == snps[i][1]:
-        #        ref_support += allele_counts[i][0] 
-        #if ref_support != 0:
-            #print min_chr, min_pos, "M:", alleles[M], allele_counts[M], "P:", alleles[P], allele_counts[P], \
-            # "plasma:", alleles[PLASMA], allele_counts[PLASMA]
+                    
+        #organize the haplotypes in M, P (phased VCF files)
+        for i in [M, P]:
+            #if there is a SNP in the data at this position
+            if min_chr == snps[i][0] and min_pos == snps[i][1]:
+                info = snps[i]
+                if len(info) <= 2: continue
+                #parse out haplotype config info
+                ht = map(int, info[9].split('/'))
+                #get the configuration
+                phased_alleles = [alleles[i][ht[0]], alleles[i][ht[1]]]
+                alleles[i] = phased_alleles
            
         if True or alleles[M][0] != alleles[M][1]:
             #output M, P, F alleles at this SNP locus
@@ -210,10 +200,12 @@ def main():
     while True:
         line = in_files[PLASMA].readline()
         if not line: break
+        if len(line) > 0 and line[0] == '#': continue
         pile_up(mapping_parser(line), data)
     
     #print the plasma allele counts    
-    for pos in sorted(data.keys()):
+    for pos in sorted(map(int, data.keys())):
+        pos = str(pos)
         nuc_counts = data[pos]
         tmp = []
         for nuc in ['A', 'C', 'G', 'T']: #to make sure they are in the right order

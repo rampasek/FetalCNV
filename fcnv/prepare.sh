@@ -13,7 +13,7 @@ fi
 
 #echo "continued"
 #exit
-#<<comment
+<<comment
 # (1) remove PCR duplicates
 echo "removing PCR duplicates:"
 samtools view -bu $1 $5 | samtools rmdup - - > __M.part.bam &
@@ -50,8 +50,37 @@ do
 done
 wait
 
+for file in __M.part __P.part __F.part
+do
+    #annotate SNPs by rs-ids from dbSNP
+    echo  "annotating $file"
+    java -jar ~/apps/snpEff/SnpSift.jar annotate -v dbSnp.vcf $file.snps.vcf > $file.snps.annot.vcf &
+done
+wait
+
+refpanels=ALL.chr20.phase1_release_v3.20101123.filt
+for prefix in __M __P
+do
+    #convert annotated VCF to BEAGLE format (creates $file.bgl.gz, .markers, and .int)
+    cat $prefix.part.snps.annot.vcf | java -jar ~/apps/jar/vcf2beagle.jar ? $prefix
+    #unify alleles for the markers in $file.markers
+    pypy union_markers.py $prefix.markers $refpanels.markers > $prefix.mod.markers
+    #phase haplotypes
+    java -Xmx10000m -jar ~/apps/jar/beagle.jar markers=$prefix.mod.markers phased=$refpanels.bgl.gz  unphased=$prefix.bgl.gz missing=? out=$prefix omitprefix=true &
+done
+wait
+        
+for prefix in __M __P
+do
+    #convert haplotypes from BEAGLE to VCF format
+    java -jar ~/apps/jar/beagle2vcf.jar chr20 $prefix.markers $prefix.bgl.gz.phased.gz ? > $prefix.phased.vcf
+done
+wait
+
+
+
 echo "-------- step 2 done ----------"
-#comment
+comment
 
 # (3) mix reads to get plasma-like reads
 for gnm in M F; do
@@ -112,7 +141,7 @@ done
 samtools view -Sbu $temp_file | samtools sort - __plasma.sort
 rm $temp_file*
 plasma_file='plasma.sort.sam'
-samtools view -q 20  __plasma.sort.bam > $plasma_file
+samtools view -h -q 20  __plasma.sort.bam > $plasma_file
 rm __plasma.sort.bam
 echo "-------- step 3 done ----------"
 
@@ -123,7 +152,7 @@ echo "-------- step 3 done ----------"
 #samtools mpileup -uD -f /filer/hg19/hg19.fa plasma.sort.bam | bcftools view -cg - | ./extract_snps.awk -v qlimit=0 > $plasma_snps
 
 echo "combining"
-time pypy process_vcfs.py __M.part.snps.vcf __P.part.snps.vcf __F.part.snps.vcf $plasma_file
+time pypy process_vcfs.py __M.phased.vcf __P.phased.vcf __F.part.snps.vcf $plasma_file
 echo "-------- step 4 done ----------"
 
 # CLEAN-UP
