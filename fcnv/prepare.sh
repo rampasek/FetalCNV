@@ -11,9 +11,10 @@ if [ $# -ne 5 ]; then
     exit
 fi
 
-#echo "continued"
-#exit
-<<comment
+#parse out chromosome ID
+chr=`echo $5 | awk 'BEGIN {FS=":"}{print $1}'`
+
+#<<comment
 # (1) remove PCR duplicates
 echo "removing PCR duplicates:"
 samtools view -bu $1 $5 | samtools rmdup - - > __M.part.bam &
@@ -24,10 +25,10 @@ samtools index __M.part.bam &
 samtools index __P.part.bam &
 samtools index __F.part.bam &
 wait
-
+#comment
 echo "-------- step 1 done ----------"
 
-# (2) genotype M, P, F
+# (2) genotype M, P, F, filter and phase
 
 for file in __M.part __P.part __F.part
 do
@@ -45,24 +46,29 @@ wait
 
 for file in __M.part __P.part __F.part
 do
-    #extract only SNPs with reasonable quality score
-    cat $file.genotype.vcf | ./extract_snps.awk -v qlimit=100 > $file.snps.vcf &
+    #annotate SNPs by rs-ids from dbSNP
+    echo  "annotating $file"
+    java -jar ~/apps/snpEff/SnpSift.jar annotate -v dbSnp.vcf $file.genotype.vcf > $file.genotype.annot.vcf &
 done
 wait
 
 for file in __M.part __P.part __F.part
 do
-    #annotate SNPs by rs-ids from dbSNP
-    echo  "annotating $file"
-    java -jar ~/apps/snpEff/SnpSift.jar annotate -v dbSnp.vcf $file.snps.vcf > $file.snps.annot.vcf &
+    #extract only SNPs with reasonable quality score
+    cat $file.genotype.annot.vcf | ./extract_annot_snps.awk -v qlimit=0 > $file.snps.annot.vcf &
 done
 wait
 
-refpanels=ALL.chr20.phase1_release_v3.20101123.filt
+#----------------
+# filter out SNP positions for which we don't have confident calls (or homoz. ref.) evidance in both M and P
+echo "Filtering SNP positions"
+time ./filter_vcfs.py __M.part.snps.annot.vcf __P.part.snps.annot.vcf
+
+refpanels=ALL.$chr.phase1_release_v3.20101123.filt
 for prefix in __M __P
 do
     #convert annotated VCF to BEAGLE format (creates $file.bgl.gz, .markers, and .int)
-    cat $prefix.part.snps.annot.vcf | java -jar ~/apps/jar/vcf2beagle.jar ? $prefix
+    cat $prefix.part.snps.annot.ftr.vcf | java -jar ~/apps/jar/vcf2beagle.jar ? $prefix
     #unify alleles for the markers in $file.markers
     pypy union_markers.py $prefix.markers $refpanels.markers > $prefix.mod.markers
     #phase haplotypes
@@ -73,14 +79,12 @@ wait
 for prefix in __M __P
 do
     #convert haplotypes from BEAGLE to VCF format
-    java -jar ~/apps/jar/beagle2vcf.jar chr20 $prefix.markers $prefix.bgl.gz.phased.gz ? > $prefix.phased.vcf
+    java -jar ~/apps/jar/beagle2vcf.jar $chr $prefix.markers $prefix.bgl.gz.phased.gz ? > $prefix.phased.vcf &
 done
 wait
 
-
-
 echo "-------- step 2 done ----------"
-comment
+#comment
 
 # (3) mix reads to get plasma-like reads
 for gnm in M F; do
@@ -118,7 +122,7 @@ for gnm in M F; do
     while [ $(bc <<< "$frac >= 1") -eq 1 ]; do
         file_count=$(($file_count+1))
         #echo $frac $gnm
-        samtools view __$gnm.part.bam | awk -v f=$frac '{OFS="\t"; $1=$1"."f; print $0}' > $temp_file$file_count &
+        samtools view __$gnm.part.bam | awk -v f=$frac '{OFS="\t"; $1=$1"."f; print $0}' > $temp_file.$gnm.$file_count &
 
         frac=`echo "scale=5; $frac - 1"|bc`
         #echo $frac
@@ -126,16 +130,20 @@ for gnm in M F; do
     if [ $(bc <<< "$frac > 0") -eq 1 ]; then
         file_count=$(($file_count+1))
         #echo $frac $gnm
-        samtools view -s $frac __$gnm.part.bam | awk -v f=$frac '{OFS="\t"; $1=$1"."f; print $0}' > $temp_file$file_count &
+        samtools view -s $frac __$gnm.part.bam | awk -v f=$frac '{OFS="\t"; $1=$1"."f; print $0}' > $temp_file.$gnm.$file_count &
     fi    
 done
 wait
 
 #concatenate the temp files
-for (( c=0; c<=$file_count; c++ ))
-do
-    cat $temp_file$c >> $temp_file
+#for (( c=0; c<=$file_count; c++ )); do
+#    cat $temp_file$c >> $temp_file
+#done
+for gnm in M F; do
+    samtools view -H __$gnm.part.bam > __plasma.$gnm.sam
+    cat $temp_file.$gnm.* >> __plasma.$gnm.sam
 done
+cat $temp_file.[MF].* >> $temp_file
 
 #sort the sam file: turn it to a bam, sort, convert back to sam
 samtools view -Sbu $temp_file | samtools sort - __plasma.sort
@@ -143,16 +151,14 @@ rm $temp_file*
 plasma_file='plasma.sort.sam'
 samtools view -h -q 20  __plasma.sort.bam > $plasma_file
 rm __plasma.sort.bam
+
 echo "-------- step 3 done ----------"
 
 # (4) get nucleotides counts for individual SNP positions (union of the SNP positions found in (2)
 # when genotyping the parental genomes)
+echo "Processing final VCFs and plasma reads to FCNV input files"
+time pypy process_vcfs.py __M.phased.vcf __P.phased.vcf __F.part.snps.annot.vcf $plasma_file
 
-#plasma_snps='__plasma_mapped.vcf'
-#samtools mpileup -uD -f /filer/hg19/hg19.fa plasma.sort.bam | bcftools view -cg - | ./extract_snps.awk -v qlimit=0 > $plasma_snps
-
-echo "combining"
-time pypy process_vcfs.py __M.phased.vcf __P.phased.vcf __F.part.snps.vcf $plasma_file
 echo "-------- step 4 done ----------"
 
 # CLEAN-UP

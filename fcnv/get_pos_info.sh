@@ -6,7 +6,7 @@ for pos in $@ ; do
         echo "+++++++++++++++> info for "$file":"
         echo "  VCFftr: "`grep "[^0-9]$chrPos[^0-9]" __$file.part.snps.vcf`
         echo "  VCFraw: "`grep "[^0-9]$chrPos[^0-9]" __$file.part.genotype.vcf`
-        echo "  pileup: "`samtools mpileup -r chr20:$chrPos-$chrPos __$file.part.bam 2> /dev/null | tail -n 1`
+        echo "  pileup: "`samtools mpileup -r chr20:$chrPos-$chrPos __$file.part.bam 2> /dev/null`
     done
     echo "----------------------------------------------------------------------"
 done

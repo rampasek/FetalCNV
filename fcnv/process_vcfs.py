@@ -180,7 +180,7 @@ def main():
                 #get the configuration
                 phased_alleles = [alleles[i][ht[0]], alleles[i][ht[1]]]
                 alleles[i] = phased_alleles
-           
+        
         if True or alleles[M][0] != alleles[M][1]:
             #output M, P, F alleles at this SNP locus
             for i in [M, P]:
@@ -189,7 +189,7 @@ def main():
             
             #take note that for this position we need to get allele counts in plasma samaples
             add_pos(min_pos, data)
-            print >>out_pos_file, min_pos, ": M", alleles[M], " P:", alleles[P], " F:", alleles[F]
+            print >>out_pos_file, min_pos, ": M:", alleles[M], " P:", alleles[P], " F:", alleles[F]
             
         #read input: next SNP
         for i in [M, P, F]:
@@ -200,7 +200,7 @@ def main():
     while True:
         line = in_files[PLASMA].readline()
         if not line: break
-        if len(line) > 0 and line[0] == '#': continue
+        if len(line) > 0 and line[0] == '@': continue
         pile_up(mapping_parser(line), data)
     
     #print the plasma allele counts    
