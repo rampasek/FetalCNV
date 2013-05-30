@@ -14,7 +14,7 @@ fi
 #parse out chromosome ID
 chr=`echo $5 | awk 'BEGIN {FS=":"}{print $1}'`
 
-#<<comment
+<<comment
 # (1) remove PCR duplicates
 echo "removing PCR duplicates:"
 samtools view -bu $1 $5 | samtools rmdup - - > __M.part.bam &
@@ -25,7 +25,7 @@ samtools index __M.part.bam &
 samtools index __P.part.bam &
 samtools index __F.part.bam &
 wait
-#comment
+comment
 echo "-------- step 1 done ----------"
 
 # (2) genotype M, P, F, filter and phase

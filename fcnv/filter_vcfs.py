@@ -27,7 +27,7 @@ def main():
     parser.add_argument('filenames', type=str, nargs='+', help='paths to .vcf files with M, and P SNPs')
     args = parser.parse_args()
     
-    if len(args.filenames) != 2: die("No enough arguments: missing file names!")
+    if len(args.filenames) != 2: die("Unexpected number of arguments passed! Expecting 2 filenames.")
     
     #treat these as CONSTANTS!
     M = 0; P = 1; 
@@ -39,8 +39,8 @@ def main():
     #list of output files
     out_files = [open(args.filenames[i][:-3]+"ftr.vcf", "w") for i in ALL]
     
-    #allele counts in plasma samples for particular positions
-    data = dict()
+    #positions ignored from the union of M and P
+    ignored_pos = 0
     
     #read SNPs from M, P, F vcf files
     snps = [[] for i in ALL]
@@ -79,17 +79,27 @@ def main():
             cmd = 'samtools mpileup -r %(chr)s:%(pos)d-%(pos)d __%(gnm)s.part.bam' % {'chr':min_chr, 'pos':min_pos, 'gnm':'MP'[i]}
             process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = process.communicate()
-            if(process.returncode==0):
-                coverage[i] = int(out.split('\t')[3])
+            if process.returncode == 0:
+                fields = out.split('\t')
+                if len(fields) < 4:
+                    #there is no coverage in the BAM file for this position
+                    coverage[i] = 0
+                    #print "!!! :", out, "|", err, "|", cmd
+                else:
+                    coverage[i] = int(fields[3])
                 #print out, '>>coverage>>', coverage[i]
             else:
                 print err
         coverageOK = bool(coverage[M] >= 15 and coverage[P] >= 15)
         
-        if not (qualityOK and coverageOK):
+        MOK = bool(callQ[M] >= 50 or coverage[M] >= 15)
+        POK = bool(callQ[P] >= 50 or coverage[P] >= 15)
+        if not (MOK and POK): #ignore positions that are not good enough
+            ignored_pos += 1
             for i in ALL:
                 #if there is a SNP in the data at this position, skip it
                 if min_chr == snps[i][0] and min_pos == snps[i][1]:
+                    #print min_pos, callQ[M], callQ[P], coverage[M], coverage[P],  prev_lines[i],
                     prev_lines[i] = ''
                     
             
@@ -99,7 +109,7 @@ def main():
             if min_chr >= snps[i][0] and min_pos >= snps[i][1]:
                 snps[i] = getlineFromFile(in_files, out_files, i).split('\t')
                 
-    
+   print "Low quality positions ignored in the region:", ignored_pos  
     
 if __name__ == '__main__':
     #import doctest

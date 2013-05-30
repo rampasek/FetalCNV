@@ -2,109 +2,26 @@
 
 import argparse
 import random
-
-#SAM bitewise flags
-ALL_PROPERLY_ALIGNED = 0x2
-IS_UNMAPPED = 0x4
-MP_UNMAPPED = 0x8
-#CIGAR operators
-cigar_qr_op = 'HSIM=X'
-cigar_db_op = 'NDM=X'
-cigar_clip_op = 'HS'
-
-def mapping_parser(m):
-    '''
-    Parse a read in SAM format, return a dictionary with filled in fields of interest.
-    '''
-    if isinstance(m, str):
-        m = m.strip().split('\t')
-    d = {}
-    d['flag'] = int(m[1])   # flags
-    d['chr'] = m[2]         # chr
-    d['pos'] = int(m[3])    # pos
-    d['cigar'] = m[5]       # cigar string
-    d['seq'] = m[9]         # sequence
-    d['qual'] = m[10]       # qual
-    
-    return d
-
-def parse_cigar_string(s):
-    '''
-    Parse given CIGAR string to a list of operators.
-    '''
-    res = []
-    crt_len = ''
-    i = 0
-    while i < len(s):
-        if str.isdigit(s[i]):
-            crt_len += s[i]
-        else:
-            res.append([s[i], int(crt_len)])
-            crt_len = ''
-        i += 1
-    return res
-    
-def pile_up(read, data):
-    '''
-    Store allele evidence given by @read.
-    '''
-    #take only reads mapped in proper pair
-    if read['flag'] & ALL_PROPERLY_ALIGNED == 0: return
-    
-    pos_qr = 0
-    pos_db = read['pos']
-    op = parse_cigar_string(read['cigar'])
-    for o in op:
-        if o[0] == 'H': continue
-        elif o[0] in 'SI': pos_qr += o[1]
-        elif o[0] in 'ND': pos_db += o[1]
-        elif o[0] in 'M=X':
-            for i in range(o[1]):
-                #if the read position is of sufficient quality, record this info
-                if ord(read['qual'][pos_qr]) >= 33+20:
-                    add_support(pos_db, read['seq'][pos_qr].upper(), data)
-                pos_db += 1
-                pos_qr += 1
-
-def add_pos(pos, data):
-    '''
-    Add key @pos to @data.
-    '''
-    pos = str(pos)
-    if not pos in data: data[pos] = dict()
-
-def add_support(pos, nuc, data):
-    '''
-    Increase counter for nucleotide @nuc at position @pos, motify datastructure @data.
-    Ignore positions @pos that are not in @data.
-    '''
-    pos = str(pos)
-    if not pos in data: return #if we don't need info for this position
-    if not nuc in 'ACGT': 
-        print "Unrecognized symbol in SEQ:", nuc
-        return
-    try:
-        data[pos][nuc] += 1
-    except:
-        data[pos].update({nuc:1})
+import copy
+import samParse as sp
 
 def main():
     #parse ARGs
-    parser = argparse.ArgumentParser(description='Prepare SNP data for FCNV. Read filenames for M, P, and F .vcf files and plasma .sam file.')
-    parser.add_argument('filenames', type=str, nargs='+', help='paths to .vcf files with M, P, F SNPs and *sorted* plasma reads in SAM format')
+    parser = argparse.ArgumentParser(description='Prepare SNP data for FCNV. Read filenames for M, P, and F .vcf files and plasma, M, and P .sam files.')
+    parser.add_argument('filenames', type=str, nargs='+', help='paths to .vcf files with M, P, F SNPs and reads in SAM format for plasma, M, and P samples.')
     args = parser.parse_args()
     
-    if len(args.filenames) != 4: die("No enough arguments: missing file names!")
+    if len(args.filenames) != 6: die("Unexpected number of arguments passed! Expecting 6 filenames.")
     
     #treat these as CONSTANTS!
-    M = 0; P = 1; F = 2; PLASMA = 3;
-    ALL = [M, P, F, PLASMA]
+    M = 0; P = 1; F = 2; PLASMA = 3; MR = 4; PR = 5;
+    ALL = [M, P, F, PLASMA, MR, PR]
     
     #list of input files
     in_files = [open(args.filenames[i], "r" ) for i in ALL]
     
     #list of output files
-    out_files = [None for i in ALL]
+    out_files = [None for i in [M, P, F, PLASMA]]
     out_files[M] = open("M_alleles.txt", "w")
     out_files[P] = open("P_alleles.txt", "w")
     out_files[F] = open("F_alleles.txt", "w")
@@ -113,6 +30,7 @@ def main():
     
     #allele counts in plasma samples for particular positions
     data = dict()
+    loci = dict()
     
     #read SNPs from M, P, F vcf files
     snps = [[] for i in [M, P, F]]
@@ -181,34 +99,44 @@ def main():
                 phased_alleles = [alleles[i][ht[0]], alleles[i][ht[1]]]
                 alleles[i] = phased_alleles
         
-        if True or alleles[M][0] != alleles[M][1]:
-            #output M, P, F alleles at this SNP locus
-            for i in [M, P]:
-                print >>out_files[i], alleles[i][0], alleles[i][1]
-            print >>out_files[F], alleles[F][0], alleles[F][1], 3
-            
-            #take note that for this position we need to get allele counts in plasma samaples
-            add_pos(min_pos, data)
-            print >>out_pos_file, min_pos, ": M:", alleles[M], " P:", alleles[P], " F:", alleles[F]
+        #take note that for this position we need to get allele counts in plasma samaples
+        loci[min_pos] = alleles
+        sp.add_pos(min_pos, data)
+        print >>out_pos_file, min_pos, ": M:", alleles[M], " P:", alleles[P], " F:", alleles[F]
             
         #read input: next SNP
         for i in [M, P, F]:
             if min_chr >= snps[i][0] and min_pos >= snps[i][1]:
                 snps[i] = in_files[i].readline().split('\t')
+
+        #END WHILE
     
-    #read the reads in plasma SAM file and get counts for the positions specified in 'data'
-    while True:
-        line = in_files[PLASMA].readline()
-        if not line: break
-        if len(line) > 0 and line[0] == '@': continue
-        pile_up(mapping_parser(line), data)
+    #set up datastructures for counting allele support in diffrenct SAM files
+    posInfo = [dict() for i in ALL]
+    for R in [PLASMA, MR, PR]:
+        posInfo[R] = copy.deepcopy(data)
+        
+    #fetch the reads in plasma SAM file and get counts for the positions originally specified in 'data'
+    for R in [PLASMA, MR, PR]:
+        while True:
+            line = in_files[R].readline()
+            if not line: break
+            if len(line) > 0 and line[0] == '@': continue
+            sp.pile_up(sp.mapping_parser(line), posInfo[R])    
     
-    #print the plasma allele counts    
-    for pos in sorted(map(int, data.keys())):
-        pos = str(pos)
-        nuc_counts = data[pos]
+    #print info / compute stats for each SNP position
+    for pos in sorted(data.keys()):
+        alleles = loci[pos]
+        #if alleles[M][0] != alleles[M][1]:
+        #output M, P, F alleles at this SNP locus
+        for i in [M, P]:
+            print >>out_files[i], alleles[i][0], alleles[i][1]
+        print >>out_files[F], alleles[F][0], alleles[F][1], 3
+        
+        #print the plasma allele counts 
+        nuc_counts = posInfo[PLASMA][pos]
         tmp = []
-        for nuc in ['A', 'C', 'G', 'T']: #to make sure they are in the right order
+        for nuc in 'ACGT': #to make sure they are in the right order
             try:
                 tmp.append(str(nuc_counts[nuc]))
             except KeyError:
