@@ -1,13 +1,14 @@
 #!/usr/bin/python2
 
 import argparse
+from sys import exit
 
 def main():
     parser = argparse.ArgumentParser(description='Takes two .markers files, returns markers from the first file agumented by alleles from the second file.')
     parser.add_argument('filenames', type=str, nargs='+', help='paths to .markers files')
     args = parser.parse_args()
     
-    if len(args.filenames) != 2: die("No enough arguments: missing file names!")
+    if len(args.filenames) != 2: exit("No enough arguments: missing file names!")
 
     filename1 = args.filenames[0]
     filename2 = args.filenames[1]

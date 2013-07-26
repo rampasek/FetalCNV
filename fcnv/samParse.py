@@ -17,9 +17,10 @@ def mapping_parser(m):
     d['flag'] = int(m[1])   # flags
     d['chr'] = m[2]         # chr
     d['pos'] = int(m[3])    # pos
+    d['mapq'] = int(m[4])   # mapping quality
     d['cigar'] = m[5]       # cigar string
     d['seq'] = m[9]         # sequence
-    d['qual'] = m[10]       # qual
+    d['qual'] = m[10]       # sequencing quality
     
     return d
 
@@ -36,7 +37,7 @@ def parse_cigar_string(s):
         else:
             res.append([s[i], int(crt_len)])
             crt_len = ''
-        i += 1
+        i += 1  
     return res
     
 def pile_up(read, data):
@@ -45,6 +46,7 @@ def pile_up(read, data):
     '''
     #take only reads mapped in proper pair
     if read['flag'] & ALL_PROPERLY_ALIGNED == 0: return
+    if read['mapq'] < 20: return
     
     pos_qr = 0
     pos_db = read['pos']
