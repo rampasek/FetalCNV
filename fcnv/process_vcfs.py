@@ -41,7 +41,7 @@ def main():
     centromeres = dict()
     for line in in_files[CT].readlines():
         line = line.rstrip('\n').split('\t')
-        if line[0] not in centromere.keys(): centromeres[line[0]] = []
+        if line[0] not in centromeres.keys(): centromeres[line[0]] = []
         centromeres[line[0]] += [(int(line[1]), int(line[2]))]
         
     
@@ -71,8 +71,8 @@ def main():
                 snps[i][1] = int(snps[i][1])
         #chromosome
         min_chr = min(snps[M][0], snps[P][0])
-        if processed_chr != '': processed_chr = min_chr
-        if processed_chr != min_chr: print "WARNING: multiple chromosomes in the input"
+        if processed_chr == '': processed_chr = min_chr
+        if processed_chr != min_chr: print "WARNING: multiple chromosomes in the input", processed_chr, "|", min_chr
         #position
         min_pos = 1e15
         for i in [M, P]:
@@ -199,8 +199,8 @@ def main():
         print >>out_files[F], alleles[F][0], alleles[F][1], 3
         print >>out_pos_file, pos, "- M:", alleles[M], " P:", alleles[P], " F:", alleles[F]
      
-     print "Low overall coverage positions ignored:", skipped_low
-     print "Ignored positions in centromere regions:", skipped_in_centromere   
+    print "Low overall coverage positions ignored:", skipped_low
+    print "Ignored positions in centromere regions:", skipped_in_centromere   
     
     
 if __name__ == '__main__':
