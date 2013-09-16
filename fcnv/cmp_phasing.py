@@ -37,6 +37,8 @@ def main():
     #    print x, y
         
     overlap = missing = 0
+    nagr = agr = magr = 0
+    aagr = []
     for line in in_files[J].readlines():
         fields = line.rstrip('\n').split('\t')
         if len(fields) < 3:
@@ -44,19 +46,42 @@ def main():
         pos = fields[1]
         m = fields[9].split(':')[0]
         if pos in kitz:
+            overlap += 1
             print kitz[pos], fields[3], fields[4], m
             hs = str(1-(kitz[pos][0]==fields[3]))+'|'+str(int(kitz[pos][1]==fields[4]))
             print "      ", hs, m, '                ', fields[9].split(':')[2]
-            #overlap += 1
+            if hs==m: 
+                agr+=1
+                if nagr==0: continue
+                magr = max(nagr, magr)
+                aagr.append(nagr)
+                nagr = 0
+            else:
+                nagr+=1
+                if agr==0: continue
+                magr = max(agr, magr)
+                aagr.append(agr)
+                agr = 0
+            
             #print fields[9:12]
         else:
-            if m == '0/0': print '0/0'
-            if m == '.':
-                overlap += 1 
-            else:
-                missing +=1
+            #if m == '0|0': print '!!!!!!!! 0|0'
+            if m == '.': print '!!!!!!!! .'
+            missing +=1
+                
+    magr = max(agr, magr)
+    aagr.append(agr)
+    aagr.append(nagr)
+    print "new_pos:", missing, " overlap:", overlap, "/", len(kitz), " max_agree:", magr
+    print aagr
     
-    print missing, overlap
+    count_in_small = num_of_small = 0
+    for x in aagr:
+        if x < 10: 
+            count_in_small += x
+            num_of_small += 1
+    print num_of_small, count_in_small, sum(aagr)
+    
     
 if __name__ == '__main__':
     #import doctest

@@ -22,6 +22,7 @@ bindir="/dupa-filer/laci/bin"
 #parse out chromosome ID
 region=$5
 chr=`echo $region | awk 'BEGIN {FS=":"}{print $1}'`
+chrno=`echo $chr | awk 'BEGIN {FS="chr"}{print $2}'`
 reference=$4
 
 <<comment
@@ -44,29 +45,38 @@ echo "-------- step 1 done ----------"
 # (2) genotype M, P, F, filter and phase
 
 echo "genotyping the trio"
-samtools mpileup -uDSI -r $region -f $reference __M.part.bam __P.part.bam __F.part.bam | bcftools view -bvcg - > trio.genotype.raw.bcf
+samtools mpileup -uDSI -C50 -r $region -f $reference __M.part.bam __P.part.bam __F.part.bam | bcftools view -bvcg - > trio.genotype.raw.bcf
 
-bcftools view trio.genotype.raw.bcf | vcfutils.pl varFilter -d90 -D180 -Q20> trio.genotype.vcf
+bcftools view trio.genotype.raw.bcf | vcfutils.pl varFilter -d90 -D180 -Q20 > trio.genotype.vcf
 # TODO: ???? what limit for depth of coverage to use?
 
 #annotate SNPs by rs-ids from dbSNP
 echo  "annotating called SNPs"
 java -jar ~/apps/snpEff/SnpSift.jar annotate -v /dupa-filer/laci/dbSnp.vcf trio.genotype.vcf > trio.genotype.annot.vcf
-
+ 
 #extract only SNPs with reasonable quality score TODO: change qlimit depending on nummber of samples
-cat trio.genotype.annot.vcf | extract_annot_snps.awk -v qlimit=50 > trio.snps.annot.vcf
+snpsFile=trio.snps.annot
+cat trio.genotype.annot.vcf | extract_annot_snps.awk -v qlimit=50 > $snpsFile.vcf
 
 #compress and index
-bgzip trio.snps.annot.vcf
-tabix -p vcf trio.snps.annot.vcf.gz
+#bgzip trio.snps.annot.vcf
+#tabix -p vcf trio.snps.annot.vcf.gz
 
-#modify our trio VCF fil so that its records are consistent with the reference VCF file
-#refpanels=/dupa-filer/laci/reference_panels/$chr.1kg.ref.phase1_release_v3.20101123.vcf.gz
+refpanels=/dupa-filer/laci/reference_panels/$chr.1kg.ref.phase1_release_v3.20101123.vcf.gz
+
+#modify our trio VCF file so that its records are consistent with the reference VCF file
+#...this doesn't seems to work, rather use custom implementation - conform.py
 #time java -jar ~/apps/jar/conform-gt.jar  gt=trio.snps.annot.vcf.gz out=conform chrom=$chr ref=$refpanels
 
+#exclude markers that are not in the reference
+echo  "conforming markers with the reference panels"
+zcat $refpanels | conform.py $snpsFile.vcf /dev/stdin
+sed "s/$chr/$chrno/g" $snpsFile.ftr.vcf > $snpsFile.ftr2.vcf
+
 #phase by Beagle
-echo  "invoking Beagle for phasing"
-time java -jar $bindir/b4.r1128.jar gt=trio.snps.annot.vcf.gz ped=pedigree.txt out=trio.phase
+echo  "invoking Beagle for trio phasing w/ reference panels"
+time java -jar $bindir/b4.r1128.jar gt=$snpsFile.ftr2.vcf ped=pedigree.txt out=trio.phase ref=$refpanels impute=false
+#time java -jar $bindir/b4.r1128.jar gt=$snpsFile.vcf.gz ped=pedigree.txt out=trio.phase
 
 # CLEAN-UP
 #rm __*.*
