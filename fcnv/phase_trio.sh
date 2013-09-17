@@ -1,9 +1,9 @@
 #!/bin/bash
 # --> genotype & phase the trio
 
-# $1 - maternal reads bam file
-# $2 - paternal reads bam file
-# $3 - fetal reads bam file
+# $1 - path to maternal bam files
+# $2 - path to paternal bam files
+# $3 - path to fetal bam files
 # $4 - reference sequence .fa file
 # $5 - region to extract
 
@@ -28,9 +28,9 @@ reference=$4
 <<comment
 # (1) extract the region and remove PCR duplicates
 echo "merging and removing PCR duplicates:"
-samtools merge -R $region - $1 | samtools rmdup - __M.part.bam &
-samtools merge -R $region - $2 | samtools rmdup - __P.part.bam &
-samtools merge -R $region - $3 | samtools rmdup - __F.part.bam &
+samtools merge -R $region - $1*/*/*.bam | samtools rmdup - __M.part.bam &
+samtools merge -R $region - $2*/*/*.bam | samtools rmdup - __P.part.bam &
+samtools merge -R $region - $3*/*/*.bam | samtools rmdup - __F.part.bam &
 wait
 samtools index __M.part.bam &
 samtools index __P.part.bam &
@@ -45,9 +45,9 @@ comment
 # (2) genotype M, P, F, filter and phase
 prefix=trio
 echo "genotyping the trio"
-samtools mpileup -uDSI -C50 -r $region -f $reference __M.part.bam __P.part.bam __F.part.bam | bcftools view -bvcg - > $prefix.genotype.raw.bcf
+time samtools mpileup -uDSI -C50 -r $region -f $reference __M.part.bam __P.part.bam __F.part.bam | bcftools view -bvcg - > $prefix.genotype.raw.bcf
 
-bcftools view $prefix.genotype.raw.bcf | vcfutils.pl varFilter -d80 -D200 -Q20 > $prefix.genotype.vcf
+time bcftools view $prefix.genotype.raw.bcf | vcfutils.pl varFilter -d80 -D200 -Q20 > $prefix.genotype.vcf
 # TODO: ???? what limit for depth of coverage to use?
 
 #annotate SNPs by rs-ids from dbSNP
