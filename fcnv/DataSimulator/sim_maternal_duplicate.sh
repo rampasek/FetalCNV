@@ -18,7 +18,7 @@ echo "done."
 
 echo "Down sampling the results..."
 numReads=`wc -l filteredResults | awk '{print $1}'`
-python maternal_duplicate_down_sampler.py resultsA $plasmaFetusRate $plasmaCoverage $readLength $numReads $region > $source-$haplotype-$region-duplicate.sam
+python maternal_duplicate_down_sampler.py filteredResults $plasmaFetusRate $plasmaCoverage $readLength $numReads $region > $source-$haplotype-$region-duplicate.sam
 echo "done."
 
 
