@@ -1,5 +1,5 @@
 #!/usr/bin/python2
-
+#example usage: time prepare_fcnv_input.py mp.phase.vcf __plasma.dup100kb.sam __M.part.sam __P.part.sam /dupa-filer/laci/centromeres >log_prepare_fcnv_input.txt 2>>log_prepare_fcnv_input.txt &
 import argparse
 from sys import exit
 import random
@@ -24,20 +24,11 @@ def main():
     #treat these as CONSTANTS!
     MP = 0; PLR = 1; MR = 2; PR = 3; CT = 4; #in_files
     ALL = [MP, PLR, MR, PR, CT]
-    M = 0; P = 1; F = 2; PLASMA = 3; #out_files
-    
+    M = 0; P = 1; #maternal, paternal
+    ALDOC = 0; GT = 1; #out_files: allele DOC and ground truth
     
     #list of input files
     in_files = [open(args.filenames[i], "r" ) for i in ALL]
-    
-    #list of output files
-    out_files = [None for i in [M, P, F, PLASMA]]
-    out_files[M] = open("M_alleles.txt", "w")
-    out_files[P] = open("P_alleles.txt", "w")
-    out_files[F] = open("F_alleles.txt", "w")
-    out_files[PLASMA] = open("plasma_samples.txt", "w")
-    date = datetime.now().strftime('%m-%d-%H-%M')
-    out_pos_file = open("positions" + date + ".txt", "w")
     
     #read centromeres positions
     centromeres = dict()
@@ -110,7 +101,14 @@ def main():
             if len(line) > 0 and line[0] == '@': continue
             sp.pile_up(sp.mapping_parser(line), posInfo[R])    
     
+    
     print "  Writing output " + datetime.now().strftime('%m-%d-%H-%M')
+    #list of output files
+    out_files = [None for i in [ALDOC, GT]]
+    out_files[ALDOC] = open(processed_chr + "_alleles_doc.txt", "w")
+    out_files[GT] = open(processed_chr + "_target.txt", "w")
+    print >>out_files[ALDOC], '#POS\tA\tC\tG\tT\tM_hapA\tM_hapB\tDP_hapA\tDP_hapB\tP_hapA\tP_hapB\tDP_hapA\tDP_hapB'
+    
     skipped_low_doc = 0
     #print info / compute stats for each SNP position
     for pos in sorted(pos_data.keys()):
@@ -131,7 +129,7 @@ def main():
             skipped_low_doc += 1
             continue
         
-        print >>out_files[PLASMA], '\t'.join(tmp)
+        print >>out_files[ALDOC], 'pos\t' + '\t'.join(tmp),
         
         #output M, P alleles at this SNP locus
         for i, r in [(M, MR), (P, PR)]:
@@ -148,13 +146,13 @@ def main():
                 count_a1 /= 2.
                 count_a2 /= 2.
             
-            print >>out_files[i], '{0}\t{1}\t{2}\t{3}\t{4}'.format(pos, a1, a2, count_a1, count_a2)
+            print >>out_files[ALDOC], '\t{1}\t{2}\t{3}\t{4}'.format(a1, a2, count_a1, count_a2),
+        print >>out_files[ALDOC], '\n',
         
         if 10181440 <= pos and pos <= 10281440:
-            print >>out_files[F], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', 6)
+            print >>out_files[GT], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', 6)
         else:
-            print >>out_files[F], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', 3)
-        print >>out_pos_file, '{0}\tM: {1}\tP: {2}'.format(pos, alleles[M], alleles[P])
+            print >>out_files[GT], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', 3)
      
     print "Low overall coverage positions ignored:", skipped_low_doc
     print "Ignored positions in centromere regions:", skipped_in_centromere   
