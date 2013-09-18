@@ -1,13 +1,11 @@
 #!/usr/bin/python2
 #example usage: time prepare_fcnv_input.py mp.phase.vcf __plasma.dup100kb.sam __M.part.sam __P.part.sam /dupa-filer/laci/centromeres >log_prepare_fcnv_input.txt 2>>log_prepare_fcnv_input.txt &
-
 import argparse
 from sys import exit
 import random
 import copy
+import samParse as sp
 from datetime import datetime
-import subprocess
-import os
 
 def is_within_intervals(num, intervals):
     for interval in intervals:
@@ -17,7 +15,7 @@ def is_within_intervals(num, intervals):
 
 def main():
     #parse ARGs
-    parser = argparse.ArgumentParser(description='Prepare SNP support data for FCNV. Read filenames: for joined M&P phased .vcf file; plasma, M, and P .bam files; and for centromeres list.')
+    parser = argparse.ArgumentParser(description='Prepare SNP support data for FCNV. Read filenames: for joined M&P phased .vcf file; plasma, M, and P .sam files; and for centromeres list.')
     parser.add_argument('filenames', type=str, nargs='+', help='paths to 1) .vcf file with phased M & P SNPs; 2) reads in SAM format for plasma, M, and P samples; 3) centromeres list file.')
     args = parser.parse_args()
     
@@ -30,12 +28,7 @@ def main():
     ALDOC = 0; GT = 1; #out_files: allele DOC and ground truth
     
     #list of input files
-    in_files = [None for i in ALL]
-    in_files[MP] = open(args.filenames[MP], "r" )
-    in_files[CT] = open(args.filenames[CT], "r" )
-    
-    tmp_pos_file_name = "__snps_positions.txt"
-    tmp_pos_file = open(tmp_pos_file_name, "w")
+    in_files = [open(args.filenames[i], "r" ) for i in ALL]
     
     #read centromeres positions
     centromeres = dict()
@@ -46,6 +39,7 @@ def main():
         
     
     #allele counts in plasma samples for particular positions
+    pos_data = dict()
     loci = dict()
     processed_chr = ''
     skipped_in_centromere = 0
@@ -87,55 +81,37 @@ def main():
             continue
         
         #take note that for this position we need to get allele counts in plasma samaples
-        alleles = (snps[M], snps[P], (ref, alt))
+        alleles = (snps[M], snps[P])
         loci[pos] = alleles
-        print >>tmp_pos_file, processed_chr, pos
-        #if(len(loci)==10): break
+        sp.add_pos(pos, pos_data)
         
-    #END WHILE
-            
-    print "  Piling up the reads " + datetime.now().strftime('%m-%d-%H-%M')
-    #call samtools mpileup to get allele counts for positions in 'loci'
-    cdir = os.getcwd() + '/'
-    cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} __tmp".format(cdir+tmp_pos_file_name, \
-        cdir+args.filenames[PLR], cdir+args.filenames[MR], cdir+args.filenames[PR])
-    #os.system(cmd)
+        #END WHILE
     
-    posInfo = [dict() for i in range(4)]
+    print "  Piling up the reads " + datetime.now().strftime('%m-%d-%H-%M')
+    #set up datastructures for counting allele support in diffrenct SAM files
+    posInfo = [dict() for i in ALL]
     for R in [PLR, MR, PR]:
-        tmp_vcf_name = cdir + "__tmp." + str(R) + ".vcf"
-        vcf_file = open(tmp_vcf_name, 'r')
+        posInfo[R] = copy.deepcopy(pos_data)
+        
+    #fetch the reads in plasma SAM file and get counts for the positions originally specified in 'pos_data'
+    for R in [PLR, MR, PR]:
         while True:
-            line = vcf_file.readline()
+            line = in_files[R].readline()
             if not line: break
-            if len(line) > 0 and line[0] == '#': continue
-            line = line.rstrip('\n').split('\t')
-            
-            ac = {'A':0, 'C':0, 'G':0, 'T':0}
-            pos = int(line[1])
-            ref = loci[pos][2][0]
-            alt = loci[pos][2][1]
-            if ref != line[3]: print "SOMETHING IS WRONG WITH TEMP VCF POSITIONS" 
-            for x in line[7].split(';'):
-                if len(x) > 3 and x[0:3]=='DP4':
-                    counts = map(int, x[4:].split(','))
-                    ac[ref] = counts[0] + counts[1]
-                    ac[alt] = counts[2] + counts[3]
-            posInfo[R][pos] = ac
-            
-        if len(loci) != len(posInfo[R]): print "DIFFERENT NUMBER OF POSITIONS IN TEMP VCF " + str(R) 
-        vcf_file.close()    
+            if len(line) > 0 and line[0] == '@': continue
+            sp.pile_up(sp.mapping_parser(line), posInfo[R])    
+    
     
     print "  Writing output " + datetime.now().strftime('%m-%d-%H-%M')
     #list of output files
     out_files = [None for i in [ALDOC, GT]]
-    out_files[ALDOC] = open(processed_chr + "_alleles_doc.txt", "w")
-    out_files[GT] = open(processed_chr + "_target.txt", "w")
+    out_files[ALDOC] = open(processed_chr + "_alleles_docOWN.txt", "w")
+    out_files[GT] = open(processed_chr + "_targetOWN.txt", "w")
     print >>out_files[ALDOC], '#POS\tA\tC\tG\tT\tM_hapA\tM_hapB\tDP_hapA\tDP_hapB\tP_hapA\tP_hapB\tDP_hapA\tDP_hapB'
     
     skipped_low_doc = 0
     #print info / compute stats for each SNP position
-    for pos in sorted(loci.keys()):
+    for pos in sorted(pos_data.keys()):
         alleles = loci[pos]
         
         #print the plasma allele counts 
