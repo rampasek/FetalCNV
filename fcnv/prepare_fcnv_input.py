@@ -90,16 +90,15 @@ def main():
         alleles = (snps[M], snps[P], (ref, alt))
         loci[pos] = alleles
         print >>tmp_pos_file, processed_chr, pos
-        #if(len(loci)==10): break
-        
     #END WHILE
-            
+    tmp_pos_file.close()
+    
     print "  Piling up the reads " + datetime.now().strftime('%m-%d-%H-%M')
     #call samtools mpileup to get allele counts for positions in 'loci'
     cdir = os.getcwd() + '/'
     cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} __tmp".format(cdir+tmp_pos_file_name, \
         cdir+args.filenames[PLR], cdir+args.filenames[MR], cdir+args.filenames[PR])
-    #os.system(cmd)
+    os.system(cmd)
     
     posInfo = [dict() for i in range(4)]
     for R in [PLR, MR, PR]:
@@ -139,6 +138,9 @@ def main():
         alleles = loci[pos]
         
         #print the plasma allele counts 
+        if pos not in posInfo[PLR]:
+            print "FORCED TO IGNORE POS:", pos
+            continue
         nuc_counts = posInfo[PLR][pos]
         tmp = []
         for nuc in 'ACGT': #to make sure they are in the right order
