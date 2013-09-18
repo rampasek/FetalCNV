@@ -274,10 +274,11 @@ class FCNV(object):
         for ip in self.inheritance_patterns:
             
             if ip == (1, 1): #generate Normal states transitions\
-                #pstay = 0.499
+                pstay = 0.9989
                 #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
-                pstay = precomb = 0.999 / 6.
-                pgo = 0.001
+                #pstay = precomb = 0.999 / 6.
+                precomb = 0.001 / 5.
+                pgo = 0.0001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -291,10 +292,11 @@ class FCNV(object):
                     trans[i][outState_id] = pgo
                     
             else: #generate CNV states transitions
-                #pstay = 0.499
+                pstay = 0.9989
                 #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
-                pstay = precomb = 0.999 / 6.
-                pgo = 0.001
+                #pstay = precomb = 0.999 / 6.
+                precomb = 0.001 / 5.
+                pgo = 0.0001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -509,27 +511,41 @@ class FCNV(object):
         
         '''self.distributionCache[code] = dist'''
         return dist
+    
+    def allelesDistributionExtended(self, Malleles, Falleles, Mcounts, Fcounts, mix):
+        """Compute nucleotides distribution in maternal plasma for a position with
+        given maternal and fetal alleles, assuming the given fetal admixture.
         
-    def allelesDistributionMeans(self, maternal, fetal, mix):
-        """        
         Arguments:
         maternal -- maternal alleles
         paternal -- paternal alleles
         mix -- fetal admixture ratio
         returns list(floats) -- list of nucleotides probabilities
         """
-        adjusted_fetal_admix = mix/2. * len(fetal)
-        adjusted_maternal_admix = (1.-mix) / 2. * len(maternal)
-        cmix = adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix)
-        dist = []
-        for nuc in self.nucleotides:
-            p = maternal.count(nuc) / float(len(maternal)) * (1.-mix)
-            p += fetal.count(nuc) / float(len(fetal)) * adjusted_fetal_admix
-            dist.append(p)
 
-        return dist
+        #adjusted_fetal_admix = mix/2. * len(fetal)
+        #adjusted_maternal_admix = (1.-mix)/ 2. * len(maternal)
+        #cmix = adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix)
+        dist = {}
+        for nuc in self.nucleotides: dist[nuc] = 0.
+        alpha = 15
+        
+        for i, nuc in enumerate(Malleles):
+            dist[nuc] += (alpha + Mcounts[i]) * (1.-mix)
+        
+        for i, nuc in enumerate(Falleles):
+            dist[nuc] += (alpha + Fcounts[i]) * mix
+        
+        dist_list = [dist[nuc] for nuc in self.nucleotides]
+        
+        #normalize
+        summ = float(sum(dist_list))
+        dist_list = [dist_list[i] / summ for i in range(len(dist_list)) ]
+
+        return dist_list
+           
     
-    def logGaussian(self, x, ps, cov_vector):
+    def logGaussian(self, x, ps, cov_diagonal):
         '''
         log probability of x ~ N(mu, cov)
         '''
@@ -538,20 +554,21 @@ class FCNV(object):
         xm = [ x[i] - N*ps[i] for i in range(D) ]
         
         det = 1.
-        for i in range(D): det *= cov_vector[i]
+        for i in range(D): det *= cov_diagonal[i]
             
         px = - (D * math.log(2*math.pi)) /2.
         px += - math.log(det) /2.
         
         #compute the 'exponent' part #px += -(np.dot(np.dot(xm.T, inv), xm)) /2.
-        part1 = [ xm[i] / cov_vector[i] for i in range(D) ]
+        part1 = [ xm[i] / cov_diagonal[i] for i in range(D) ]
         part2 = sum([ part1[i] * xm[i] for i in range(D) ])
         px += - part2 /2.
         
         return px
     
-    #TODO: NEEDS OPTIMIZATION if possible !!    !!!!!!!!!!!!!!!
-    def logLHGivenState(self, nuc_counts, maternal_alleles, paternal_alleles, mix, state, multinom = False):
+    #TODO: NEEDS OPTIMIZATION if possible !!!!!!!!!!!!!!!!!
+    def logLHGivenState(self, nuc_counts, maternal_alleles, paternal_alleles, maternal_sq_counts,\
+           paternal_sq_counts, mix, state, multinom = False):
         '''
         >>> f = FCNV()
         >>> f.logLHGivenState([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [1,1])
@@ -564,18 +581,19 @@ class FCNV(object):
         pattern = state.phased_pattern
                
         fetal_alleles = []
+        fetal_pseudocounts = []
         for mHpatt in pattern[0]:
             fetal_alleles.append(maternal_alleles[mHpatt])
+            fetal_pseudocounts.append(maternal_sq_counts[mHpatt])
         for pHpatt in pattern[1]:
             fetal_alleles.append(paternal_alleles[pHpatt])
-        fetal_alleles.sort()
+            fetal_pseudocounts.append(paternal_sq_counts[pHpatt])
         
         #Caching:
-        code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(fetal_alleles), mix)
+        #code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(fetal_alleles), mix)
         #try: return self.logLikelihoodCache[code]
         #except KeyError: pass
 
-        ps = self.allelesDistributionMeans(maternal_alleles, tuple(fetal_alleles), mix)
         #result = self.logMultinomial(nuc_counts, ps)
         if multinom:
             ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
@@ -584,32 +602,31 @@ class FCNV(object):
             a = sum(ps)
             ps = [ps[i] / a for i in range(4)]
             return self.logMultinomial(tuple(nuc_counts), tuple(ps))
-
-
+        
         N = sum(nuc_counts)
-        cov_vector = []
-        for i in range(4):
-            c = N*ps[i] 
-            if c < 0.7: c = 0.7
-            cov_vector.append(c)
-        result = self.logGaussian(nuc_counts, ps, cov_vector)
-        if result < -15: result = -15
+        ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
+        #ps = self.allelesDistributionExtended(maternal_alleles, tuple(fetal_alleles), maternal_sq_counts, fetal_pseudocounts, mix)
+        cov_diagonal = [ max(0.8, N*ps[x]) for x in range(4) ]
+        result = self.logGaussian(nuc_counts, ps, cov_diagonal)
+        if result < -20: result = -20
         
-        if random.random()> 1:
-            print "---------------------------------------"
-            print nuc_counts, maternal_alleles, paternal_alleles, fetal_alleles, mix, state
-            print ps
-            
-            N = sum(nuc_counts)
-            nps = [ ps[i]*N for i in range(4)]
-            ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
-            for i in range(4):
-                if ps[i] == 0: ps[i] = 0.01
-            a = sum(ps)
-            ps = [ps[i] / a for i in range(4)]
-            print ps, nps, cov_vector, result, '   ', self.logMultinomial(nuc_counts, tuple(ps))
+        #debug log
+        #if random.random()> 0.999: print self.avgCoverage, sum(nuc_counts)
+        #if random.random()> 1:
+        #    print "---------------------------------------"
+        #    print nuc_counts, maternal_alleles, maternal_sq_counts, paternal_alleles, paternal_sq_counts, fetal_alleles, mix, state
+        #    print ps
+        #   
+        #    N = sum(nuc_counts)
+        #   nps = [ ps[i]*N for i in range(4)]
+        #    ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
+        #    for i in range(4):
+        #        if ps[i] == 0: ps[i] = 0.01
+        #    a = sum(ps)
+        #    ps = [ps[i] / a for i in range(4)]
+        #    print ps, nps, cov_diagonal, result, '   ', self.logMultinomial(nuc_counts, tuple(ps))
         
-        self.logLikelihoodCache[code] = result
+        #self.logLikelihoodCache[code] = result
         return result
     
     def estimateMixture(self, samples, M, P):
@@ -644,15 +661,22 @@ class FCNV(object):
                 else:
                     num += 0.5
         return mix/num
+        
+    def estimateCoverage(self, samples):
+        """Estimate coverage of the SNP loci in the plasma samples as empirical mean.
+        """
+        result = sum(map(sum, samples)) / float(len(samples))
+        return result
     
     
-    def viterbiPath(self, samples, M, P, mixture):
+    def viterbiPath(self, samples, M, P, MSC, PSC, mixture):
         """
         Viterbi decoding of the most probable path.
         """
         num_states = self.getNumStates()
         num_real_states = self.getNumPP() 
         transitions = self.transitions
+        self.avgCoverage = self.estimateCoverage(samples)
         
         n = len(samples)
         predecessor = [[0 for i in range(num_states)] for j in xrange(n+1)] 
@@ -681,7 +705,7 @@ class FCNV(object):
             #(i) compute new values for all phased patterns - "real" states of the HMM:
             for state_id, state in enumerate(self.states[:num_real_states]):
                 #emission probability in the given state
-                emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, state)
+                emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
                 
                 #porobability of this state is `emission * max{previous state * transition}`
                 max_prev = self.neg_inf
@@ -888,7 +912,7 @@ class FCNV(object):
         """
         #import sys
         #print >> sys.stderr, "BEGIN"
-        
+        self.avgCoverage = self.estimateCoverage(samples)
         self.samples = samples
         self.M = M
         self.P = P
@@ -1041,7 +1065,7 @@ class FCNV(object):
         print "labeling probability: ", table[n][exit_id]
         return path[1:]
     
-    def computeForward(self, samples, M, P, mixture):
+    def computeForward(self, samples, M, P, MSC, PSC, mixture):
         '''
         Posterior decoding: forward algorithm
         '''
@@ -1049,7 +1073,8 @@ class FCNV(object):
         num_real_states = self.getNumPP()
         patterns = self.inheritance_patterns
         transitions = self.transitions
-
+        self.avgCoverage = self.estimateCoverage(samples)
+        
         n = len(samples)
         #scale factors
         scale = [0. for i in xrange(n+1)]
@@ -1077,7 +1102,7 @@ class FCNV(object):
             #(i) compute new values for all phased patterns - "real" states of the HMM:
             for state_id, state in enumerate(self.states[:num_real_states]):
                 #emission probability in the given state
-                emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, state)
+                emis_p = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
                 
                 #probability of this state is `emission * \sum {previous state * transition}`
                 summ = self.neg_inf
@@ -1112,7 +1137,7 @@ class FCNV(object):
         return table, pX, scale
         
         
-    def computeBackward(self, samples, M, P, mixture, scale):
+    def computeBackward(self, samples, M, P, MSC, PSC, mixture, scale):
         '''
         Posterior decoding: backward algorithm
         '''
@@ -1120,7 +1145,8 @@ class FCNV(object):
         num_real_states = self.getNumPP()
         patterns = self.inheritance_patterns
         transitions = self.transitions
-
+        self.avgCoverage = self.estimateCoverage(samples)
+        
         n = len(samples)
         #DP table dim: seq length+2 x num_states
         table = [[self.neg_inf for i in range(num_states)] for j in xrange(n+1)]
@@ -1160,7 +1186,7 @@ class FCNV(object):
             #precompute emission probabilities
             emis_p = []
             for state in self.states[:num_real_states]:
-                emis_p.append(self.logLHGivenState(samples[pos], M[pos], P[pos], mixture, state) )
+                emis_p.append(self.logLHGivenState(samples[pos], M[pos], P[pos], MSC[pos], PSC[pos], mixture, state) )
                 
             #(i) transitions from all states to 'real' states of the HMM:
             for state_id in range(num_states):
@@ -1204,7 +1230,7 @@ class FCNV(object):
         return table, pX
         
         
-    def maxPosteriorDecoding(self, samples, M, P, mixture):
+    def maxPosteriorDecoding(self, samples, M, P, MSC, PSC, mixture):
         """Maximum posterior probability decoding. 
         
         Returns list of states -- for each position the one with highest posterior
@@ -1213,8 +1239,8 @@ class FCNV(object):
         """
         n = len(samples)
         
-        fwd, pX1, scale = self.computeForward(samples, M, P, mixture)
-        bck, pX2 = self.computeBackward(samples, M, P, mixture, scale)
+        fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
+        bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
         
         if abs(pX1-pX2) > 10e-8:
             print "p(X) from forward and backward DP doesn't match", pX1, pX2
@@ -1237,7 +1263,7 @@ class FCNV(object):
         return path
     
     
-    def posteriorDecoding(self, samples, M, P, mixture):
+    def posteriorDecoding(self, samples, M, P, MSC, PSC, mixture):
         """Posterior probability decoding.
         
         For each position returns a list of states ordered by their posterior
@@ -1247,8 +1273,8 @@ class FCNV(object):
         n = len(samples)
         num_real_states = self.getNumPP()
         
-        fwd, pX1, scale = self.computeForward(samples, M, P, mixture)
-        bck, pX2 = self.computeBackward(samples, M, P, mixture, scale)
+        fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
+        bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
         
         #print pX1, pX2, sum(scale)
         
@@ -1300,8 +1326,8 @@ class FCNV(object):
         print over90, numall, "that is:", over90/float(numall)
         return table
     
-    def mixedDecoding(self, samples, M, P, mixture):
-        posterior = self.likelihoodDecoding(samples, M, P, mixture)
+    def mixedDecoding(self, samples, M, P, MSC, PSC, mixture):
+        posterior = self.likelihoodDecoding(samples, M, P, MSC, PSC, mixture)
         n = len(M)
         prediction = [-1 for i in xrange(n)]
         
@@ -1333,7 +1359,7 @@ class FCNV(object):
                     #b = min(n, i+6)
                     #path = self.extendedLabeling(samples[a:b], M[a:b], P[a:b], mixture)
                     print i - last + 1, 
-                    path = self.viterbiPath(samples[last:i+1], M[last:i+1], P[last:i+1], mixture)
+                    path = self.viterbiPath(samples[last:i+1], M[last:i+1], P[last:i+1], MSC[last:i+1], PSC[last:i+1], mixture)
                     for pos in range(last, i+1):
                         prediction[pos] = path[pos-last]
                     last = i
@@ -1496,7 +1522,7 @@ class FCNV(object):
             print " "
         
             
-    def likelihoodDecoding(self, samples, M, P, mixture):
+    def likelihoodDecoding(self, samples, M, P, MSC, PSC, mixture):
         '''
         for each position returns a list of states ordered by the likelihood
         of the data in corresponding state, i.e. by emission porobabilities
@@ -1512,14 +1538,14 @@ class FCNV(object):
                 max_ = self.neg_inf
                 for s in self.states[:num_real_states]:
                     if s.inheritance_pattern == ip:
-                        ll = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, s)
+                        ll = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, s)
                         max_ = max(max_, ll)
                 
                 '''#sum over corresponding phased patterns
                 sum_ = self.neg_inf
                 for s in self.states:
                     if s.inheritance_pattern == ip:
-                        ll = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], mixture, s)
+                        ll = self.logLHGivenState(samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, s)
                         sum_ = self.logSum(sum_, ll)
                 '''        
 
@@ -1541,13 +1567,14 @@ class FCNV(object):
                                 M = [M1, M2]
                                 P = [P1, P2]
                                 F = [F1, F2]
+                                MSC = PSC = (10, 10)
                                 counts = [90*(M1=='A')+90*(M2=='A')+10*(F1=='A')+10*(F2=='A'), 0, 0, 90*(M1=='T')+90*(M2=='T')+10*(F1=='T')+10*(F2=='T')]
-                                tmp = self.maxLikelyState(counts, M, P, 0.1);
+                                tmp = self.maxLikelyState(counts, M, P, MSC, PSC, 0.1);
                                 daMem.append((M, P, F, counts, tmp))
         return daMem
                         
     
-    def maxLikelyState(self, nuc_counts, M, P, mixture):
+    def maxLikelyState(self, nuc_counts, M, P, MSC, PSC, mixture):
         '''
         blah blah
         import fcnvHMM; f = fcnvHMM.FCNV()
@@ -1562,8 +1589,8 @@ class FCNV(object):
             max_ = self.neg_inf
             for s in self.states[:num_real_states]:
                 if s.inheritance_pattern == ip:
-                    ll = self.logLHGivenState(nuc_counts, M, P, mixture, s)
-                    ll2 =self.logLHGivenState(nuc_counts, M, P, mixture, s, True)
+                    ll = self.logLHGivenState(nuc_counts, M, P, MSC, PSC, mixture, s)
+                    ll2 =self.logLHGivenState(nuc_counts, M, P, MSC, PSC, mixture, s, True)
                     max_ = max(max_, ll)
 
                     tmp.append((ll, ll2, s.phased_pattern, s.inheritance_pattern))

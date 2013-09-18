@@ -2,6 +2,7 @@ import math
 import numpypy as np
 import sys
 import fcnvHMM
+from datetime import datetime
 
 def readInput(file_samples_in, file_maternal_in, file_paternal_in):
     """Read the input from files.
@@ -13,11 +14,27 @@ def readInput(file_samples_in, file_maternal_in, file_paternal_in):
     
     """
     def parseHaplotypes(lines):
-        X = []
+        '''
+        A = []
+        C = []
         for line in lines:
             line = line.rstrip("\n")
-            X.append(tuple(line.split(" ")))
-        return X
+            L = line.split(" ")
+            A.append(tuple(L[:2]))
+            C.append(tuple(map(float, L[2:])))
+        return A, C
+        '''
+        A = []
+        C = []
+        for line in lines:
+            line = line.rstrip("\n")
+            L = line.split(" ")
+            a = tuple(L[:2])
+            c = tuple(map(float, L[2:]))
+            if a[0] == a[1]: c = [x/2. for x in c]
+            A.append(a)
+            C.append(c)
+        return A, C
         
     def parseSamples(lines):
         X = []
@@ -33,13 +50,13 @@ def readInput(file_samples_in, file_maternal_in, file_paternal_in):
     fsamples = open(file_samples_in, 'r')
     
     #maternal and paternal alleles
-    M = parseHaplotypes(fmaternal.readlines())
-    P = parseHaplotypes(fpaternal.readlines())
+    M, MSC = parseHaplotypes(fmaternal.readlines())
+    P, PSC = parseHaplotypes(fpaternal.readlines())
     
     #plasma samples
     samples = parseSamples(fsamples.readlines())
     
-    return samples, M, P
+    return samples, M, P, MSC, PSC
 
 def computeEval(reference, prediction, sensitivity, num_patt):
     """Compute evaluation of referenced anotation versus predicted one.
@@ -128,22 +145,22 @@ def computeStats(ok, wrong, pref, num_patt):
         if o+w > 0: ratio = o/float(o+w) *100
         print pref, t, ": ", o, w, ratio, '%'
 
-def test(fcnv, samples, M, P, mixture, ground_truth):
+def test(fcnv, samples, M, P, MSC, PSC, mixture, ground_truth):
     #el = fcnv.extendedLabeling(samples, M, P, mixture)
     #el = fcnv.mixedDecoding(samples, M, P, mixture) 
-    vp = fcnv.viterbiPath(samples, M, P, mixture)
-    el = vp #skip experimenting with posterior labeling:)
-    posterior = fcnv.posteriorDecoding(samples, M, P, mixture)
-    byLL = fcnv.likelihoodDecoding(samples, M, P, mixture)    
+    vp = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture)
+    posterior = fcnv.posteriorDecoding(samples, M, P, MSC, PSC, mixture)
+    byLL = fcnv.likelihoodDecoding(samples, M, P, MSC, PSC, mixture)    
     
     if True:
-        fout = file("prediction.txt", 'w')
+        date = datetime.now().strftime('%m-%d-%H-%M')
+        fout = file("prediction" + date + ".txt", 'w')
     
     
     print fcnv.inheritance_patterns
     num_patt = fcnv.getNumIP()
     
-    labeling_correct = 0
+    #labeling_correct = 0
     viterbi_correct = 0
     max_posterior_correct = 0
     ll_correct = 0
@@ -152,7 +169,7 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
     ll_dist = [0 for x in range(num_patt)]
     #other stats
     state_stats = [0 for x in range(num_patt)]
-    state_correct_el = [0 for x in range(num_patt)]
+    #state_correct_el = [0 for x in range(num_patt)]
     state_correct_vp = [0 for x in range(num_patt)]
     state_correct_pp = [0 for x in range(num_patt)]
     state_correct_ll = [0 for x in range(num_patt)]
@@ -177,11 +194,11 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         tableLH.append(ll_value)
         
         #print the results
-        print >>fout, samples[i], M[i], P[i], vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
+        print >>fout, i+1, samples[i], M[i], list(MSC[i]), P[i], list(PSC[i]), vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
             
         #print ground_truth[i], vp[i], pp[i], '|', post
-        labeling_correct += int(ground_truth[i] == el[i])
-        state_correct_el[ground_truth[i]] += int(ground_truth[i] == el[i])
+        #labeling_correct += int(ground_truth[i] == el[i])
+        #state_correct_el[ground_truth[i]] += int(ground_truth[i] == el[i])
         viterbi_correct += int(ground_truth[i] == vp[i])
         state_correct_vp[ground_truth[i]] += int(ground_truth[i] == vp[i])
         max_posterior_correct += int(ground_truth[i] == post[0])
@@ -190,7 +207,7 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         posterior_dist[x] += 1
         
         #for pure likelihood
-        threshold = .5
+        threshold = .1
         x = ll_state.index(ground_truth[i])
         ll_diff = abs(ll_value[x]-ll_value[0])
         if ll_diff < threshold:
@@ -235,14 +252,14 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
     #for x in range(7):
     #    print x,":", state3_stats[x]
     print "stats  : ", state_stats
-    print "mplabel: ", state_correct_el
+    #print "mplabel: ", state_correct_el
     print "viterbi: ", state_correct_vp
     print "mposter: ", state_correct_pp
     print "byLHood: ", state_correct_ll
     print "avgDist: ", avg_distance / len(vp) 
     print "dist_set:", distance_set
     
-    print 'Labeling : ',(labeling_correct*100.)/len(vp), '% OK'
+    #print 'Labeling : ',(labeling_correct*100.)/len(vp), '% OK'
     print 'Viterbi  : ',(viterbi_correct*100.)/len(vp), '% OK'
     print 'Posterior: ',(max_posterior_correct*100.)/len(vp), '% OK'
     print 'LikeliH. : ',(ll_correct*100.)/len(vp), '% OK'
@@ -252,12 +269,12 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         print "sensitivity: 1 /", i
         
         #recall Labeling
-        called_l, real, ok_called, not_called = computeEval(ground_truth, el, i, num_patt)
-        print "mplabel recall   : ", called_l, '/',  real, " => ", 
-        print "%0.3f" % (called_l*100./real), "%"
-        print ok_called
-        print not_called
-        computeStats(ok_called, not_called, "LR", num_patt)
+        #called_l, real, ok_called, not_called = computeEval(ground_truth, el, i, num_patt)
+        #print "mplabel recall   : ", called_l, '/',  real, " => ", 
+        #print "%0.3f" % (called_l*100./real), "%"
+        #print ok_called
+        #print not_called
+        #computeStats(ok_called, not_called, "LR", num_patt)
         
         #recall Viterbi
         called_v, real, ok_called, not_called = computeEval(ground_truth, vp, i, num_patt)
@@ -276,12 +293,12 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         computeStats(ok_called, not_called, "PR", num_patt)
         
         #precision Labeling 
-        correct_l, claimed_l, ok_prediction, wr_prediction = computeEval(el, ground_truth, i, num_patt)
-        print "mplabel precision: ", correct_l , '/',  claimed_l, " => ", 
-        print "%0.3f" % (correct_l*100./claimed_l), "%"
-        print ok_prediction
-        print wr_prediction
-        computeStats(ok_prediction, wr_prediction, "LP", num_patt)
+        #correct_l, claimed_l, ok_prediction, wr_prediction = computeEval(el, ground_truth, i, num_patt)
+        #print "mplabel precision: ", correct_l , '/',  claimed_l, " => ", 
+        #print "%0.3f" % (correct_l*100./claimed_l), "%"
+        #print ok_prediction
+        #print wr_prediction
+        #computeStats(ok_prediction, wr_prediction, "LP", num_patt)
         
         #precision Viterbi 
         correct_v, claimed_v, ok_prediction, wr_prediction = computeEval(vp, ground_truth, i, num_patt)
@@ -302,16 +319,16 @@ def test(fcnv, samples, M, P, mixture, ground_truth):
         #format for LaTeX tabular
         #print "%0.3f" % ((viterbi_correct*100.)/len(vp)), "\%"
         #print "%0.3f" % ((max_posterior_correct*100.)/len(vp)), "\%"
-        print "%0.3f" % (called_l*100./real), "\%"
+        #print "%0.3f" % (called_l*100./real), "\%"
         print "%0.3f" % (called_v*100./real), "\%"
         print "%0.3f" % (called_p*100./real), "\%"
-        print "%0.3f" % (correct_l*100./claimed_l), "\%"
+        #print "%0.3f" % (correct_l*100./claimed_l), "\%"
         print "%0.3f" % (correct_v*100./claimed_v), "\%"
         print "%0.3f" % (correct_p*100./claimed_p), "\%"
         
         
 def main():
-    mix = 0.1 #proportion of fetal genome in plasma
+    mix = 0.08 #proportion of fetal genome in plasma
     #file_fetal_out = "fetal_prediction.txt"    
     #ffetal = open(file_fetal_out, 'w')
     
@@ -329,7 +346,7 @@ def main():
         path_in + "maternal_allelesT" + suffix + ".txt", \
         path_in + "paternal_allelesT" + suffix + ".txt")
     '''
-    samples, M, P = readInput( \
+    samples, M, P, MSC, PSC = readInput( \
         path_in + "plasma_samples" + suffix + ".txt", \
         path_in + "maternal_alleles" + suffix + ".txt", \
         path_in + "paternal_alleles" + suffix + ".txt")
@@ -337,7 +354,7 @@ def main():
     fcnv = fcnvHMM.FCNV()
     
     #mix_t = fcnv.estimateMixture(samples_t, M_t, P_t)
-    #mix = fcnv.estimateMixture(samples, M, P)
+    mix = fcnv.estimateMixture(samples, M, P)
     
     #mix = mix_t = 0.15 #proportion of fetal genome in plasma
     #print "Est. Mixture: ", mix_t, mix
@@ -360,7 +377,7 @@ def main():
     fetal_in.close()
     
     print "------------------ w/o TRAINING -------------------"
-    test(fcnv, samples, M, P, mix, ground_truth)
+    test(fcnv, samples, M, P, MSC, PSC, mix, ground_truth)
     #test(fcnv, samples[:500], M[:500], P[:500], mix, ground_truth[:500])
     
     '''
