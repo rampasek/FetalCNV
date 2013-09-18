@@ -1,5 +1,6 @@
 phase_sites=./trio.phase.vcf
 bamfile=~/fetusProject/I1/chr20/I1_M_chr20.bam
+plasmaFile=
 readLength=100
 plasmaFetusRate=0.13
 plasmaCoverage=78
@@ -27,5 +28,8 @@ samtools view -S -b inside.sam > inside.bam
 
 echo "Merging"
 # Outside has the headers
-samtools merge -f $source-$haplotype-$region-duplicate.bam $bamfile inside.bam
+samtools merge -f $source-$haplotype-$region-duplicate.bam $plasmaFile inside.bam
+samtools sort $source-$haplotype-$region-duplicate.bam $source-$haplotype-$region-duplicate.sort
+samtools index $source-$haplotype-$region-duplicate.sort.bam
 
+rm $source-$haplotype-$region-duplicate.bam
