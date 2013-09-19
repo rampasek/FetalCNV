@@ -130,7 +130,7 @@ def main():
             if snip==len(snips_f) or snips_f[snip]['chr']!=parsed_read['chr']:
                 break
 
-            correctHaplo=True
+            correctHaplo=False
             if o[0] == 'H': continue
             elif o[0] in 'SI': pos_qr += o[1]
             elif o[0] in 'ND': pos_db += o[1]
@@ -140,7 +140,7 @@ def main():
                         plasma=parsed_read['seq'][pos_qr]
 
                         if snips_f[snip]["H"+goalHaplotype]==plasma:
-                            correctHaplo=False
+                            correctHaplo=True
 
                         if snips_f[snip]['HA']==plasma:
                             count += fetusRate/2.0
