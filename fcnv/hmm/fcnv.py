@@ -1,62 +1,43 @@
 import math
+import argparse
 import numpypy as np
 import sys
 import fcnvHMM
 from datetime import datetime
 
-def readInput(file_samples_in, file_maternal_in, file_paternal_in):
+def readInput(in_file_name):
     """Read the input from files.
     Read maternal alleles, paternal alleles, and samples per position.
     
     Arguments:
-    file names -- strings
+    file name -- string
     returns lists of parsed data    
     
     """
-    def parseHaplotypes(lines):
-        '''
-        A = []
-        C = []
-        for line in lines:
-            line = line.rstrip("\n")
-            L = line.split(" ")
-            A.append(tuple(L[:2]))
-            C.append(tuple(map(float, L[2:])))
-        return A, C
-        '''
-        A = []
-        C = []
-        for line in lines:
-            line = line.rstrip("\n")
-            L = line.split(" ")
-            a = tuple(L[:2])
-            c = tuple(map(float, L[2:]))
-            if a[0] == a[1]: c = [x/2. for x in c]
-            A.append(a)
-            C.append(c)
-        return A, C
+    in_file = open(in_file_name, 'r')
+    positions = []
+    samples = []
+    M = []; P = [];
+    MC = []; PC = [];
+    while True:
+        line = in_file.readline()
+        if not line: break
+        if line[0] == '#': continue  #skip comment
+        line = line.rstrip('\n').split('\t')
         
-    def parseSamples(lines):
-        X = []
-        for line in lines:
-            l = line.rstrip("\n").split(" ")
-            for i in range(len(l)):
-                l[i] = int(l[i])
-            X.append(tuple(l))
-        return X
-
-    fpaternal = open(file_paternal_in, 'r')
-    fmaternal = open(file_maternal_in, 'r')
-    fsamples = open(file_samples_in, 'r')
+        #genomic positions and allele support in plasma samples
+        positions.append(int(line[0]))
+        samples.append(tuple(map(int, line[1:5])))
+        
+        #maternal and paternal alleles
+        M.append(tuple(line[5:7]))
+        MC.append(tuple(map(float, line[7:9])))
+        
+        P.append(tuple(line[9:11]))
+        PC.append(tuple(map(float, line[11:13])))     
     
-    #maternal and paternal alleles
-    M, MSC = parseHaplotypes(fmaternal.readlines())
-    P, PSC = parseHaplotypes(fpaternal.readlines())
-    
-    #plasma samples
-    samples = parseSamples(fsamples.readlines())
-    
-    return samples, M, P, MSC, PSC
+    in_file.close()
+    return positions, samples, M, P, MC, PC
 
 def computeEval(reference, prediction, sensitivity, num_patt):
     """Compute evaluation of referenced anotation versus predicted one.
@@ -145,7 +126,7 @@ def computeStats(ok, wrong, pref, num_patt):
         if o+w > 0: ratio = o/float(o+w) *100
         print pref, t, ": ", o, w, ratio, '%'
 
-def test(fcnv, samples, M, P, MSC, PSC, mixture, ground_truth):
+def test(fcnv, positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_name_prefix):
     #el = fcnv.extendedLabeling(samples, M, P, mixture)
     #el = fcnv.mixedDecoding(samples, M, P, mixture) 
     vp = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture)
@@ -154,7 +135,8 @@ def test(fcnv, samples, M, P, MSC, PSC, mixture, ground_truth):
     
     if True:
         date = datetime.now().strftime('%m-%d-%H-%M')
-        fout = file("prediction" + date + ".txt", 'w')
+        fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')
+        annot_out = file(file_name_prefix + ".annotation" + date + ".txt", 'w')
     
     
     print fcnv.inheritance_patterns
@@ -195,6 +177,7 @@ def test(fcnv, samples, M, P, MSC, PSC, mixture, ground_truth):
         
         #print the results
         print >>fout, i+1, samples[i], M[i], list(MSC[i]), P[i], list(PSC[i]), vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
+        print >>annot_out, positions[i], ground_truth[i], vp[i]
             
         #print ground_truth[i], vp[i], pp[i], '|', post
         #labeling_correct += int(ground_truth[i] == el[i])
@@ -328,38 +311,41 @@ def test(fcnv, samples, M, P, MSC, PSC, mixture, ground_truth):
         
         
 def main():
-    mix = 0.08 #proportion of fetal genome in plasma
-    #file_fetal_out = "fetal_prediction.txt"    
-    #ffetal = open(file_fetal_out, 'w')
+    #parse command line arguments
+    parser = argparse.ArgumentParser(description='Performs fetal CNV analysis from maternal plasma and phased parental data.')
+    parser.add_argument('input', type=str, nargs=1, help='path to input file with allele counts in plasma and parental haplotypes')
+    parser.add_argument('target', type=str, nargs=1, help='path to file with background truth - "target"')
+    #parser.add_argument('out', type=str, nargs=1, help='output file with anotation of SNPs')
+    args = parser.parse_args()
     
-    #parse command line arguments => suffix of the output files
-    path = sys.argv[0]
-    path = path[:path.rfind('/')+1]
-    path_in = path + "in/"
-    suffix = ""
-    if len(sys.argv) == 2: suffix = sys.argv[1]
+    in_file_name = args.input[0]
+    target_file_name = args.target[0]
+    #out_file_name = args.out[0]
     
     #read the input
+    positions, samples, M, P, MSC, PSC = readInput(in_file_name)
     '''
     samples_t, M_t, P_t = readInput( \
         path_in + "plasma_samplesT" + suffix + ".txt", \
         path_in + "maternal_allelesT" + suffix + ".txt", \
         path_in + "paternal_allelesT" + suffix + ".txt")
     '''
-    samples, M, P, MSC, PSC = readInput( \
-        path_in + "plasma_samples" + suffix + ".txt", \
-        path_in + "maternal_alleles" + suffix + ".txt", \
-        path_in + "paternal_alleles" + suffix + ".txt")
 
     fcnv = fcnvHMM.FCNV()
     
+    mix = 0.13 #proportion of fetal genome in plasma
+    #mix = fcnv.estimateMixture(samples, M, P)
     #mix_t = fcnv.estimateMixture(samples_t, M_t, P_t)
-    mix = fcnv.estimateMixture(samples, M, P)
     
-    #mix = mix_t = 0.15 #proportion of fetal genome in plasma
-    #print "Est. Mixture: ", mix_t, mix
     print "Est. Mixture: ", mix
+    #print "Est. Mixture: ", mix_t, mix
     
+    ground_truth = []
+    target_file = open(target_file_name, 'r')
+    for line in target_file.readlines():
+        line = line.rstrip("\n").split("\t")
+        ground_truth.append(int(line[-1]))
+    target_file.close()
     '''
     ground_truth_t = []
     fetal_in = open(path_in + "fetal_allelesT" + suffix + ".txt", 'r')
@@ -369,15 +355,10 @@ def main():
     fetal_in.close()
     '''
     
-    ground_truth = []
-    fetal_in = open(path_in + "fetal_alleles" + suffix + ".txt", 'r')
-    for line in fetal_in.readlines():
-        line = line.rstrip("\n")
-        ground_truth.append(int(line.split(" ")[-1]))
-    fetal_in.close()
-    
+    #res_file = open(out_file_name, 'w')
+    file_name_prefix = target_file_name.split('/')[-1].split('.')[0].replace(':', '-')
     print "------------------ w/o TRAINING -------------------"
-    test(fcnv, samples, M, P, MSC, PSC, mix, ground_truth)
+    test(fcnv, positions, samples, M, P, MSC, PSC, mix, ground_truth, file_name_prefix)
     #test(fcnv, samples[:500], M[:500], P[:500], mix, ground_truth[:500])
     
     '''
@@ -415,7 +396,7 @@ def main():
     #pp = fcnv.maxPosteriorDecoding(samples, M, P, mixture)
     
 if __name__ == "__main__":
-    import doctest
+    #import doctest
     #doctest.testmod()
     
     main()
