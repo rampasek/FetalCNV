@@ -34,8 +34,15 @@ def main():
     in_files[MP] = open(args.filenames[MP], "r" )
     in_files[CT] = open(args.filenames[CT], "r" )
     
-    tmp_pos_file_name = "__snps_positions.txt"
+    tmp_pos_file_name = "__tmp" + args.filenames[PLR][:-4] + "_snp_pos.txt"
     tmp_pos_file = open(tmp_pos_file_name, "w")
+    
+    try:
+        reg_begin = int(args.filenames[PLR].split(':')[1].split('-')[0])
+        reg_end = int(args.filenames[PLR].split(':')[1].split('-')[1])
+    except:
+        reg_begin = 0
+        reg_end = 0
     
     #read centromeres positions
     centromeres = dict()
@@ -96,13 +103,14 @@ def main():
     print "  Piling up the reads " + datetime.now().strftime('%m-%d-%H-%M')
     #call samtools mpileup to get allele counts for positions in 'loci'
     cdir = os.getcwd() + '/'
-    cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} __tmp".format(cdir+tmp_pos_file_name, \
-        cdir+args.filenames[PLR], cdir+args.filenames[MR], cdir+args.filenames[PR])
+    tmp_vcf_prefix = '__tmp' + args.filenames[PLR][:-4].replace(':', '-')
+    cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} {4}".format(cdir+tmp_pos_file_name, \
+        cdir+args.filenames[PLR], cdir+args.filenames[MR], cdir+args.filenames[PR], tmp_vcf_prefix)
     os.system(cmd)
     
     posInfo = [dict() for i in range(4)]
     for R in [PLR, MR, PR]:
-        tmp_vcf_name = cdir + "__tmp." + str(R) + ".vcf"
+        tmp_vcf_name = tmp_vcf_prefix + "." + str(R) + ".vcf"
         vcf_file = open(tmp_vcf_name, 'r')
         while True:
             line = vcf_file.readline()
@@ -128,11 +136,12 @@ def main():
     print "  Writing output " + datetime.now().strftime('%m-%d-%H-%M')
     #list of output files
     out_files = [None for i in [ALDOC, GT]]
-    out_files[ALDOC] = open(processed_chr + "_alleles_doc.txt", "w")
-    out_files[GT] = open(processed_chr + "_target.txt", "w")
+    out_files[ALDOC] = open(args.filenames[PLR][:-4] + ".alleles_doc.txt", "w")
+    out_files[GT] = open(args.filenames[PLR][:-4] + ".target.txt", "w")
     print >>out_files[ALDOC], '#POS\tA\tC\tG\tT\tM_hapA\tM_hapB\tDP_hapA\tDP_hapB\tP_hapA\tP_hapB\tDP_hapA\tDP_hapB'
     
     skipped_low_doc = 0
+    forced_to_ignore = 0
     #print info / compute stats for each SNP position
     for pos in sorted(loci.keys()):
         alleles = loci[pos]
@@ -140,6 +149,7 @@ def main():
         #print the plasma allele counts 
         if pos not in posInfo[PLR]:
             print "FORCED TO IGNORE POS:", pos
+            forced_to_ignore += 1
             continue
         nuc_counts = posInfo[PLR][pos]
         tmp = []
@@ -175,12 +185,13 @@ def main():
             print >>out_files[ALDOC], '\t{0}\t{1}\t{2}\t{3}'.format(a1, a2, count_a1, count_a2),
         print >>out_files[ALDOC], '\n',
         
-        if 10181440 <= pos and pos <= 10281440:
-            print >>out_files[GT], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', 6)
+        if reg_begin <= pos and pos <= reg_end:
+            print >>out_files[GT], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', 9)
         else:
             print >>out_files[GT], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', 3)
      
     print "Low overall coverage positions ignored:", skipped_low_doc
+    print "Forced to ignore due to missing in plasma:", forced_to_ignore
     print "Ignored positions in centromere regions:", skipped_in_centromere   
     print "DONE " + datetime.now().strftime('%m-%d-%H-%M')
     
