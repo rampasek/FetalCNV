@@ -34,7 +34,8 @@ def main():
     in_files[MP] = open(args.filenames[MP], "r" )
     in_files[CT] = open(args.filenames[CT], "r" )
     
-    tmp_pos_file_name = "__tmp" + args.filenames[PLR][:-4] + "_snp_pos.txt"
+    plasma_id = args.filenames[PLR][:-4].replace(':', '-').replace('.sort', '')
+    tmp_pos_file_name = "__tmp" + plasma_id + "_snp_pos.txt"
     tmp_pos_file = open(tmp_pos_file_name, "w")
     
     try:
@@ -103,7 +104,7 @@ def main():
     print "  Piling up the reads " + datetime.now().strftime('%m-%d-%H-%M')
     #call samtools mpileup to get allele counts for positions in 'loci'
     cdir = os.getcwd() + '/'
-    tmp_vcf_prefix = '__tmp' + args.filenames[PLR][:-4].replace(':', '-')
+    tmp_vcf_prefix = '__tmp' + plasma_id
     cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} {4}".format(cdir+tmp_pos_file_name, \
         cdir+args.filenames[PLR], cdir+args.filenames[MR], cdir+args.filenames[PR], tmp_vcf_prefix)
     os.system(cmd)
@@ -136,8 +137,8 @@ def main():
     print "  Writing output " + datetime.now().strftime('%m-%d-%H-%M')
     #list of output files
     out_files = [None for i in [ALDOC, GT]]
-    out_files[ALDOC] = open(args.filenames[PLR][:-4] + ".alleles_doc.txt", "w")
-    out_files[GT] = open(args.filenames[PLR][:-4] + ".target.txt", "w")
+    out_files[ALDOC] = open(plasma_id + ".alleles_doc.txt", "w")
+    out_files[GT] = open(plasma_id + ".target.txt", "w")
     print >>out_files[ALDOC], '#POS\tA\tC\tG\tT\tM_hapA\tM_hapB\tDP_hapA\tDP_hapB\tP_hapA\tP_hapB\tDP_hapA\tDP_hapB'
     
     skipped_low_doc = 0
