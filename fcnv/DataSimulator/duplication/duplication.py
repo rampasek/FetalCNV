@@ -3,6 +3,7 @@ import argparse
 import random
 
 ALL_PROPERLY_ALIGNED = 0x2
+UNMAPPED = 0x4
 sourceIndex={'IM1':9,'IP1':10,'IC1':11}
 
 def mapping_parser(m):
@@ -26,6 +27,8 @@ def parse_cigar_string(s):
     '''
     Parse given CIGAR string to a list of operators.
     '''
+    if s[0] == '*': return []
+    
     res = []
     crt_len = ''
     i = 0
@@ -108,8 +111,9 @@ def main():
         parsed_read= mapping_parser(read)
 
         # If the read is not aligned properly, ignore it
-        if parsed_read['flag'] & ALL_PROPERLY_ALIGNED == 0: continue 
-        if parsed_read['mapq'] < 20: continue 
+        #if parsed_read['flag'] & ALL_PROPERLY_ALIGNED == 0: continue
+        if parsed_read['flag'] & UNMAPPED != 0: continue 
+        if parsed_read['cigar'] == '*': continue
 
         pos_qr = 0
         pos_db = parsed_read['pos']
@@ -134,7 +138,7 @@ def main():
             elif o[0] in 'ND': pos_db += o[1]
             elif o[0] in 'M=X':
                 for i in range(o[1]):
-                    if pos_db==snips[snip]['pos'] and ord(parsed_read['qual'][pos_qr]) >= 33+20:
+                    if pos_db==snips[snip]['pos']: #and ord(parsed_read['qual'][pos_qr]) >= 33+20:
                         if snips[snip]['HA']==parsed_read['seq'][pos_qr]:
                             countA += 1
                         elif snips[snip]['HB']==parsed_read['seq'][pos_qr]:

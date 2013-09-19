@@ -1,17 +1,17 @@
 #!/bin/bash
 
 phase_sites=../../chr20/trio.phase.vcf
-bamfile=../../chr20/__M.part.bam
+bamfile='../../chr20/__'$3'.part.bam'
 plasmaFile=../../chr20/__plasma.part.bam
 readLength=100
 plasmaFetusRate=0.13
 plasmaCoverage=78
 
 chromosome=chr20
-begin=10181440
-end=11181440
+begin=$1
+end=$(($1 + $2))
 haplotype=B
-source=IM1
+source='I'$3'1'
 
 region=$chromosome':'$begin'-'$end
 

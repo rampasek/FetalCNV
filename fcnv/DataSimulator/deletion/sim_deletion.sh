@@ -6,8 +6,8 @@ readLength=100
 plasmaFetusRate=0.13
 
 chromosome=chr20
-begin=10181440
-end=10281440
+begin=$1
+end=$(($1 + $2))
 haplotype=B
 
 regionCompliment=$chromosome':1-'$((begin-readLength))' '$chromosome':'$((end+readLength))
