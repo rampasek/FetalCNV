@@ -125,7 +125,6 @@ def main():
         # Search for the start of the related snips
         snip = upper_bound(snips_f, parsed_read['chr'], parsed_read['pos'], 0, len(snips_f));
 
-        count=0
 
         # Count the snips for each haplotype using the cigar string
         for o in op:
@@ -134,6 +133,8 @@ def main():
             if snip==len(snips_f) or snips_f[snip]['chr']!=parsed_read['chr']:
                 break
 
+            hitmap_f=({"HA":True,"HB":True})
+            hitmap_m=({"HA":True,"HB":True})
             correctHaplo=False
             if o[0] == 'H': continue
             elif o[0] in 'SI': pos_qr += o[1]
@@ -143,29 +144,37 @@ def main():
                     if pos_db==snips_f[snip]['pos']: #and ord(parsed_read['qual'][pos_qr]) >= 33+20:
                         plasma=parsed_read['seq'][pos_qr]
 
-                        if snips_f[snip]["H"+goalHaplotype]==plasma:
-                            correctHaplo=True
+                        if snips_f[snip]['HA']!=plasma:
+                            hitmap_f["HA"]=False
 
-                        if snips_f[snip]['HA']==plasma:
-                            count += fetusRate/2.0
+                        if snips_f[snip]['HB']!=plasma:
+                            hitmap_f["HB"]=False
 
-                        if snips_f[snip]['HB']==plasma:
-                            count += fetusRate/2.0
+                        if snips_m[snip]['HA']!=plasma:
+                            hitmap_m["HA"]=False
 
-                        if snips_m[snip]['HA']==plasma:
-                            count += (1-fetusRate)/2.0
-
-                        if snips_m[snip]['HB']==plasma:
-                            count += (1-fetusRate)/2.0
+                        if snips_m[snip]['HB']!=plasma:
+                            hitmap_m["HB"]=False
+                        snip += 1
 
                     pos_db += 1
                     pos_qr += 1
 
-        if count==0:
-            count=1
-        rate=fetusRate/count
+
+        count=0
+        if hitmap_f["HA"]:
+            count+=fetusRate/2.
+        if hitmap_f["HB"]:
+            count+=fetusRate/2.
+        if hitmap_m["HA"]:
+            count+=(1-fetusRate)/2.
+        if hitmap_m["HB"]:
+            count+=(1-fetusRate)/2.
+
+        if count!=0:
+            rate=fetusRate/count/2.
         # Find the haplotype for the read 
-        if correctHaplo==False or random.random()>rate:
+        if hitmap_f["H"+goalHaplotype] or random.random()>rate:
             print read,
 
 if __name__ == '__main__':
