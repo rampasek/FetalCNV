@@ -38,12 +38,30 @@ def main():
     tmp_pos_file_name = "__tmp" + plasma_id + "_snp_pos.txt"
     tmp_pos_file = open(tmp_pos_file_name, "w")
     
+    #parse CNV type and position from the plasma .bam file name
     try:
-        reg_begin = int(args.filenames[PLR].split(':')[1].split('-')[0])
-        reg_end = int(args.filenames[PLR].split(':')[1].split('-')[1])
+        plasmaFN = args.filenames[PLR]
+        reg_begin = int(plasmaFN.split(':')[1].split('-')[0])
+        reg_end = int(plasmaFN.split(':')[1].split('-')[1])
+        
+        maternal_origin = False
+        paternal_origin = False
+        if plasmaFN.split('-')[0].lower().find('m') != -1:
+            maternal_origin = True
+        elif plasmaFN.split('-')[0].lower().find('p') != -1:
+            paternal_origin = True
+        
+        #[(0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1)]
+        cnv_state_id = 9    
+        if plasmaFN.find('duplicate') != -1:
+            if maternal_origin: cnv_state_id = 6
+            elif paternal_origin: cnv_state_id = 4
+        if plasmaFN.find('delete') != -1:
+            cnv_state_id = 0
     except:
         reg_begin = 0
         reg_end = 0
+        cnv_state_id = 9
     
     #read centromeres positions
     centromeres = dict()
@@ -187,7 +205,7 @@ def main():
         print >>out_files[ALDOC], '\n',
         
         if reg_begin <= pos and pos <= reg_end:
-            print >>out_files[GT], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', 9)
+            print >>out_files[GT], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', cnv_state_id)
         else:
             print >>out_files[GT], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', 3)
      
