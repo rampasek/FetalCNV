@@ -1,7 +1,8 @@
 #!/bin/bash
+# 1-region start; 2-region length; 3-haplotype; 4-data path; 5-results path;
 
-data_path=$3
-results_path=$4
+data_path=$4
+results_path=$5
 phase_sites=$data_path/trio.phase.vcf
 bamfile=$data_path/__plasma.part.bam
 readLength=100
@@ -10,7 +11,7 @@ plasmaFetusRate=0.13
 chromosome=chr20
 begin=$1
 end=$(($1 + $2))
-haplotype=B
+haplotype=$3
 
 regionCompliment=$chromosome':1-'$((begin-readLength))' '$chromosome':'$((end+readLength))
 region=$chromosome':'$begin'-'$end

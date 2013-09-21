@@ -1,7 +1,8 @@
 #!/bin/bash
-
-data_path=$4
-results_path=$5
+# 1-region start; 2-region length; 3-origin(M/P); 4-haplotype; 5-data path; 6-results path;
+ 
+data_path=$5
+results_path=$6
 phase_sites=$data_path/trio.phase.vcf
 bamfile=$data_path'/__'$3'.part.bam'
 plasmaFile=$data_path/__plasma.part.bam
@@ -12,7 +13,7 @@ plasmaCoverage=78
 chromosome=chr20
 begin=$1
 end=$(($1 + $2))
-haplotype=B
+haplotype=$4
 source='I'$3'1'
 
 region=$chromosome':'$begin'-'$end
