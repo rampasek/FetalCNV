@@ -1,7 +1,9 @@
 #!/bin/bash
 
-phase_sites=../../chr20/trio.phase.vcf
-bamfile=../../chr20/__plasma.part.bam
+data_path=$3
+results_path=$4
+phase_sites=$data_path/trio.phase.vcf
+bamfile=$data_path/__plasma.part.bam
 readLength=100
 plasmaFetusRate=0.13
 
@@ -26,7 +28,7 @@ samtools view -H $bamfile $region > inside$pid.sam
 
 echo "Filtering the reads that are not deleted..."
 python deletion.py raw_reads$pid $phase_sites $plasmaFetusRate $haplotype >> inside$pid.sam
-samtools view -S -b inside$pid.sam > inside$pid.bam 
+samtools view -S -b inside$pid.sam > inside$pid.bam
 
 echo "Adding reads located out of the region..."
 samtools view -h -b $bamfile $regionCompliment > outside$pid.bam
@@ -36,9 +38,11 @@ echo "Merging"
 samtools merge -f $haplotype-$region-delete.bam outside$pid.bam inside$pid.bam
 echo "Sorting"
 samtools sort $haplotype-$region-delete.bam $haplotype-$region-delete.sort
+mv $haplotype-$region-delete.sort.bam $results_path/
 echo "Indexing"
-samtools index $haplotype-$region-delete.sort.bam
+samtools index $results_path/$haplotype-$region-delete.sort.bam
 
 rm $haplotype-$region-delete.bam
 rm outside$pid.bam inside$pid.sam inside$pid.bam raw_reads$pid
+
 
