@@ -133,9 +133,8 @@ def main():
             if snip==len(snips_f) or snips_f[snip]['chr']!=parsed_read['chr']:
                 break
 
-            hitmap_f=({"HA":True,"HB":True})
-            hitmap_m=({"HA":True,"HB":True})
-            correctHaplo=False
+            hitmap_f = {"HA":True, "HB":True}
+            hitmap_m = {"HA":True, "HB":True}
             if o[0] == 'H': continue
             elif o[0] in 'SI': pos_qr += o[1]
             elif o[0] in 'ND': pos_db += o[1]
@@ -161,20 +160,23 @@ def main():
                     pos_qr += 1
 
 
-        count=0
+        count = 0
         if hitmap_f["HA"]:
-            count+=fetusRate/2.
+            count += fetusRate/2.
         if hitmap_f["HB"]:
-            count+=fetusRate/2.
+            count += fetusRate/2.
         if hitmap_m["HA"]:
-            count+=(1-fetusRate)/2.
+            count += (1-fetusRate)/2.
         if hitmap_m["HB"]:
-            count+=(1-fetusRate)/2.
+            count += (1-fetusRate)/2.
 
-        if count!=0:
-            rate=fetusRate/count/2.
-        # Find the haplotype for the read 
-        if hitmap_f["H"+goalHaplotype] or random.random()>rate:
+        if count == 0:
+            if random.random() > fetusRate/2.:
+                print read,
+            continue
+            
+        rate = (fetusRate/2.)/count
+        if hitmap_f["H"+goalHaplotype] == False or random.random() > rate:
             print read,
 
 if __name__ == '__main__':
