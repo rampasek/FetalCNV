@@ -1,11 +1,13 @@
+#!/usr/bin/python2
+
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import argparse
 
 normal=3
 
 def main():
-    parser = argparse.ArgumentParser(description='Filter SNP positions by call quality and min. coverage. Awaits filenames for M, P .vcf files, and M, P .sam files.')
-    parser.add_argument('filenames', type=str, nargs='+', help='paths to .vcf files with M, P SNPs and to corresponding .sam files')
+    parser = argparse.ArgumentParser(description='Evaluates FCNV prediction recall and precision. Takes an annotation file produced by FCNV.')
+    parser.add_argument('filenames', type=str, nargs=1, help='path to the annotation file')
     args = parser.parse_args()
 
     results_file=open(args.filenames[0], "r")
@@ -24,10 +26,16 @@ def main():
             regionSnips=regionSnips+1
             if res["real"]==res["pred"]:
                 foundSnips=foundSnips+1
-    print foundSnips
-    print regionSnips
+    #print foundSnips
+    #print regionSnips
 
-    recall=float(foundSnips)/regionSnips
+    if regionSnips>0:
+        recall=float(foundSnips)/regionSnips
+    else:
+        recall='NAN'
+
+    
+    
 
     foundSnips=0
     regionSnips=0
@@ -36,15 +44,19 @@ def main():
            regionSnips=regionSnips+1
            if res["real"]==res["pred"]:
                foundSnips=foundSnips+1
-
-    precision=float(foundSnips)/regionSnips
-    print foundSnips
-    print regionSnips
+               
+    if regionSnips>0:
+        precision=float(foundSnips)/regionSnips
+    else:
+        precision='NAN'
+        
+    #print foundSnips
+    #print regionSnips
     
 
     print "recall: "+str(recall)
     print "precision: "+str(precision)
-    print "F-Measure: "+str(fmeasure)
+    #print "F-Measure: "+str(fmeasure)
 
     length=0
     lastCH='!'
