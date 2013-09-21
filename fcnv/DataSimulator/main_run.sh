@@ -6,8 +6,8 @@ results_path='/dupa-filer/laci/I1/chr20/fcnv_data/'
 exec_path='/dupa-filer/laci/bin/'
 
 #time ./sim_duplicate.sh 10000000 100000 P &
-$exec_path/sim_duplicate.sh 10000000 100000 P B $data_path $plasma_path &
-$exec_path/sim_deletion.sh 10000000 1000000 B $data_path $plasma_path &
+$exec_path/sim_duplicate.sh 10000000 100000 P B $data_path $plasma_path $exec_path &
+$exec_path/sim_deletion.sh 10000000 1000000 A $data_path $plasma_path $exec_path &
 wait
 
 for bam_file in $plasma_path/*.bam

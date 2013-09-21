@@ -1,8 +1,8 @@
 #!/bin/bash
-# 1-region start; 2-region length; 3-origin(M/P); 4-haplotype; 5-data path; 6-results path;
- 
-data_path=$5
-results_path=$6
+
+data_path=$4
+results_path=$5
+exec_path=$6
 phase_sites=$data_path/trio.phase.vcf
 bamfile=$data_path'/__'$3'.part.bam'
 plasmaFile=$data_path/__plasma.part.bam
@@ -13,7 +13,7 @@ plasmaCoverage=78
 chromosome=chr20
 begin=$1
 end=$(($1 + $2))
-haplotype=$4
+haplotype=B
 source='I'$3'1'
 
 region=$chromosome':'$begin'-'$end
@@ -30,11 +30,11 @@ samtools view $bamfile $region > raw_reads$pid
 samtools view -H $bamfile $region > inside$pid.sam
 
 echo "Filtering for the correct haplotype..."
-python duplication.py raw_reads$pid $phase_sites $source $haplotype > filteredResults$pid
+python $exec_path/duplication.py raw_reads$pid $phase_sites $source $haplotype > filteredResults$pid
 
 echo "Down sampling the results..."
 numReads=`wc -l filteredResults$pid | awk '{print $1}'`
-python duplication_down_sampler.py filteredResults$pid $plasmaFetusRate $plasmaCoverage $readLength $numReads $region >> inside$pid.sam
+python $exec_path/duplication_down_sampler.py filteredResults$pid $plasmaFetusRate $plasmaCoverage $readLength $numReads $region >> inside$pid.sam
 samtools view -S -b inside$pid.sam > inside$pid.bam
 
 echo "Merging"

@@ -1,8 +1,8 @@
 #!/bin/bash
-# 1-region start; 2-region length; 3-haplotype; 4-data path; 5-results path;
 
-data_path=$4
-results_path=$5
+data_path=$3
+results_path=$4
+exec_path=$5
 phase_sites=$data_path/trio.phase.vcf
 bamfile=$data_path/__plasma.part.bam
 readLength=100
@@ -11,7 +11,7 @@ plasmaFetusRate=0.13
 chromosome=chr20
 begin=$1
 end=$(($1 + $2))
-haplotype=$3
+haplotype=B
 
 regionCompliment=$chromosome':1-'$((begin-readLength))' '$chromosome':'$((end+readLength))
 region=$chromosome':'$begin'-'$end
@@ -28,7 +28,7 @@ samtools view $bamfile $region > raw_reads$pid
 samtools view -H $bamfile $region > inside$pid.sam
 
 echo "Filtering the reads that are not deleted..."
-python deletion.py raw_reads$pid $phase_sites $plasmaFetusRate $haplotype >> inside$pid.sam
+python $exec_path/deletion.py raw_reads$pid $phase_sites $plasmaFetusRate $haplotype >> inside$pid.sam
 samtools view -S -b inside$pid.sam > inside$pid.bam
 
 echo "Adding reads located out of the region..."
