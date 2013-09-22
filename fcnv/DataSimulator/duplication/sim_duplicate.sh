@@ -1,8 +1,11 @@
 #!/bin/bash
 
-data_path=$4
-results_path=$5
-exec_path=$6
+# 1-CNV start position; 2-CNV length; 3-origin(M/P); 4-haplotype(A/B); 5-path to data;
+# 6-path where to store the simulated plasma BAM; 7-path to dir with scripts
+
+data_path=$5
+results_path=$6
+exec_path=$7
 phase_sites=$data_path/trio.phase.vcf
 bamfile=$data_path'/__'$3'.part.bam'
 plasmaFile=$data_path/__plasma.part.bam
@@ -13,7 +16,7 @@ plasmaCoverage=78
 chromosome=chr20
 begin=$1
 end=$(($1 + $2))
-haplotype=B
+haplotype=$4
 source='I'$3'1'
 
 region=$chromosome':'$begin'-'$end
@@ -42,10 +45,13 @@ echo "Merging"
 samtools merge -f $source-$haplotype-$region-duplicate.bam $plasmaFile inside$pid.bam
 echo "Sorting"
 samtools sort $source-$haplotype-$region-duplicate.bam $source-$haplotype-$region-duplicate.sort
-mv $source-$haplotype-$region-duplicate.sort.bam $results_path/
 echo "Indexing"
 samtools index $results_path/$source-$haplotype-$region-duplicate.sort.bam
+
+#move to results_path
+mv $source-$haplotype-$region-duplicate.sort.bam* $results_path/
 
 rm $source-$haplotype-$region-duplicate.bam
 rm raw_reads$pid inside$pid.sam filteredResults$pid inside$pid.bam
 
+echo "sim_duplicate script - DONE."

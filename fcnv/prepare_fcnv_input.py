@@ -18,13 +18,13 @@ def is_within_intervals(num, intervals):
 def main():
     #parse ARGs
     parser = argparse.ArgumentParser(description='Prepare SNP support data for FCNV. Read filenames: for joined M&P phased .vcf file; plasma, M, and P .bam files; and for centromeres list.')
-    parser.add_argument('filenames', type=str, nargs='+', help='paths to 1) .vcf file with phased M & P SNPs; 2) reads in SAM format for plasma, M, and P samples; 3) centromeres list file.')
+    parser.add_argument('filenames', type=str, nargs='+', help='paths to 1) .vcf file with phased M & P SNPs; 2) reads in SAM format for plasma, M, and P samples; 3) centromeres list file; 4) result path.')
     args = parser.parse_args()
     
-    if len(args.filenames) != 5: exit("Unexpected number of arguments passed! Expecting 5 filenames.")
+    if len(args.filenames) != 6: exit("Unexpected number of arguments passed! Expecting 6 parameters.")
     
     #treat these as CONSTANTS!
-    MP = 0; PLR = 1; MR = 2; PR = 3; CT = 4; #in_files
+    MP = 0; PLR = 1; MR = 2; PR = 3; CT = 4; RES_PATH=5; #in_files
     ALL = [MP, PLR, MR, PR, CT]
     M = 0; P = 1; #maternal, paternal
     ALDOC = 0; GT = 1; #out_files: allele DOC and ground truth
@@ -33,9 +33,12 @@ def main():
     in_files = [None for i in ALL]
     in_files[MP] = open(args.filenames[MP], "r" )
     in_files[CT] = open(args.filenames[CT], "r" )
+    res_path = args.filenames[RES_PATH]
     
     plasma_id = args.filenames[PLR][:-4].replace(':', '-').replace('.sort', '')
-    tmp_pos_file_name = "__tmp" + plasma_id + "_snp_pos.txt"
+    plasma_path = '/'.join(plasma_id.split('/')[:-1]) + '/'
+    plasma_id = plasma_id.split('/')[-1]
+    tmp_pos_file_name = plasma_path + "__tmp" + plasma_id + "_snp_pos.txt"
     tmp_pos_file = open(tmp_pos_file_name, "w")
     
     #parse CNV type and position from the plasma .bam file name
@@ -122,7 +125,7 @@ def main():
     print "  Piling up the reads " + datetime.now().strftime('%m-%d-%H-%M')
     #call samtools mpileup to get allele counts for positions in 'loci'
     cdir = os.getcwd() + '/'
-    tmp_vcf_prefix = '__tmp' + plasma_id
+    tmp_vcf_prefix = plasma_path + '__tmp' + plasma_id
     cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} {4}".format(cdir+tmp_pos_file_name, \
         cdir+args.filenames[PLR], cdir+args.filenames[MR], cdir+args.filenames[PR], tmp_vcf_prefix)
     os.system(cmd)
@@ -155,8 +158,8 @@ def main():
     print "  Writing output " + datetime.now().strftime('%m-%d-%H-%M')
     #list of output files
     out_files = [None for i in [ALDOC, GT]]
-    out_files[ALDOC] = open(plasma_id + ".alleles_doc.txt", "w")
-    out_files[GT] = open(plasma_id + ".target.txt", "w")
+    out_files[ALDOC] = open(res_path + '/' + plasma_id + ".alleles_doc.txt", "w")
+    out_files[GT] = open(res_path + '/' + plasma_id + ".target.txt", "w")
     print >>out_files[ALDOC], '#POS\tA\tC\tG\tT\tM_hapA\tM_hapB\tDP_hapA\tDP_hapB\tP_hapA\tP_hapB\tDP_hapA\tDP_hapB'
     
     skipped_low_doc = 0
