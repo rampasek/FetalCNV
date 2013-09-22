@@ -11,7 +11,9 @@ echo "Starting CNV plasma files simulations"
 length_set='10000000 1000000 500000 100000'
 haplo_set='A B'
 src_set='P M'
-begin_set='100 100000 10000000'
+begin_set='10000000 35000000 47000000'
+
+export SGE_O_PATH=$PATH
 
 for begin in $begin_set
 do
@@ -19,30 +21,30 @@ do
 	do
 		for haplo in $haplo_set
 		do
-			#qsub -q all.q -R y -pe parallel 6 -l h_vmem=10G -l h_rt=05:00:00 -S $exec_path/sim_deletion.sh $begin $length $haplo $data_path $plasma_path $exec_path
+			qsub -q all.q -V -R y -l h_vmem=10G -l h_rt=05:00:00 -S /bin/bash $exec_path/sim_deletion.sh $begin $length $haplo $data_path $plasma_path $exec_path
 			echo $begin' '$length' '$haplo
 
 			for src in $src_set
 			do
-				#qsub -q all.q -R y -pe parallel 6 -l h_vmem=10G -l h_rt=05:00:00 -S $exec_path/sim_duplicate.sh $begin $length $src $haplo $data_path $plasma_path $exec_path
+				qsub -q all.q -V -R y -l h_vmem=10G -l h_rt=05:00:00 -S /bin/bash $exec_path/sim_duplicate.sh $begin $length $src $haplo $data_path $plasma_path $exec_path
 				echo $begin' '$length' '$src' '$haplo
 			done
 		done
 	done
 done
-
+echo "DONE."
 exit
 
-$exec_path/sim_duplicate.sh 10000000 100000 P B $data_path $plasma_path $exec_path &
-$exec_path/sim_deletion.sh 10000000 100000 A $data_path $plasma_path $exec_path &
-wait
-echo "DONE."
+#$exec_path/sim_duplicate.sh 10000000 100000 P B $data_path $plasma_path $exec_path &
+#$exec_path/sim_deletion.sh 10000000 100000 A $data_path $plasma_path $exec_path &
+#wait
 
 echo "Starting BAM files processing by prepare_fcnv_input.py"
 for bam_file in $plasma_path/*.bam
 do
     log_file=`echo $bam_file | sed -e 's/.bam/.log/g'`
-    time -p $exec_path/prepare_fcnv_input.py $data_path/mp.phase.vcf $bam_file $data_path/__M.part.bam $data_path/__P.part.bam /dupa-filer/laci/centromeres $results_path > $log_file 2>&1 &
+    qsub -q all.q -V -R y -pe parallel 6 -l h_vmem=10G -l h_rt=05:00:00 -b time -p $exec_path/prepare_fcnv_input.py $data_path/mp.phase.vcf $bam_file $data_path/__M.part.bam $data_path/__P.part.bam /dupa-filer/laci/centromeres $results_path > $log_file 2>&1
+    #time -p $exec_path/prepare_fcnv_input.py $data_path/mp.phase.vcf $bam_file $data_path/__M.part.bam $data_path/__P.part.bam /dupa-filer/laci/centromeres $results_path > $log_file 2>&1 &
 done
 wait
 echo "DONE."
