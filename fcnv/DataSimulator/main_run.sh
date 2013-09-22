@@ -7,6 +7,36 @@ exec_path='/dupa-filer/laci/bin/'
 
 echo "Starting CNV plasma files simulations"
 #time ./sim_duplicate.sh 10000000 100000 P &
+
+length_set='10000000 1000000 500000 100000'
+haplo_set='A B'
+src_set='P M'
+CHR_LEN=100000000
+
+for i in {1..3}
+do
+	for length in $length_set
+	do
+		for haplo in $haplo_set
+		do
+			begin=$RANDOM
+			begin=$(($begin*$RANDOM))
+			begin=$(($begin%$CHR_LEN))
+
+			#qsub -q all.q -R y -pe parallel 6 -l h_vmem=10G -l h_rt=05:00:00 -S $exec_path/sim_deletion.sh $begin $length $haplo $data_path $plasma_path $exec_path
+			echo $begin' '$length' '$haplo
+
+			for src in $src_set
+			do
+				#qsub -q all.q -R y -pe parallel 6 -l h_vmem=10G -l h_rt=05:00:00 -S $exec_path/sim_duplicate.sh $begin $length $src $haplo $data_path $plasma_path $exec_path
+				echo $begin' '$length' '$src' '$haplo
+			done
+		done
+	done
+done
+
+exit
+
 $exec_path/sim_duplicate.sh 10000000 100000 P B $data_path $plasma_path $exec_path &
 $exec_path/sim_deletion.sh 10000000 100000 A $data_path $plasma_path $exec_path &
 wait
