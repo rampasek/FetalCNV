@@ -8,6 +8,7 @@ results_path=$5
 exec_path=$6
 phase_sites=$data_path/trio.phase.vcf
 bamfile=$data_path/__plasma.part.bam
+tmp_path=$results_path
 readLength=100
 plasmaFetusRate=0.13
 
@@ -20,36 +21,43 @@ regionCompliment=$chromosome':1-'$((begin-readLength))' '$chromosome':'$((end+re
 region=$chromosome':'$begin'-'$end
 
 pid=$$
-logfile=log_simDel.$pid.log
+logfile=$results_path/log_simDel.$pid.log
 exec > $logfile 2>&1
 
-echo "$region $haplotype $source"
+echo "SimDeletion: $region $haplotype $source"
+
+#temp files names
+raw_reads_file=$tmp_path/raw_reads$pid
+inside_sam_file=$tmp_path/inside$pid.sam
+inside_bam_file=$tmp_path/inside$pid.bam
+outside_bam_file=$tmp_path/outside$pid.bam
+plasma_file_prefix=$tmp_path/$haplotype-$region-delete
 
 echo "Copying all the reads in the region..."
-samtools view $bamfile $region > raw_reads$pid
+samtools view $bamfile $region > $raw_reads_file
 # Copying the header
-samtools view -H $bamfile $region > inside$pid.sam
+samtools view -H $bamfile $region > $inside_sam_file
 
 echo "Filtering the reads that are not deleted..."
-python $exec_path/deletion.py raw_reads$pid $phase_sites $plasmaFetusRate $haplotype >> inside$pid.sam
-samtools view -S -b inside$pid.sam > inside$pid.bam
+python $exec_path/deletion.py $raw_reads_file $phase_sites $plasmaFetusRate $haplotype >> $inside_sam_file
+samtools view -S -b $inside_sam_file > $inside_bam_file
 
 echo "Adding reads located out of the region..."
-samtools view -h -b $bamfile $regionCompliment > outside$pid.bam
+samtools view -h -b $bamfile $regionCompliment > $outside_bam_file
 
 echo "Merging"
 # Outside has the headers
-samtools merge -f $haplotype-$region-delete.bam outside$pid.bam inside$pid.bam
+samtools merge -f $plasma_file_prefix.bam $outside_bam_file $inside_bam_file
 echo "Sorting"
-samtools sort $haplotype-$region-delete.bam $haplotype-$region-delete.sort
+samtools sort $plasma_file_prefix.bam $plasma_file_prefix.sort
 echo "Indexing"
-samtools index $results_path/$haplotype-$region-delete.sort.bam
+samtools index $plasma_file_prefix.sort.bam
 
 #move to results_path
-mv $source-$haplotype-$region-duplicate.sort.bam* $results_path/
+mv $plasma_file_prefix.sort.bam* $results_path/
 
-rm $haplotype-$region-delete.bam
-rm outside$pid.bam inside$pid.sam inside$pid.bam raw_reads$pid
+rm $plasma_file_prefix.bam
+rm $outside_bam_file $inside_sam_file $inside_bam_file $raw_reads_file
 
 echo "sim_deletion script - DONE."
 
