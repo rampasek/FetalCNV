@@ -1,3 +1,5 @@
+#!/usr/bin/pypy
+
 import math
 import argparse
 import numpypy as np
@@ -133,10 +135,9 @@ def test(fcnv, positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_n
     posterior = fcnv.posteriorDecoding(samples, M, P, MSC, PSC, mixture)
     byLL = fcnv.likelihoodDecoding(samples, M, P, MSC, PSC, mixture)    
     
-    if True:
-        date = datetime.now().strftime('%m-%d-%H-%M')
-        fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')
-        annot_out = file(file_name_prefix + ".annotation" + date + ".txt", 'w')
+    date = datetime.now().strftime('%m-%d-%H-%M')
+    #fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')
+    annot_out = file(file_name_prefix + ".annotation" + date + ".txt", 'w')
     
     
     print fcnv.inheritance_patterns
@@ -176,7 +177,7 @@ def test(fcnv, positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_n
         tableLH.append(ll_value)
         
         #print the results
-        print >>fout, i+1, samples[i], M[i], list(MSC[i]), P[i], list(PSC[i]), vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
+        #print >>fout, i+1, samples[i], M[i], list(MSC[i]), P[i], list(PSC[i]), vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
         print >>annot_out, positions[i], ground_truth[i], vp[i]
             
         #print ground_truth[i], vp[i], pp[i], '|', post

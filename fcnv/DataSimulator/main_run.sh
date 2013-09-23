@@ -41,7 +41,7 @@ echo "Starting BAM files processing by prepare_fcnv_input.py"
 for bam_file in $plasma_path/*.bam
 do
     log_file=`echo $bam_file | sed -e 's/.bam/.log/g'`
-    qsub -q all.q -V -R y -pe parallel 6 -l h_vmem=10G -l h_rt=05:00:00 -S /usr/bin/python2 $exec_path/prepare_fcnv_input.py $data_path/mp.phase.vcf $bam_file $data_path/__M.part.bam $data_path/__P.part.bam /dupa-filer/laci/centromeres $results_path > $log_file 2>&1
+    qsub -q all.q -V -R y -pe parallel 6 -l h_vmem=10G -l h_rt=05:00:00 -o $log_file -S /usr/bin/python2 $exec_path/prepare_fcnv_input.py $data_path/mp.phase.vcf $bam_file $data_path/__M.part.bam $data_path/__P.part.bam /dupa-filer/laci/centromeres $results_path
     #time -p $exec_path/prepare_fcnv_input.py $data_path/mp.phase.vcf $bam_file $data_path/__M.part.bam $data_path/__P.part.bam /dupa-filer/laci/centromeres $results_path > $log_file 2>&1 &
 done
 wait
