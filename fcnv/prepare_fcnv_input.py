@@ -43,7 +43,7 @@ def main():
     
     #parse CNV type and position from the plasma .bam file name
     try:
-        plasmaFN = args.filenames[PLR]
+        plasmaFN = args.filenames[PLR].split('/')[-1]
         reg_begin = int(plasmaFN.split(':')[1].split('-')[0])
         reg_end = int(plasmaFN.split(':')[1].split('-')[1])
         
@@ -155,7 +155,7 @@ def main():
         if len(loci) != len(posInfo[R]): print "DIFFERENT NUMBER OF POSITIONS IN TEMP VCF " + str(R) 
         vcf_file.close()    
         os.remove(tmp_vcf_name)
-    os.remove(tmp_pos_file)
+    os.remove(tmp_pos_file_name)
         
     print "  Writing output " + datetime.now().strftime('%m-%d-%H-%M')
     #list of output files
