@@ -124,10 +124,10 @@ def main():
     
     print "  Piling up the reads " + datetime.now().strftime('%m-%d-%H-%M')
     #call samtools mpileup to get allele counts for positions in 'loci'
-    cdir = os.getcwd() + '/'
+    #cdir = os.getcwd() + '/'
     tmp_vcf_prefix = plasma_path + '__tmp' + plasma_id
-    cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} {4}".format(cdir+tmp_pos_file_name, \
-        cdir+args.filenames[PLR], cdir+args.filenames[MR], cdir+args.filenames[PR], tmp_vcf_prefix)
+    cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} {4}".format(tmp_pos_file_name, \
+        args.filenames[PLR], args.filenames[MR], args.filenames[PR], tmp_vcf_prefix)
     os.system(cmd)
     
     posInfo = [dict() for i in range(4)]
@@ -154,7 +154,9 @@ def main():
             
         if len(loci) != len(posInfo[R]): print "DIFFERENT NUMBER OF POSITIONS IN TEMP VCF " + str(R) 
         vcf_file.close()    
-    
+        os.remove(tmp_vcf_name)
+    os.remove(tmp_pos_file)
+        
     print "  Writing output " + datetime.now().strftime('%m-%d-%H-%M')
     #list of output files
     out_files = [None for i in [ALDOC, GT]]
