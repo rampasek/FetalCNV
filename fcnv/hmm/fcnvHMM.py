@@ -274,11 +274,11 @@ class FCNV(object):
         for ip in self.inheritance_patterns:
             
             if ip == (1, 1): #generate Normal states transitions\
-                pstay = 0.9989
+                pstay = 0.99899
                 #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
                 #pstay = precomb = 0.999 / 6.
                 precomb = 0.001 / 5.
-                pgo = 0.0001
+                pgo = 0.00001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -329,7 +329,9 @@ class FCNV(object):
                     prob = 1. / self.getNumIP()
                     for j, state2 in enumerate(self.states[num_real_states:]):
                         if state2.phased_pattern == "in" and \
-                         state2.inheritance_pattern != state1.inheritance_pattern:
+                         state2.inheritance_pattern != state1.inheritance_pattern \
+                         and state2.inheritance_pattern != (0,2) \
+                         and state2.inheritance_pattern != (2,0):
                             trans[i][num_real_states + j] = prob
                 else:
                     trans[i][inNormal_id] = 1. - exit_prob
@@ -747,12 +749,14 @@ class FCNV(object):
             path[i] = predecessor[i+1][path[i+1]]
             while path[i] >= num_real_states: path[i] = predecessor[i][path[i]]
         
+        state_path = [[] for i in xrange(n+1)]
         for i in xrange(1, n+1):
             state = self.states[ path[i] ]
             path[i] = self.inheritance_patterns.index(state.inheritance_pattern)
+            state_path[i] = (state.inheritance_pattern, state.phased_pattern)
         
         print "Viterbi path probability: ", table[n][exit_id]    
-        return path[1:]
+        return path[1:], state_path[1:]
         
     '''    
     def preCompute(self, v, u, j, i, samples, M, P, mixture):
