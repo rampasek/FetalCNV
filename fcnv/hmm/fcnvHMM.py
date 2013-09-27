@@ -545,15 +545,100 @@ class FCNV(object):
         dist_list = [dist_list[i] / summ for i in range(len(dist_list)) ]
 
         return dist_list
-           
     
-    def logGaussian(self, x, ps, cov_diagonal):
+    def allelesMeans(self, plasma, Malleles, Palleles, Mcounts, Pcounts, pattern, mix):
+        """Compute nucleotides distribution in maternal plasma for a position with
+        given maternal and fetal alleles, assuming the given fetal admixture.
+        
+        Arguments:
+        maternal -- maternal alleles
+        paternal -- paternal alleles
+        mix -- fetal admixture ratio
+        returns list(floats) -- list of nucleotides probabilities
+        """
+        plasma_avg_doc = 67.3
+        maternal_avg_doc = 29.6
+        paternal_avg_doc = 36.8
+        Mseq_ratio = sum(Mcounts)/float(maternal_avg_doc)
+        Pseq_ratio = sum(Pcounts)/float(paternal_avg_doc)
+        
+        Falleles = []
+        Fpseudocounts = []
+        for mHpatt in pattern[0]:
+            Falleles.append(Malleles[mHpatt])
+            Fpseudocounts.append(Mcounts[mHpatt])
+        for pHpatt in pattern[1]:
+            Falleles.append(Palleles[pHpatt])
+            Fpseudocounts.append(Pcounts[pHpatt])
+            
+        #adjust mixture to currently considered event (deletion, duplication, normal)
+        adjusted_fetal_admix = mix/2. * len(Falleles)
+        adjusted_maternal_admix = (1.-mix)/2. * len(Malleles) 
+        cmix = adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix)
+        
+        #adjust the mixture by DOC in pure maternal and paternal sequencing
+        #adjusted_maternal_admix = (1. - cmix) * sum(Mcounts)/float(40.)
+        #adjusted_fetal_admix = cmix/float(len(pattern[0])) * sum(Mcounts)/float(40.) + cmix/float(len(pattern[1])) * sum(Pcounts)/float(40.)
+        #cmix = adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix)
+        
+        maternal_pos_doc = (sum(Mcounts) + maternal_avg_doc) / 2.
+        scaled_M_doc = (maternal_pos_doc * plasma_avg_doc / maternal_avg_doc)
+        paternal_pos_doc = (sum(Pcounts) + paternal_avg_doc) / 2.
+        scaled_P_doc = (paternal_pos_doc * plasma_avg_doc / paternal_avg_doc)
+        
+        Mcounts = list(Mcounts)
+        Pcounts = list(Pcounts)
+        
+        Mcounts[0] += 30
+        Mcounts[1] += 30
+        
+        Pcounts[0] += 37
+        Pcounts[1] += 37
+        
+        mus = []
+        for nuc in self.nucleotides:
+            nuc_count_in_M = 0.
+            if Malleles[0] == nuc: nuc_count_in_M += Mcounts[0]
+            if Malleles[1] == nuc: nuc_count_in_M += Mcounts[1]
+            
+            mu = 0.
+            if nuc_count_in_M != 0:
+                #p = Malleles.count(nuc) / float(len(Malleles)) * (1.-cmix)
+                mu = (1.-cmix) * (nuc_count_in_M / float(sum(Mcounts))) * scaled_M_doc #(0.5+0.5*(Malleles[0] == Malleles[1]))
+            for mHpatt in pattern[0]:
+                if Malleles[mHpatt] == nuc:
+                    mu += cmix/float(len(pattern[0])) * (Mcounts[mHpatt] / float(sum(Mcounts))) * scaled_M_doc
+            for pHpatt in pattern[1]:
+                if Palleles[pHpatt] == nuc:
+                    mu += cmix/float(len(pattern[1])) * (Pcounts[pHpatt] / float(sum(Pcounts))) * scaled_P_doc
+            #if p < 0.01: p = 0.01
+            mus.append(mu)
+        
+        dist = []
+        for nuc in self.nucleotides:
+            p = Malleles.count(nuc) / float(len(Malleles)) * (1.-cmix)
+            p += Falleles.count(nuc) / float(len(Falleles)) * (cmix)
+            dist.append(p)    
+            
+        #normalize
+        #summ = sum(dist)
+        #dist = [dist[i] / summ for i in range(len(dist)) ]
+        mus = [mus[i] * sum(plasma)/float(sum(mus)) for i in range(len(mus)) ]
+        
+        #mus = [(mus[i] + sum(plasma)*dist[i])/2. for i in range(len(mus)) ]
+        #mus = [mus[i] * sum(plasma)/float(sum(mus)) for i in range(len(mus)) ]
+        
+        
+        return mus
+     
+    
+    def logGaussian(self, x, mus, cov_diagonal):
         '''
         log probability of x ~ N(mu, cov)
         '''
         D = len(x)
         N = sum(x)
-        xm = [ x[i] - N*ps[i] for i in range(D) ]
+        xm = [ x[i] - mus[i] for i in range(D) ]
         
         det = 1.
         for i in range(D): det *= cov_diagonal[i]
@@ -608,8 +693,12 @@ class FCNV(object):
         N = sum(nuc_counts)
         ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
         #ps = self.allelesDistributionExtended(maternal_alleles, tuple(fetal_alleles), maternal_sq_counts, fetal_pseudocounts, mix)
-        cov_diagonal = [ max(0.8, N*ps[x]) for x in range(4) ]
-        result = self.logGaussian(nuc_counts, ps, cov_diagonal)
+        mus = [ N*ps[i] for i in range(4) ]
+        
+        mus = self.allelesMeans(nuc_counts, maternal_alleles, paternal_alleles, maternal_sq_counts, paternal_sq_counts, pattern, mix)
+        
+        cov_diagonal = [ max(0.8, mus[x]) for x in range(4)]
+        result = self.logGaussian(nuc_counts, mus, cov_diagonal)
         if result < -20: result = -20
         
         #debug log
