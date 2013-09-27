@@ -18,13 +18,13 @@ def is_within_intervals(num, intervals):
 def main():
     #parse ARGs
     parser = argparse.ArgumentParser(description='Prepare SNP support data for FCNV. Read filenames: for joined M&P phased .vcf file; plasma, M, and P .bam files; and for centromeres list.')
-    parser.add_argument('filenames', type=str, nargs='+', help='paths to 1) .vcf file with phased M & P SNPs; 2) reads in SAM format for plasma, M, and P samples; 3) centromeres list file; 4) result path.')
+    parser.add_argument('filenames', type=str, nargs='+', help='paths to 1) .vcf file with phased M & P SNPs; 2) reads in SAM format for plasma, M, and P samples; 3) valid regions BED file 4) centromeres list file; 5) result path.')
     args = parser.parse_args()
     
-    if len(args.filenames) != 6: exit("Unexpected number of arguments passed! Expecting 6 parameters.")
+    if len(args.filenames) != 7: exit("Unexpected number of arguments passed! Expecting 7 parameters.")
     
     #treat these as CONSTANTS!
-    MP = 0; PLR = 1; MR = 2; PR = 3; CT = 4; RES_PATH=5; #in_files
+    MP = 0; PLR = 1; MR = 2; PR = 3; BED = 4; CT = 5; RES_PATH=6; #in_files
     ALL = [MP, PLR, MR, PR, CT]
     M = 0; P = 1; #maternal, paternal
     ALDOC = 0; GT = 1; #out_files: allele DOC and ground truth
@@ -126,8 +126,9 @@ def main():
     #call samtools mpileup to get allele counts for positions in 'loci'
     #cdir = os.getcwd() + '/'
     tmp_vcf_prefix = plasma_path + '__tmp' + plasma_id
-    cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} {4}".format(tmp_pos_file_name, \
-        args.filenames[PLR], args.filenames[MR], args.filenames[PR], tmp_vcf_prefix)
+    pile_prefix = res_path + '/' + plasma_id
+    cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} {4} {5} {6}".format(tmp_pos_file_name, \
+        args.filenames[PLR], args.filenames[MR], args.filenames[PR], tmp_vcf_prefix, args.filenames[BED], pile_prefix)
     os.system(cmd)
     
     posInfo = [dict() for i in range(4)]
@@ -184,7 +185,7 @@ def main():
                 tmp.append('0')
                 
         #if the plasma coverage is too low, skip this position        
-        if sum(map(int, tmp)) < 50: 
+        if sum(map(int, tmp)) < 20: 
             print pos, "- low overall coverage", sum(map(int, tmp))
             skipped_low_doc += 1
             continue
