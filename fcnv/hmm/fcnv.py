@@ -131,12 +131,12 @@ def computeStats(ok, wrong, pref, num_patt):
 def test(fcnv, positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_name_prefix):
     #el = fcnv.extendedLabeling(samples, M, P, mixture)
     #el = fcnv.mixedDecoding(samples, M, P, mixture) 
-    vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture)
-    posterior = fcnv.posteriorDecoding(samples, M, P, MSC, PSC, mixture)
-    byLL = fcnv.likelihoodDecoding(samples, M, P, MSC, PSC, mixture)    
+    vp, v_state_path = fcnv.viterbiPath(positions, samples, M, P, MSC, PSC, mixture)
+    posterior = fcnv.posteriorDecoding(positions, samples, M, P, MSC, PSC, mixture)
+    byLL = fcnv.likelihoodDecoding(positions, samples, M, P, MSC, PSC, mixture)    
     
     date = datetime.now().strftime('%m-%d-%H-%M')
-    #fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')
+    fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')
     annot_out = file(file_name_prefix + ".annotation" + date + ".txt", 'w')
     
     
@@ -177,7 +177,7 @@ def test(fcnv, positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_n
         tableLH.append(ll_value)
         
         #print the results
-        #print >>fout, i+1, samples[i], M[i], list(MSC[i]), P[i], list(PSC[i]), vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
+        print >>fout, i+1, samples[i], M[i], list(MSC[i]), P[i], list(PSC[i]), vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
         print >>annot_out, positions[i], ground_truth[i], vp[i], v_state_path[i]
             
         #print ground_truth[i], vp[i], pp[i], '|', post
@@ -316,30 +316,46 @@ def main():
     parser = argparse.ArgumentParser(description='Performs fetal CNV analysis from maternal plasma and phased parental data.')
     parser.add_argument('input', type=str, nargs=1, help='path to input file with allele counts in plasma and parental haplotypes')
     parser.add_argument('target', type=str, nargs=1, help='path to file with background truth - "target"')
+    parser.add_argument('plasma', type=str, nargs=1, help='path to file with plasma sequencing DOC for all chromosomal positions')
+    parser.add_argument('maternal', type=str, nargs=1, help='path to file with maternal sequencing DOC for all chromosomal positions')
     #parser.add_argument('out', type=str, nargs=1, help='output file with anotation of SNPs')
     args = parser.parse_args()
     
     in_file_name = args.input[0]
     target_file_name = args.target[0]
     #out_file_name = args.out[0]
+    plasma_doc_file = open(args.plasma[0], "r")
+    maternal_doc_file = open(args.maternal[0], "r")
     
     #read the input
     positions, samples, M, P, MSC, PSC = readInput(in_file_name)
-    '''
-    samples_t, M_t, P_t = readInput( \
-        path_in + "plasma_samplesT" + suffix + ".txt", \
-        path_in + "maternal_allelesT" + suffix + ".txt", \
-        path_in + "paternal_allelesT" + suffix + ".txt")
-    '''
 
-    fcnv = fcnvHMM.FCNV()
+    chr_length = 63000000
+    prefix_sum_plasma = [0] * chr_length
+    prefix_count_plasma = [0] * chr_length
+    prefix_sum_maternal = [0] * chr_length
+    prefix_count_maternal = [0] * chr_length
+    
+    last = 0
+    for line in plasma_doc_file:
+        row = map(int, line.split(' '))
+        prefix_sum_plasma[row[0]] = prefix_sum_plasma[last] + row[1]
+        prefix_count_plasma[row[0]] = prefix_count_plasma[last] + 1
+        last = row[0]
+
+    last = 0
+    for line in maternal_doc_file:
+        row = map(int, line.split(' '))
+        prefix_sum_maternal[row[0]] = prefix_sum_maternal[last] + row[1]
+        prefix_count_maternal[row[0]] = prefix_count_maternal[last] + 1
+        last = row[0]
+
+    fcnv = fcnvHMM.FCNV(prefix_sum_plasma, prefix_count_plasma, prefix_sum_maternal, prefix_count_maternal)
     
     mix = 0.13 #proportion of fetal genome in plasma
     #mix = fcnv.estimateMixture(samples, M, P)
-    #mix_t = fcnv.estimateMixture(samples_t, M_t, P_t)
     
     print "Est. Mixture: ", mix
-    #print "Est. Mixture: ", mix_t, mix
     
     ground_truth = []
     target_file = open(target_file_name, 'r')
@@ -347,20 +363,12 @@ def main():
         line = line.rstrip("\n").split("\t")
         ground_truth.append(int(line[-1]))
     target_file.close()
-    '''
-    ground_truth_t = []
-    fetal_in = open(path_in + "fetal_allelesT" + suffix + ".txt", 'r')
-    for line in fetal_in.readlines():
-        line = line.rstrip("\n")
-        ground_truth_t.append(int(line.split(" ")[-1]))
-    fetal_in.close()
-    '''
     
     #res_file = open(out_file_name, 'w')
     file_name_prefix = target_file_name.split('/')[-1].split('.')[0].replace(':', '-')
     print "------------------ w/o TRAINING -------------------"
     test(fcnv, positions, samples, M, P, MSC, PSC, mix, ground_truth, file_name_prefix)
-    #test(fcnv, samples[:500], M[:500], P[:500], mix, ground_truth[:500])
+    #test(fcnv, positions[:1000], samples[:1000], M[:1000], P[:1000], MSC[:1000], PSC[:1000], mix, ground_truth[:1000], file_name_prefix)
     
     '''
     print "------------------ BEFORE TRAINING -------------------"

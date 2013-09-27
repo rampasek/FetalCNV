@@ -12,7 +12,7 @@ plasmaFile=$data_path/__plasma.part.bam
 tmp_path=$results_path
 readLength=100
 plasmaFetusRate=0.13
-plasmaCoverage=78
+plasmaCoverage=67
 
 chromosome=chr20
 begin=$1

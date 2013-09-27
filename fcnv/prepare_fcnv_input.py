@@ -25,7 +25,7 @@ def main():
     
     #treat these as CONSTANTS!
     MP = 0; PLR = 1; MR = 2; PR = 3; BED = 4; CT = 5; RES_PATH=6; #in_files
-    ALL = [MP, PLR, MR, PR, CT]
+    ALL = [MP, PLR, MR, BED, PR, CT]
     M = 0; P = 1; #maternal, paternal
     ALDOC = 0; GT = 1; #out_files: allele DOC and ground truth
     
