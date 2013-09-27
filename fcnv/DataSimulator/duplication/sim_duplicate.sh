@@ -41,7 +41,7 @@ samtools view $bamfile $region > $raw_reads_file
 samtools view -H $bamfile $region > $inside_sam_file
 
 echo "Filtering for the correct haplotype..."
-python $exec_path/duplication.py $raw_reads_file $phase_sites $source $haplotype > $filtered_res_file
+python $exec_path/duplication.py $raw_reads_file $phase_sites $haplotype > $filtered_res_file
 
 echo "Down sampling the results..."
 numReads=`wc -l $filtered_res_file | awk '{print $1}'`
