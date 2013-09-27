@@ -3,12 +3,13 @@
 import argparse
 
 def main():
-    parser = argparse.ArgumentParser(description='Filter SNP positions by call quality and min. coverage. Awaits filenames for M, P .vcf files, and M, P .sam files.')
-    parser.add_argument('filenames', type=str, nargs='+', help='paths to .vcf files with M, P SNPs and to corresponding .sam files')
+    parser = argparse.ArgumentParser(description='This script calculates the mean and variance for difference of coverage between maternal and plasma sequencing data. It needs path to maternal and plasma .piled.txt files as arguments')
+    parser.add_argument('maternalFile', type=str, nargs=1, help='Path to .piled.txt file for maternal reads')
+    parser.add_argument('plasmaFile', type=str, nargs=1, help='Path to .piled.txt file for plasma reads')
     args = parser.parse_args()
 
-    maternal_file=open(args.filenames[0], "r")
-    plasma_file=open(args.filenames[1], "r")
+    maternal_file=open(args.maternalFile[0], "r")
+    plasma_file=open(args.plasmaFile[0], "r")
     prefix_value_maternal=[0]*70000000
     prefix_value_plasma=[0]*70000000
     prefix_count_maternal=[0]*70000000
@@ -40,7 +41,7 @@ def main():
         prefix_count_plasma[int(row[0])]=prefix_count_plasma[last]+1
         last=int(row[0])
        #print prefix_count[last]
-
+    
     for l in [10, 100, 1000, 10000, 100000, 1000000]:
         mean=0.
         ct=0

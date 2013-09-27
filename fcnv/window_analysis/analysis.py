@@ -2,8 +2,8 @@
 import argparse
 
 def main():
-    parser = argparse.ArgumentParser(description='Filter SNP positions by call quality and min. coverage. Awaits filenames for M, P .vcf files, and M, P .sam files.')
-    parser.add_argument('filenames', type=str, nargs='+', help='paths to .vcf files with M, P SNPs and to corresponding .sam files')
+    parser = argparse.ArgumentParser(description='This script calculates the mean and variance for coverage of different regions with the same size. It needs path to the .piled.txt file of the target reads as argument')
+    parser.add_argument('PileUpFile', type=str, nargs=1, help='Path to .piled.txt file for the target reads')
     args = parser.parse_args()
 
     pile_file=open(args.filenames[0], "r")
