@@ -64,10 +64,10 @@ def upper_bound(arr, ch, pos, q, p):
  
 def main():
     parser = argparse.ArgumentParser(description='This script filters the given reads of a certain region of plasma so that it simulates a deletion in this region. It requires the read file, snips file, the rate of fetus DNA in the plasma and the target haplotype of fetus for deletion')
-    parser.add_argument('readsFile', type=str, nargs='1', help='path to the .sam file for the plasma reads')
-    parser.add_argument('snipsFile', type=str, nargs='1', help='path to the snips file')
-    parser.add_argument('fetusRate', type=str, nargs='1', help='rate of fatus DNA in plasma as a float number between 0 and 1')
-    parser.add_argument('haplotype', type=str, nargs='1', help='the target haplotype for deletion (A or B)')
+    parser.add_argument('readsFile', type=str, nargs=1, help='path to the .sam file for the plasma reads')
+    parser.add_argument('snipsFile', type=str, nargs=1, help='path to the snips file')
+    parser.add_argument('fetusRate', type=str, nargs=1, help='rate of fatus DNA in plasma as a float number between 0 and 1')
+    parser.add_argument('haplotype', type=str, nargs=1, help='the target haplotype for deletion (A or B)')
     args = parser.parse_args()
 
     reads_file=open(args.readsFile[0], "r")
