@@ -78,11 +78,12 @@ class FCNV(object):
     
     nucleotides = ['A', 'C', 'G', 'T'] 
     
-    def __init__(self, prefix_sum_plasma, prefix_count_plasma, prefix_sum_maternal, prefix_count_maternal):
+    def __init__(self, positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_maternal, prefix_count_maternal):
         """Initialize new FCNV object"""
         super(FCNV, self).__init__()
         
         #store the DOC prefix data
+        self.positions = positions
         self.prefix_sum_plasma = prefix_sum_plasma
         self.prefix_count_plasma = prefix_count_plasma
         self.prefix_sum_maternal = prefix_sum_maternal
@@ -727,13 +728,16 @@ class FCNV(object):
         #self.logLikelihoodCache[code] = result
         return result
     
-    def logLHGivenStateWCoverage(self, chr_pos, nuc_counts, maternal_alleles, paternal_alleles,\
+    def logLHGivenStateWCoverage(self, pos_ind, nuc_counts, maternal_alleles, paternal_alleles,\
            maternal_sq_counts, paternal_sq_counts, mix, state):
         
-        win_size = 10000
+        win_size = 100
+        begin_ind = max(0, pos_ind - 1)
+        end_ind = min(pos_ind + 1, len(self.positions) - 1)
         
-        b = chr_pos - win_size/2
-        e = chr_pos + win_size/2
+        b = self.positions[begin_ind] #chr_pos - win_size/2
+        e = self.positions[end_ind] #chr_pos + win_size/2
+        win_size = e - b
         while b < 0 or self.prefix_sum_maternal[b] == 0: b += 1
         while e >= len(self.prefix_sum_maternal) or self.prefix_sum_maternal[e] == 0: e -= 1
         maternal_doc = self.prefix_sum_maternal[e] - self.prefix_sum_maternal[b]
@@ -743,6 +747,8 @@ class FCNV(object):
         #adjust conditional on inheritance pattern
         maternal_doc += (sum(state.inheritance_pattern) - 2) * (67.3 * mix/2.)
         
+        b = self.positions[begin_ind] #chr_pos - win_size/2
+        e = self.positions[end_ind] #chr_pos + win_size/2
         while b < 0 or self.prefix_sum_plasma[b] == 0: b += 1
         while e >= len(self.prefix_sum_plasma) or self.prefix_sum_plasma[e] == 0: e -= 1
         plasma_doc = self.prefix_sum_plasma[e] - self.prefix_sum_plasma[b]
@@ -753,15 +759,17 @@ class FCNV(object):
         N = sum(nuc_counts)
         
         mus = self.allelesMeans(nuc_counts, maternal_alleles, paternal_alleles, maternal_sq_counts, paternal_sq_counts, pattern, mix)
-        mus.append(maternal_doc)
+        #mus.append(maternal_doc)
         
         cov_diagonal = [ max(0.8, mus[x]) for x in range(4)]
-        cov_diagonal.append(67.3*1.5)
+        #cov_diagonal.append(50.)
         
         nuc_counts = list(nuc_counts)
-        nuc_counts.append(plasma_doc)
-        result = self.logGaussian(nuc_counts, mus, cov_diagonal) + 7
-        #print maternal_doc, plasma_doc, result, sum(nuc_counts[:-1])
+        #nuc_counts.append(plasma_doc)
+
+        coverage_prob = self.logGaussian([plasma_doc], [maternal_doc], [maternal_doc])
+        result = self.logGaussian(nuc_counts, mus, cov_diagonal) + coverage_prob + 2
+        #print maternal_doc, plasma_doc, sum(nuc_counts), result, coverage_prob, win_size
         if result < -20: result = -20
         
         return result
@@ -806,7 +814,7 @@ class FCNV(object):
         return result
     
     
-    def viterbiPath(self, positions, samples, M, P, MSC, PSC, mixture):
+    def viterbiPath(self, samples, M, P, MSC, PSC, mixture):
         """
         Viterbi decoding of the most probable path.
         """
@@ -842,7 +850,7 @@ class FCNV(object):
             #(i) compute new values for all phased patterns - "real" states of the HMM:
             for state_id, state in enumerate(self.states[:num_real_states]):
                 #emission probability in the given state
-                emis_p = self.logLHGivenStateWCoverage(positions[pos-1], samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
+                emis_p = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
                 
                 #porobability of this state is `emission * max{previous state * transition}`
                 max_prev = self.neg_inf
@@ -1204,7 +1212,7 @@ class FCNV(object):
         print "labeling probability: ", table[n][exit_id]
         return path[1:]
     
-    def computeForward(self, positions, samples, M, P, MSC, PSC, mixture):
+    def computeForward(self, samples, M, P, MSC, PSC, mixture):
         '''
         Posterior decoding: forward algorithm
         '''
@@ -1241,7 +1249,7 @@ class FCNV(object):
             #(i) compute new values for all phased patterns - "real" states of the HMM:
             for state_id, state in enumerate(self.states[:num_real_states]):
                 #emission probability in the given state
-                emis_p = self.logLHGivenStateWCoverage(positions[pos-1], samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
+                emis_p = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
                 
                 #probability of this state is `emission * \sum {previous state * transition}`
                 summ = self.neg_inf
@@ -1276,7 +1284,7 @@ class FCNV(object):
         return table, pX, scale
         
         
-    def computeBackward(self, positions, samples, M, P, MSC, PSC, mixture, scale):
+    def computeBackward(self, samples, M, P, MSC, PSC, mixture, scale):
         '''
         Posterior decoding: backward algorithm
         '''
@@ -1325,7 +1333,7 @@ class FCNV(object):
             #precompute emission probabilities
             emis_p = []
             for state in self.states[:num_real_states]:
-                emis_p.append(self.logLHGivenStateWCoverage(positions[pos], samples[pos], M[pos], P[pos], MSC[pos], PSC[pos], mixture, state))
+                emis_p.append(self.logLHGivenStateWCoverage(pos, samples[pos], M[pos], P[pos], MSC[pos], PSC[pos], mixture, state))
                 
             #(i) transitions from all states to 'real' states of the HMM:
             for state_id in range(num_states):
@@ -1369,7 +1377,7 @@ class FCNV(object):
         return table, pX
         
         
-    def maxPosteriorDecoding(self, positions, samples, M, P, MSC, PSC, mixture):
+    def maxPosteriorDecoding(self, samples, M, P, MSC, PSC, mixture):
         """Maximum posterior probability decoding. 
         
         Returns list of states -- for each position the one with highest posterior
@@ -1378,8 +1386,8 @@ class FCNV(object):
         """
         n = len(samples)
         
-        fwd, pX1, scale = self.computeForward(positions, samples, M, P, MSC, PSC, mixture)
-        bck, pX2 = self.computeBackward(positions, samples, M, P, MSC, PSC, mixture, scale)
+        fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
+        bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
         
         if abs(pX1-pX2) > 10e-8:
             print "p(X) from forward and backward DP doesn't match", pX1, pX2
@@ -1402,7 +1410,7 @@ class FCNV(object):
         return path
     
     
-    def posteriorDecoding(self, positions, samples, M, P, MSC, PSC, mixture):
+    def posteriorDecoding(self, samples, M, P, MSC, PSC, mixture):
         """Posterior probability decoding.
         
         For each position returns a list of states ordered by their posterior
@@ -1412,8 +1420,8 @@ class FCNV(object):
         n = len(samples)
         num_real_states = self.getNumPP()
         
-        fwd, pX1, scale = self.computeForward(positions, samples, M, P, MSC, PSC, mixture)
-        bck, pX2 = self.computeBackward(positions, samples, M, P, MSC, PSC, mixture, scale)
+        fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
+        bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
         
         #print pX1, pX2, sum(scale)
         
@@ -1660,7 +1668,7 @@ class FCNV(object):
             print " "
         
             
-    def likelihoodDecoding(self, positions, samples, M, P, MSC, PSC, mixture):
+    def likelihoodDecoding(self, samples, M, P, MSC, PSC, mixture):
         '''
         for each position returns a list of states ordered by the likelihood
         of the data in corresponding state, i.e. by emission porobabilities
@@ -1676,7 +1684,7 @@ class FCNV(object):
                 max_ = self.neg_inf
                 for s in self.states[:num_real_states]:
                     if s.inheritance_pattern == ip:
-                        ll = self.logLHGivenStateWCoverage(positions[pos-1], samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, s)
+                        ll = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, s)
                         max_ = max(max_, ll)
                 
                 '''#sum over corresponding phased patterns

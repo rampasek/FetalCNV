@@ -128,12 +128,12 @@ def computeStats(ok, wrong, pref, num_patt):
         if o+w > 0: ratio = o/float(o+w) *100
         print pref, t, ": ", o, w, ratio, '%'
 
-def test(fcnv, positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_name_prefix):
+def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_name_prefix):
     #el = fcnv.extendedLabeling(samples, M, P, mixture)
     #el = fcnv.mixedDecoding(samples, M, P, mixture) 
-    vp, v_state_path = fcnv.viterbiPath(positions, samples, M, P, MSC, PSC, mixture)
-    posterior = fcnv.posteriorDecoding(positions, samples, M, P, MSC, PSC, mixture)
-    byLL = fcnv.likelihoodDecoding(positions, samples, M, P, MSC, PSC, mixture)    
+    vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture)
+    posterior = fcnv.posteriorDecoding(samples, M, P, MSC, PSC, mixture)
+    byLL = fcnv.likelihoodDecoding(samples, M, P, MSC, PSC, mixture)    
     
     date = datetime.now().strftime('%m-%d-%H-%M')
     fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')
@@ -178,7 +178,7 @@ def test(fcnv, positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_n
         
         #print the results
         print >>fout, i+1, samples[i], M[i], list(MSC[i]), P[i], list(PSC[i]), vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
-        print >>annot_out, positions[i], ground_truth[i], vp[i], v_state_path[i]
+        print >>annot_out, snp_positions[i], ground_truth[i], vp[i], v_state_path[i]
             
         #print ground_truth[i], vp[i], pp[i], '|', post
         #labeling_correct += int(ground_truth[i] == el[i])
@@ -328,7 +328,7 @@ def main():
     maternal_doc_file = open(args.maternal[0], "r")
     
     #read the input
-    positions, samples, M, P, MSC, PSC = readInput(in_file_name)
+    snp_positions, samples, M, P, MSC, PSC = readInput(in_file_name)
 
     chr_length = 63000000
     prefix_sum_plasma = [0] * chr_length
@@ -350,7 +350,7 @@ def main():
         prefix_count_maternal[row[0]] = prefix_count_maternal[last] + 1
         last = row[0]
 
-    fcnv = fcnvHMM.FCNV(prefix_sum_plasma, prefix_count_plasma, prefix_sum_maternal, prefix_count_maternal)
+    fcnv = fcnvHMM.FCNV(snp_positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_maternal, prefix_count_maternal)
     
     mix = 0.13 #proportion of fetal genome in plasma
     #mix = fcnv.estimateMixture(samples, M, P)
@@ -367,8 +367,8 @@ def main():
     #res_file = open(out_file_name, 'w')
     file_name_prefix = target_file_name.split('/')[-1].split('.')[0].replace(':', '-')
     print "------------------ w/o TRAINING -------------------"
-    test(fcnv, positions, samples, M, P, MSC, PSC, mix, ground_truth, file_name_prefix)
-    #test(fcnv, positions[:1000], samples[:1000], M[:1000], P[:1000], MSC[:1000], PSC[:1000], mix, ground_truth[:1000], file_name_prefix)
+    test(fcnv, snp_positions, samples, M, P, MSC, PSC, mix, ground_truth, file_name_prefix)
+    #test(fcnv, snp_positions[:1000], samples[:1000], M[:1000], P[:1000], MSC[:1000], PSC[:1000], mix, ground_truth[:1000], file_name_prefix)
     
     '''
     print "------------------ BEFORE TRAINING -------------------"
