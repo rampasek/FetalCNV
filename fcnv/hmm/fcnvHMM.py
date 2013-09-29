@@ -282,11 +282,11 @@ class FCNV(object):
         for ip in self.inheritance_patterns:
             
             if ip == (1, 1): #generate Normal states transitions\
-                pstay = 0.99899
+                pstay = 0.998999
                 #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
                 #pstay = precomb = 0.999 / 6.
                 precomb = 0.001 / 5.
-                pgo = 0.00001
+                pgo = 0.000001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -743,8 +743,9 @@ class FCNV(object):
         maternal_doc = self.prefix_sum_maternal[e] - self.prefix_sum_maternal[b]
         maternal_doc /= float(self.prefix_count_maternal[e] - self.prefix_count_maternal[b])
         #scale to avg. plasma coverage
-        maternal_doc *= 67.3/29.6 #TODO: make this parameter
+        maternal_doc *= 67.3/29.6 #TODO: make this a parameter
         #adjust conditional on inheritance pattern
+        mu_doc = maternal_doc
         maternal_doc += (sum(state.inheritance_pattern) - 2) * (67.3 * mix/2.)
         
         b = self.positions[begin_ind] #chr_pos - win_size/2
@@ -767,8 +768,12 @@ class FCNV(object):
         nuc_counts = list(nuc_counts)
         #nuc_counts.append(plasma_doc)
 
-        coverage_prob = self.logGaussian([plasma_doc], [maternal_doc], [maternal_doc])
-        result = self.logGaussian(nuc_counts, mus, cov_diagonal) + coverage_prob + 2
+        coverage_prob = self.logGaussian([plasma_doc], [maternal_doc], [mu_doc])
+        coverage_prob2 = self.logGaussian([plasma_doc], [mu_doc-(67.3 * mix/2.)], [mu_doc])
+        coverage_prob3 = self.logGaussian([plasma_doc], [mu_doc+(67.3 * mix/2.)], [mu_doc])
+        if state.inheritance_pattern == (1,1): coverage_prob = max(coverage_prob, coverage_prob2, coverage_prob3)
+        
+        result = self.logGaussian(nuc_counts, mus, cov_diagonal) + coverage_prob
         #print maternal_doc, plasma_doc, sum(nuc_counts), result, coverage_prob, win_size
         if result < -20: result = -20
         
