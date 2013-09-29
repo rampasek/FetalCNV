@@ -12,7 +12,6 @@ plasmaFile=$data_path/__plasma.part.bam
 tmp_path=$results_path
 readLength=100
 plasmaFetusRate=0.13
-plasmaCoverage=67
 
 chromosome=chr20
 begin=$1
@@ -21,6 +20,8 @@ haplotype=$4
 source='I'$3'1'
 
 region=$chromosome':'$begin'-'$end
+
+plasmaCoverage=$(samtools mpileup $plasmaFile -q10 -Q10 -l $region | awk '{mean += $4; ct++}END{print mean/ct}')
 
 pid=$$
 logfile=$results_path/log_simDup.$pid.log
