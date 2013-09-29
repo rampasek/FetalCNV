@@ -1,0 +1,56 @@
+\pdfoutput=1
+\documentclass[11pt, letter]{llncs}
+\usepackage{fullpage}
+\usepackage[utf8]{inputenc}
+\usepackage{amssymb}
+\setcounter{tocdepth}{3}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{subfigure}
+\usepackage{listings}
+\usepackage{url}
+\usepackage{cite}
+
+ 
+\newcommand{\keywords}[1]{\par\addvspace\baselineskip
+\noindent\keywordname\enspace\ignorespaces#1}
+
+% nice tilde
+\newcommand{\ntilde}{\raise.17ex\hbox{$\scriptstyle\mathtt{\sim}$}}
+
+\begin{document}
+
+\mainmatter  % start of an individual contribution
+
+\title{Non-Invasive Fetal Genome Copy Number Variation Analysis}
+
+\author{Ladislav Ramp\'a\v{s}ek\inst{1,*}
+	\and Aryan Arbabi\inst{1}
+	\and Michael Brudno\inst{1,2,3,4,*}}
+
+\urldef{\mailsa}\path|{rampasek, brudno}@cs.toronto.edu|   
+\institute{Department of Computer Science, University of Toronto, Canada
+	\and Centre for Computational Medicine, Hospital for Sick Children, Toronto, Canada
+	\and Genetics and Genome Biology, Hospital for Sick Children, Toronto, Canada
+	\and Donnelly Centre, University of Toronto, Canada \\
+	\textsuperscript{*} To whom correspondence should be addressed: \mailsa\\}
+
+\maketitle
+
+
+\begin{abstract}
+We developed a new method for non-invasive analysis of \textit{de novo} copy number variations in fetal genome. The motivation is to enable for identification of large regions in the fetal genome that were inherited from parental genomes in unusual number (more or less than normal) without necessity of direct samples from the fetus. We target our method to work with data obtained by sequencing of the DNA material present in maternal plasma. Such DNA material is a mixture of maternal and fetal genome. However, in this project we limit ourselves to simulated data. Our method consists of a statistical model for  individual SNP positions in the genome, and of a hidden Markov model for inference of CNV events that span these sites.
+\keywords{non-invasive, prenatal, maternal plasma, CNV}
+\end{abstract}
+
+\input intro
+\input alg
+\input res
+\input dis
+\input concl
+
+
+\bibliographystyle{splncs}
+\bibliography{main}
+
+\end{document}
