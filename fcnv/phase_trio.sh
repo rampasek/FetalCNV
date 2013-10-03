@@ -45,9 +45,9 @@ comment
 # (2) genotype M, P, F, filter and phase
 prefix=trio
 echo "genotyping the trio"
-time samtools mpileup -uDSI -C50 -r $region -f $reference __M.part.bam __P.part.bam __F.part.bam | bcftools view -bvcg - > $prefix.genotype.raw.bcf
+time samtools mpileup -uDSI -C50 -r $region -f $reference __M.allreads.part.bam __P.part.bam __F.part.bam | bcftools view -bvcg - > $prefix.genotype.raw.bcf
 
-time bcftools view $prefix.genotype.raw.bcf | vcfutils.pl varFilter -d60 -Q10 > $prefix.genotype.vcf
+time bcftools view $prefix.genotype.raw.bcf | vcfutils.pl varFilter -d80 -Q20 > $prefix.genotype.vcf
 # TODO: ???? what limit for depth of coverage to use?
 
 #annotate SNPs by rs-ids from dbSNP
