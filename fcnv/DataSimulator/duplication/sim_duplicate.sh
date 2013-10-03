@@ -21,11 +21,12 @@ source='I'$3'1'
 
 region=$chromosome':'$begin'-'$end
 
-plasmaCoverage=$(samtools mpileup $plasmaFile -q10 -Q10 -l $region | awk '{mean += $4; ct++}END{print mean/ct}')
-
 pid=$$
 logfile=$results_path/log_simDup.$pid.log
 exec > $logfile 2>&1
+
+plasmaCoverage=$(samtools mpileup $plasmaFile -q10 -Q10 -r $region | awk '{sum+=$4; ct++} END {print sum/ct}')
+echo "$region plasmaCoverage: $plasmaCoverage"
 
 echo "SimDuplication: $region $haplotype $source $3" 
 
