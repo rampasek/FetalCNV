@@ -1,0 +1,91 @@
+
+# vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
+import argparse
+from random import randint 
+from tempfile import mkstemp
+from shutil import move
+from os import remove, close
+
+def main():
+    parser = argparse.ArgumentParser(description='Finding the origin of deletions')
+    parser.add_argument('vcfFile', type=str, nargs=1, help='path to the .vcf  phasing file')
+    parser.add_argument('targetFile', type=str, nargs=1, help='path to the .target.txt file')
+    parser.add_argument('target', type=str, nargs=1, help='target haplotype')
+    parser.add_argument('aBegin', type=int, nargs=1, help='begin of the region')
+    parser.add_argument('aEnd', type=int, nargs=1, help='end of the region')
+    args = parser.parse_args()
+
+    vcfFile=open(args.vcfFile[0], "r")
+    targetFile=open(args.targetFile[0], "r")
+    tmpFileName='__'+args.targetFile[0]+'.tmp'
+    tmpFile=open(tmpFileName, "w")
+
+    begin=args.aBegin[0]
+    end=args.aEnd[0]
+    tHaplotype=ord(args.target[0])-ord('A')
+
+    counts={'PA':0, 'PB':0, 'MA':0, 'MB':0}
+    ans={'PA':0, 'PB':0, 'MA':0, 'MB':0}
+    ct=0
+    haplos=['PA', 'PB', 'MA', 'MB']
+
+    for row in vcfFile:
+        parts=row.strip().split('\t')
+        if parts[0][0]=='#' :
+            continue
+        if int(parts[1])<begin or int(parts[1])>end:
+            continue
+        if ct==100 or (ct > 0 and int(parts[1])>end):
+            mx=-1
+            ct=0
+            for haplo in haplos:
+                if counts[haplo]==mx:
+                    match.append(haplo)
+                if counts[haplo]>mx:
+                    mx=counts[haplo]
+                    match=[haplo]
+                counts[haplo]=0
+            lucky=randint(0,len(match)-1)
+            ans[match[len(match)-1]]+=1
+            print '['+match[len(match)-1]+']',
+        ct+=1
+        maternal=parts[9].strip().split(':')[0].strip().split('|')
+        paternal=parts[10].strip().split(':')[0].strip().split('|')
+        fetal=parts[11].strip().split(':')[0].strip().split('|')
+        if (fetal[tHaplotype]==paternal[0]):
+            counts['PA']+=1
+        if (fetal[tHaplotype]==paternal[1]):
+            counts['PB']+=1
+        if (fetal[tHaplotype]==maternal[0]):
+            counts['MA']+=1
+        if (fetal[tHaplotype]==maternal[1]):
+            counts['MB']+=1
+    print ' '
+
+#    print 'MA: ', ans['MA']
+#    print 'MB: ', ans['MB']
+#    print 'PA: ', ans['PA']
+#    print 'PB: ', ans['PB']
+
+###################### Laco, look at here! ######################
+    if ans['PA']+ans['PB'] > ans['MA']+ans['MB']:
+        subs='0'
+    else:
+        subs='2'
+################################################################
+
+    for row in targetFile:
+        parts=row.strip().split('\t')
+        if parts[3]!='3':
+            parts[3]=subs
+        for i in range(3):
+            tmpFile.write(parts[i]+'\t')
+        tmpFile.write(parts[3]+'\n')
+
+    remove(args.targetFile[0])
+    move(tmpFileName,args.targetFile[0])
+
+
+if __name__=='__main__':
+    main()
+        
