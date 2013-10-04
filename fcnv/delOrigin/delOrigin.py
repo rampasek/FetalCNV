@@ -69,9 +69,9 @@ def main():
 
 ###################### Laco, look at here! ######################
     if ans['PA']+ans['PB'] > ans['MA']+ans['MB']:
-        subs='0'
-    else:
         subs='2'
+    else:
+        subs='0'
 ################################################################
 
     for row in targetFile:
