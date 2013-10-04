@@ -1,3 +1,5 @@
+#!/usr/bin/python2
+
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import argparse
 import random
@@ -9,7 +11,7 @@ def main():
 
     readsFiltered_file= open(args.filenames[0], "r")
 
-    targetCoverage= float(args.filenames[1]) * int(args.filenames[2]) / 2.0
+    targetCoverage= float(args.filenames[1]) * float(args.filenames[2]) / 2.0
 
     region= args.filenames[5].strip().split(':')[1].strip().split('-')
     currentCoverage= float(args.filenames[3]) * int(args.filenames[4]) / (int(region[1])-int(region[0]))

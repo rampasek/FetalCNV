@@ -69,10 +69,10 @@ def main():
     parser.add_argument('readsFile', type=str, nargs=1, help='path to the .sam file for the maternal or paternal reads')
     parser.add_argument('snipsFile', type=str, nargs=1, help='path to the snips file')
     parser.add_argument('haplotype', type=str, nargs=1, help='the target haplotype for duplication (A or B)')
-
+    args = parser.parse_args()
+    
     reads_file=open(args.readsFile[0], "r")
     snips_file=open(args.snipsFile[0], "r")
-    fetusRate=float(args.fetusRate[0])
     goalHaplotype=args.haplotype[0]
 
 
