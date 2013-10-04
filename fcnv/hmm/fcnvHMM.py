@@ -282,11 +282,11 @@ class FCNV(object):
         for ip in self.inheritance_patterns:
             
             if ip == (1, 1): #generate Normal states transitions\
-                pstay = 0.9989
+                pstay = 0.98999
                 #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
                 #pstay = precomb = 0.999 / 6.
-                precomb = 0.001 / 5.
-                pgo = 0.0001
+                precomb = 0.01 / 5.
+                pgo = 0.00001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -300,10 +300,10 @@ class FCNV(object):
                     trans[i][outState_id] = pgo
                     
             else: #generate CNV states transitions
-                pstay = 0.9989
+                pstay = 0.9899
                 #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
                 #pstay = precomb = 0.999 / 6.
-                precomb = 0.001 / 5.
+                precomb = 0.01 / 5.
                 pgo = 0.0001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
@@ -313,6 +313,12 @@ class FCNV(object):
                             trans[i][i] = pstay
                         elif state2.inheritance_pattern == ip: #to recombination of the same IP
                             trans[i][j] = precomb
+                            if state1.inheritance_pattern == (2, 1):
+                                if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
+                                    trans[i][j] = 0.0005
+                            if state1.inheritance_pattern == (1, 2):
+                                if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
+                                    trans[i][j] = 0.0005
                     #to the silent exit node    
                     outState_id = self.getCorrespondingOutState(state1)[0]
                     trans[i][outState_id] = pgo
@@ -647,12 +653,12 @@ class FCNV(object):
         '''
         D = len(x)
         N = sum(x)
-        xm = [ x[i] - mus[i] for i in range(D) ]
+        xm = [ float(x[i] - mus[i]) for i in range(D) ]
         
         det = 1.
         for i in range(D): det *= cov_diagonal[i]
             
-        px = - (D * math.log(2*math.pi)) /2.
+        px = - D/2. * math.log(2.*math.pi)
         px += - math.log(det) /2.
         
         #compute the 'exponent' part #px += -(np.dot(np.dot(xm.T, inv), xm)) /2.
@@ -734,67 +740,81 @@ class FCNV(object):
         
         begin_ind = max(0, pos_ind - 1)
         end_ind = min(pos_ind + 1, len(self.positions) - 1)
+        leftmost = max(int((self.positions[pos_ind] + self.positions[begin_ind]) / 2.), self.positions[pos_ind] - 1000)
+        rightmost = min(int((self.positions[pos_ind] + self.positions[end_ind]) / 2.), self.positions[pos_ind] + 1000)
+        #leftmost = self.positions[pos_ind] - 500
+        #rightmost = self.positions[pos_ind] + 500
         
-        b = int((self.positions[pos_ind] + self.positions[begin_ind]) / 2.)
-        e = int((self.positions[pos_ind] + self.positions[end_ind]) / 2.)
+        b = leftmost
+        e = rightmost
         while b < 0 or self.prefix_sum_maternal[b] == 0: b += 1
         while e >= len(self.prefix_sum_maternal) or self.prefix_sum_maternal[e] == 0: e -= 1
         m_win_size = e - b
         mu_doc = self.prefix_sum_maternal[e] - self.prefix_sum_maternal[b]
         mu_doc /= float(self.prefix_count_maternal[e] - self.prefix_count_maternal[b])
         #scale to avg. plasma coverage
-        mu_doc *= 67.3/29.6 #TODO: make this a parameter
+        mu_doc *= 67.3/49.9 #TODO: make this a parameter
         
         #adjust conditional on inheritance pattern
         maternal_doc = mu_doc
         maternal_doc += (sum(state.inheritance_pattern) - 2) * (67.3 * mix/2.)
         
         #get arrivals rate
-        mu_arrivals = (mu_doc * m_win_size) / 50.
-        maternal_arrivals = (maternal_doc * m_win_size) / 50.
+        mu_arrivals = (mu_doc * m_win_size) / 200.
+        maternal_arrivals = (maternal_doc * m_win_size) / 200.
         
-        b = int((self.positions[pos_ind] + self.positions[begin_ind]) / 2.)
-        e = int((self.positions[pos_ind] + self.positions[end_ind]) / 2.)
+        b = leftmost
+        e = rightmost
         while b < 0 or self.prefix_sum_plasma[b] == 0: b += 1
         while e >= len(self.prefix_sum_plasma) or self.prefix_sum_plasma[e] == 0: e -= 1
         pl_win_size = e - b
         plasma_doc = self.prefix_sum_plasma[e] - self.prefix_sum_plasma[b]
         plasma_doc /= float(self.prefix_count_plasma[e] - self.prefix_count_plasma[b])
-        plasma_arrivals = (plasma_doc * pl_win_size) / 50.
+        plasma_arrivals = (plasma_doc * pl_win_size) / 200.
         
         
         pattern = state.phased_pattern
         N = sum(nuc_counts)
         
-        mus = self.allelesMeans(nuc_counts, maternal_alleles, paternal_alleles, maternal_sq_counts, paternal_sq_counts, pattern, mix)
+        #mus = self.allelesMeans(nuc_counts, maternal_alleles, paternal_alleles, maternal_sq_counts, paternal_sq_counts, pattern, mix)
         #mus.append(maternal_doc)
         
-#        pattern = state.phased_pattern
-#        fetal_alleles = []
-#        fetal_pseudocounts = []
-#        for mHpatt in pattern[0]:
-#            fetal_alleles.append(maternal_alleles[mHpatt])
-#            fetal_pseudocounts.append(maternal_sq_counts[mHpatt])
-#        for pHpatt in pattern[1]:
-#            fetal_alleles.append(paternal_alleles[pHpatt])
-#            fetal_pseudocounts.append(paternal_sq_counts[pHpatt])
-#        ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
-#        mus = [ N*ps[i] for i in range(4) ]
+        pattern = state.phased_pattern
+        fetal_alleles = []
+        fetal_pseudocounts = []
+        for mHpatt in pattern[0]:
+            fetal_alleles.append(maternal_alleles[mHpatt])
+            fetal_pseudocounts.append(maternal_sq_counts[mHpatt])
+        for pHpatt in pattern[1]:
+            fetal_alleles.append(paternal_alleles[pHpatt])
+            fetal_pseudocounts.append(paternal_sq_counts[pHpatt])
+        ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
+        mus = [ N*ps[i] for i in range(4) ]
         
         cov_diagonal = [ max(0.8, mus[x]) for x in range(4)]
         #cov_diagonal.append(50.)
         
         nuc_counts = list(nuc_counts)
         #nuc_counts.append(plasma_doc)
-
-        coverage_prob = self.logGaussian([plasma_arrivals], [maternal_arrivals], [mu_arrivals])
-        coverage_prob2 = self.logGaussian([plasma_arrivals], [(mu_doc-(67.3 * mix/2.)) * m_win_size / 50.], [mu_arrivals])
-        coverage_prob3 = self.logGaussian([plasma_arrivals], [(mu_doc+(67.3 * mix/2.)) * m_win_size / 50.], [mu_arrivals])
-        #if state.inheritance_pattern == (1,1): coverage_prob = (coverage_prob + max(coverage_prob2, coverage_prob3))/2.
+        
+        noise_prob = max(-7., self.logGaussian([plasma_arrivals], [mu_arrivals], [mu_arrivals*20]))/14.
+        coverage_prob = self.logGaussian([plasma_arrivals], [maternal_arrivals], [mu_arrivals])/14.
+        coverage_prob = min(0., coverage_prob - noise_prob)
+        coverage_prob2 = self.logGaussian([plasma_arrivals], [(mu_doc-(67.3 * mix/2.)) * m_win_size / 200.], [mu_arrivals])/14.
+        coverage_prob2 = min(0., coverage_prob2 - noise_prob)
+        coverage_prob3 = self.logGaussian([plasma_arrivals], [(mu_doc+(67.3 * mix/2.)) * m_win_size / 200.], [mu_arrivals])/14.
+        coverage_prob3 = min(0., coverage_prob3 - noise_prob)
+        
+        
+        if sum(state.inheritance_pattern) == 2 and pl_win_size >= 1000: coverage_prob = max(coverage_prob, coverage_prob2-0.1, coverage_prob3-0.1)
+        if noise_prob > coverage_prob or pl_win_size < 1000: coverage_prob = 0.
         
         ratios_prob = self.logGaussian(nuc_counts, mus, cov_diagonal)
         result = ratios_prob + coverage_prob
-        print maternal_doc, maternal_arrivals, m_win_size, '|', plasma_doc, plasma_arrivals, pl_win_size, '|', sum(nuc_counts), ratios_prob, coverage_prob, coverage_prob2, coverage_prob3, result
+        #if maternal_alleles[0] ==  maternal_alleles[1]: result = ratios_prob + coverage_prob
+        #else: result = ratios_prob + noise_prob
+        #print maternal_doc, maternal_arrivals, m_win_size, '|', plasma_doc, plasma_arrivals, pl_win_size, '|', sum(nuc_counts), ratios_prob, coverage_prob, coverage_prob2, coverage_prob3, noise_prob, result
+        if result < -15: result = -15
         
         return result
     
