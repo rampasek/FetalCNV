@@ -40,46 +40,51 @@ def main():
             print "Error: target haplotype and/or position can't be parsed from .target.txt file name"
             return 1
     else:
-        begin=args.aBegin[0]
-        end=args.aEnd[0]
-        tHaplotype=ord(args.targetHap[0])-ord('A')
+        begin = args.aBegin[0]
+        end = args.aEnd[0]
+        tHaplotype = ord(args.targetHap[0])-ord('A')
         
-    counts={'PA':0, 'PB':0, 'MA':0, 'MB':0}
-    ans={'PA':0, 'PB':0, 'MA':0, 'MB':0}
-    ct=0
-    haplos=['PA', 'PB', 'MA', 'MB']
+    counts = {'PA':0, 'PB':0, 'MA':0, 'MB':0}
+    ans = {'PA':0, 'PB':0, 'MA':0, 'MB':0}
+    ct = 0
+    haplos = ['PA', 'PB', 'MA', 'MB']
 
     for row in vcfFile:
-        parts=row.strip().split('\t')
+        parts = row.strip().split('\t')
+        
         if parts[0][0]=='#' :
             continue
-        if int(parts[1])<begin or int(parts[1])>end:
-            continue
+        
         if ct==100 or (ct > 0 and int(parts[1])>end):
             mx=-1
             ct=0
             for haplo in haplos:
-                if counts[haplo]==mx:
+                if counts[haplo] == mx:
                     match.append(haplo)
-                if counts[haplo]>mx:
-                    mx=counts[haplo]
-                    match=[haplo]
-                counts[haplo]=0
-            lucky=randint(0,len(match)-1)
-            ans[match[len(match)-1]]+=1
+                if counts[haplo] > mx:
+                    mx = counts[haplo]
+                    match = [haplo]
+                counts[haplo] = 0
+            lucky = randint(0,len(match)-1)
+            ans[match[len(match)-1]] += 1
             print '['+match[len(match)-1]+']',
-        ct+=1
-        maternal=parts[9].strip().split(':')[0].strip().split('|')
-        paternal=parts[10].strip().split(':')[0].strip().split('|')
-        fetal=parts[11].strip().split(':')[0].strip().split('|')
-        if (fetal[tHaplotype]==paternal[0]):
-            counts['PA']+=1
-        if (fetal[tHaplotype]==paternal[1]):
-            counts['PB']+=1
-        if (fetal[tHaplotype]==maternal[0]):
-            counts['MA']+=1
-        if (fetal[tHaplotype]==maternal[1]):
-            counts['MB']+=1
+        
+        if int(parts[1])<begin or int(parts[1])>end:
+            continue
+        
+        ct += 1
+        maternal = parts[9].strip().split(':')[0].strip().split('|')
+        paternal = parts[10].strip().split(':')[0].strip().split('|')
+        fetal = parts[11].strip().split(':')[0].strip().split('|')
+        if fetal[tHaplotype]==paternal[0]:
+            counts['PA'] += 1
+        if fetal[tHaplotype]==paternal[1]:
+            counts['PB'] += 1
+        if fetal[tHaplotype]==maternal[0]:
+            counts['MA'] += 1
+        if fetal[tHaplotype]==maternal[1]:
+            counts['MB'] += 1
+            
     print ' '
 
 #    print 'MA: ', ans['MA']
