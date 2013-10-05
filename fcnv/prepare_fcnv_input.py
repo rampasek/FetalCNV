@@ -36,7 +36,8 @@ def main():
     res_path = args.filenames[RES_PATH]
     
     plasma_id = args.filenames[PLR][:-4].replace(':', '-').replace('.sort', '')
-    plasma_path = '/'.join(plasma_id.split('/')[:-1]) + '/'
+    plasma_path = '/'.join(plasma_id.split('/')[:-1])
+    if len(plasma_path) != 0: plasma_path += '/'
     plasma_id = plasma_id.split('/')[-1]
     tmp_pos_file_name = plasma_path + "__tmp" + plasma_id + "_snp_pos.txt"
     tmp_pos_file = open(tmp_pos_file_name, "w")

@@ -1,3 +1,4 @@
+#!/usr/bin/pypy
 
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
 import argparse
@@ -10,20 +11,39 @@ def main():
     parser = argparse.ArgumentParser(description='Finding the origin of deletions')
     parser.add_argument('vcfFile', type=str, nargs=1, help='path to the .vcf  phasing file')
     parser.add_argument('targetFile', type=str, nargs=1, help='path to the .target.txt file')
-    parser.add_argument('target', type=str, nargs=1, help='target haplotype')
-    parser.add_argument('aBegin', type=int, nargs=1, help='begin of the region')
-    parser.add_argument('aEnd', type=int, nargs=1, help='end of the region')
+    parser.add_argument('--targetHap', type=str, help='target haplotype')
+    parser.add_argument('--aBegin', type=int, help='begin of the region')
+    parser.add_argument('--aEnd', type=int, help='end of the region')
     args = parser.parse_args()
-
-    vcfFile=open(args.vcfFile[0], "r")
-    targetFile=open(args.targetFile[0], "r")
-    tmpFileName='__'+args.targetFile[0]+'.tmp'
-    tmpFile=open(tmpFileName, "w")
-
-    begin=args.aBegin[0]
-    end=args.aEnd[0]
-    tHaplotype=ord(args.target[0])-ord('A')
-
+    
+    vcfFile = open(args.vcfFile[0], "r")
+    targetFile = open(args.targetFile[0], "r")
+    
+    tmpFileName = '/'.join(args.targetFile[0].split('/')[:-1])
+    if len(tmpFileName) != 0: tmpFileName += '/'
+    tmpFileName += '__' + args.targetFile[0].split('/')[-1] + '.tmp'
+    tmpFile = open(tmpFileName, "w")
+    
+    #if the target haplotype and deletion position are not specified explicitly,
+    #try to parse it from the targetFile name
+    if not (args.targetHap and args.aBegin and args.aEnd):
+        try:
+            name = args.targetFile[0].split('/')[-1]
+            begin = int(name.split('-')[2])
+            end = int(name.split('-')[3])
+            hap = name[0].upper()
+            tHaplotype=ord(hap)-ord('A')
+        except:
+            print "Error: target haplotype and/or position can't be parsed from .target.txt file name"
+            return 1
+        if tHaplotype not in [0, 1]:
+            print "Error: target haplotype and/or position can't be parsed from .target.txt file name"
+            return 1
+    else:
+        begin=args.aBegin[0]
+        end=args.aEnd[0]
+        tHaplotype=ord(args.targetHap[0])-ord('A')
+        
     counts={'PA':0, 'PB':0, 'MA':0, 'MB':0}
     ans={'PA':0, 'PB':0, 'MA':0, 'MB':0}
     ct=0
@@ -67,12 +87,10 @@ def main():
 #    print 'PA: ', ans['PA']
 #    print 'PB: ', ans['PB']
 
-###################### Laco, look at here! ######################
     if ans['PA']+ans['PB'] > ans['MA']+ans['MB']:
         subs='2'
     else:
         subs='0'
-################################################################
 
     for row in targetFile:
         parts=row.strip().split('\t')
