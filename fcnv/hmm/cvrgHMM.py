@@ -191,8 +191,8 @@ class FCNV(object):
         for ip in self.inheritance_patterns:
             
             if ip == 2: #generate Normal states transitions
-                pstay = 0.9996
-                pgo = 0.0003 / (num_states-2)
+                pstay = 0.9998
+                pgo = 0.0002 / (num_real_states - 1)
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -206,15 +206,15 @@ class FCNV(object):
                     trans[i][outState_id] = pgo
                     
             else: #generate CNV states transitions
-                pstay = 0.9996
-                pgo = 0.0003 / (num_states-2)
+                pstay = 0.9998
+                pgo = 0.0002 / (num_real_states - 1)
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
                     for j, state2 in enumerate(self.states[:num_real_states]):
                         if i == j: #stay in the state
                             trans[i][i] = pstay
-                        else:
+                        elif state1.inheritance_pattern + state2.inheritance_pattern != 4:
                             trans[i][j] = pgo
                     #to the silent exit node    
                     outState_id = self.getExitState()[0]
