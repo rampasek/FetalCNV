@@ -50,7 +50,7 @@ def main():
         for i in range(len(prefix_sum)):
             if prefix_sum[i]==0 or prefix_sum[i+l]==0:
                 continue
-            tmp_mean = (prefix_sum[i+l]-prefix_sum[i]) / (prefix_count[i+l]-prefix_count[i])
+            tmp_mean = (prefix_sum[i+l]-prefix_sum[i]) / (prefix_count[i+l]-prefix_count[i]) * l / 200.
             
             gc_ratio = (gc_sum[i+l] - gc_sum[i]) / float(l)
             index = min(int(math.floor(gc_ratio * bin_count)), bin_count-1)
@@ -66,7 +66,7 @@ def main():
         for i in range(len(prefix_sum)):
             if prefix_sum[i]==0 or prefix_sum[i+l]==0:
                 continue
-            doc = (prefix_sum[i+l]-prefix_sum[i]) / (prefix_count[i+l]-prefix_count[i])
+            doc = (prefix_sum[i+l]-prefix_sum[i]) / (prefix_count[i+l]-prefix_count[i]) * l / 200.
 
             gc_ratio = (gc_sum[i+l] - gc_sum[i]) / float(l)
             index = min(int(math.floor(gc_ratio * bin_count)), bin_count-1)
