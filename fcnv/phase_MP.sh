@@ -44,7 +44,7 @@ prefix=mp
 echo "genotyping"
 time samtools mpileup -uDSI -C50 -r $region -f $reference __M.allreads.part.bam __P.part.bam | bcftools view -bvcg - > $prefix.genotype.raw.bcf
 
-time bcftools view $prefix.genotype.raw.bcf | vcfutils.pl varFilter -d60 -Q20 > $prefix.genotype.vcf
+time bcftools view $prefix.genotype.raw.bcf | vcfutils.pl varFilter -d50 -D150 -Q20 > $prefix.genotype.vcf
 # TODO: ???? what limit for depth of coverage to use?
 
 #annotate SNPs by rs-ids from dbSNP
@@ -53,7 +53,7 @@ java -jar ~/apps/snpEff/SnpSift.jar annotate -v /dupa-filer/laci/dbSnp.vcf $pref
  
 #extract only SNPs with reasonable quality score TODO: change qlimit depending on nummber of samples
 snpsFile=$prefix.snps.annot
-cat $prefix.genotype.annot.vcf | extract_annot_snps.awk -v qlimit=150 > $snpsFile.vcf
+cat $prefix.genotype.annot.vcf | extract_annot_snps.awk -v qlimit=100 > $snpsFile.vcf
 
 refpanels=/dupa-filer/laci/reference_panels/$chr.1kg.ref.phase1_release_v3.20101123.vcf.gz
 
