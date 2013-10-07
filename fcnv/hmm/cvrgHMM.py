@@ -65,7 +65,13 @@ class HMMState(object):
 class FCNV(object):
     """Hidden Markov Model for fetal CNV calling"""
     
-    nucleotides = ['A', 'C', 'G', 'T'] 
+    nucleotides = ['A', 'C', 'G', 'T']
+    normal_scale_factor = 1.4826022185
+    
+    win_size = 1000
+    num_neighbors = 200.
+    tag_size = 200. # equal to 2 * read length  
+    magic_scale_factor = win_size * 10
     
     def __init__(self, positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum):
         """Initialize new FCNV object"""
@@ -78,8 +84,15 @@ class FCNV(object):
         self.prefix_sum_ref = prefix_sum_ref
         self.prefix_count_ref = prefix_count_ref
         self.gc_sum = gc_sum
-        self.plasma_wins = self.getGCWindows(1000, gc_sum, prefix_sum_plasma, prefix_count_plasma)
-        self.ref_wins = self.getGCWindows(1000, gc_sum, prefix_sum_ref, prefix_count_ref)
+        
+        #precompute BRV related stats
+        self.plasma_wins = self.getGCWindows(self.win_size, gc_sum, prefix_sum_plasma, prefix_count_plasma)
+        self.ref_wins = self.getGCWindows(self.win_size, gc_sum, prefix_sum_ref, prefix_count_ref)
+        self.brv_diff_mean, self.brv_diff_var = self.computeBRVDiffEstimate( \
+            self.win_size, gc_sum, \
+            prefix_sum_plasma, prefix_count_plasma, self.plasma_wins, \
+            prefix_sum_ref, prefix_count_ref, self.ref_wins )
+        self.brv_diff_mean = 0.
         
         #run intern tests
         self.neg_inf = float('-inf')
@@ -126,6 +139,7 @@ class FCNV(object):
     
     def getGCWindows(self, win_size, gc_sum, prefix_sum, prefix_count):
         """
+        Create a sorted list of (GCratio, fragments) for bins of size win_size
         """
         windows = []
         #get the DOC means for GC-ratio bins
@@ -143,13 +157,64 @@ class FCNV(object):
                 pos = end + 1
                 continue 
             
-            arrivals = (prefix_sum[end]-prefix_sum[pos]) / (prefix_count[end]-prefix_count[pos]) * win_size / 200.
+            arrivals = (prefix_sum[end]-prefix_sum[pos]) / (prefix_count[end]-prefix_count[pos]) * win_size / self.tag_size
             gc_ratio = (gc_sum[end] - gc_sum[pos]) / float(end-pos)
             windows.append((gc_ratio, arrivals))
             pos = end + 1
             
         windows.sort()
         return windows
+        
+    def computeBRVDiffEstimate(self, win_size, gc_sum, pl_sum, pl_count, pl_wins, ref_sum, ref_count, ref_wins):
+        """
+        Estimate mean and variance of BRV differences between bins of plasma and reference sequencing
+        """
+        diffs = []
+        pos = 0
+        while pos < len(pl_sum):
+            if pl_sum[pos]==0:
+                pos += 1
+                continue
+            
+            end = pos + win_size
+            if end >= len(pl_sum): break
+            
+            while end > pos and pl_sum[end]==0: end -= 1
+            if end - pos < win_size * (4./5.):
+                pos = end + 1
+                continue 
+            
+            pl_arrivals = (pl_sum[end] - pl_sum[pos]) / (pl_count[end] - pl_count[pos]) * win_size / self.tag_size
+            pl_gc_ratio = (gc_sum[end] - gc_sum[pos]) / float(end-pos)
+            pl_close_arrivals, pl_var = self.getCloseGCArrivalsSum(pl_gc_ratio, pl_arrivals, pl_wins)
+            pl_brv = pl_arrivals / pl_close_arrivals
+            
+            try:
+                ref_arrivals = (ref_sum[end] - ref_sum[pos]) / (ref_count[end] - ref_count[pos]) * win_size / self.tag_size
+                ref_gc_ratio = (gc_sum[end] - gc_sum[pos]) / float(end-pos)
+                ref_close_arrivals, ref_var = self.getCloseGCArrivalsSum(ref_gc_ratio, ref_arrivals, ref_wins)
+                ref_brv = ref_arrivals / ref_close_arrivals
+            except ZeroDivisionError:
+                pos = end + 1
+                continue
+            
+            diffs.append((pl_brv - ref_brv) * self.magic_scale_factor)
+            
+            pos = end + 1
+            
+        mean = sum(diffs) / float(len(diffs))
+        var = sum([(x-mean)**2 for x in diffs]) / float(len(diffs) - 1)
+        print mean, var, len(diffs)
+        
+        diffs.sort()
+        print diffs[len(diffs)/2], pl_brv*self.magic_scale_factor, ref_brv*self.magic_scale_factor
+        median = diffs[len(diffs)/2]
+        mad = sorted([abs(x - median) for x in diffs])[len(diffs)/2] #median absolute deviation (MAD)
+        mad_estim_var = (self.normal_scale_factor * mad)**2
+        print median, mad, mad_estim_var
+        
+        #return median, mad_estim_var
+        return mean, var
     
     @memoized     
     def getNumIP(self):
@@ -192,8 +257,8 @@ class FCNV(object):
         for ip in self.inheritance_patterns:
             
             if ip == 2: #generate Normal states transitions
-                pstay = 0.9998
-                pgo = 0.0002 / (num_real_states - 1)
+                pstay = 0.99998
+                pgo = 0.00002 / (num_real_states - 1)
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -217,6 +282,8 @@ class FCNV(object):
                             trans[i][i] = pstay
                         elif state1.inheritance_pattern + state2.inheritance_pattern != 4:
                             trans[i][j] = pgo
+                        else:
+                            trans[i][j] = pgo / 100.
                     #to the silent exit node    
                     outState_id = self.getExitState()[0]
                     trans[i][outState_id] = pgo
@@ -325,7 +392,10 @@ class FCNV(object):
         return px
     
     def getCloseGCArrivalsSum(self, gc_ratio, arrivals, wins):
-        num_neighbors = 200.
+        """
+        Computes sum of sequencing fragments in bins with closest GC ratio
+        """
+        num_neighbors = self.num_neighbors
         
         pos = bisect_left(wins, (gc_ratio, arrivals)) #binary search the position
         if pos == len(wins): pos -= 1
@@ -350,17 +420,22 @@ class FCNV(object):
         mean = close_arrivals / num_neighbors
         for x in range(left, right):
             var += (wins[x][1] - mean)**2
-        var /= num_neighbors
+        var /= (num_neighbors - 1)
             
         return close_arrivals, var
     
     def logLHGivenStateWCoverage(self, pos_ind, mix, state):
+        """
+        Compute the likelihood of the observed coverage conditional on CNV event
+        i.e. emission probability given the state
+        """
+        win_size = self.win_size
         begin_ind = max(0, pos_ind - 1)
         end_ind = min(pos_ind + 1, len(self.positions) - 1)
         #leftmost = max(int((self.positions[pos_ind] + self.positions[begin_ind]) / 2.), self.positions[pos_ind] - 1000)
         #rightmost = min(int((self.positions[pos_ind] + self.positions[end_ind]) / 2.), self.positions[pos_ind] + 1000)
-        leftmost = self.positions[pos_ind] - 500
-        rightmost = self.positions[pos_ind] + 500
+        leftmost = self.positions[pos_ind] - win_size/2
+        rightmost = self.positions[pos_ind] + win_size/2
         
         b = leftmost
         e = rightmost
@@ -378,8 +453,8 @@ class FCNV(object):
         ref_doc = mu_doc
         ref_doc += (state.inheritance_pattern - 2) * (mu_doc * mix/2.)
         #get arrivals rate
-        mu_arrivals = (mu_doc * 1000) / 200.
-        ref_arrivals = (ref_doc * 1000) / 200.
+        mu_arrivals = (mu_doc * win_size) / self.tag_size
+        ref_arrivals = (ref_doc * win_size) / self.tag_size
         ref_close_arrivals, ref_var = self.getCloseGCArrivalsSum(ref_gc_ratio, ref_arrivals, self.ref_wins)
         
         mu_brv  = mu_arrivals / ref_close_arrivals
@@ -394,19 +469,19 @@ class FCNV(object):
         if pl_win_size <= 0: return 0.
         plasma_doc = self.prefix_sum_plasma[e] - self.prefix_sum_plasma[b]
         plasma_doc /= float(self.prefix_count_plasma[e] - self.prefix_count_plasma[b])
-        plasma_arrivals = (plasma_doc * 1000) / 200.
+        plasma_arrivals = (plasma_doc * win_size) / self.tag_size
         pl_gc_ratio = (self.gc_sum[e] - self.gc_sum[b]) / float(pl_win_size)
         pl_close_arrivals, pl_var = self.getCloseGCArrivalsSum(pl_gc_ratio, plasma_arrivals, self.plasma_wins)
         pl_brv = plasma_arrivals / pl_close_arrivals
         
         
         #noise_prob = self.logGaussian([pl_brv], [mu_brv], [mu_brv*20])
-        coverage_prob = self.logGaussian([pl_brv*10000], [ref_brv*10000], [ref_brv*10000])
+        coverage_prob = self.logGaussian([(pl_brv - ref_brv) * self.magic_scale_factor], [self.brv_diff_mean], [self.brv_diff_var])
         result = coverage_prob
         
         #print ref_doc, ref_arrivals, ref_win_size, ref_brv, ref_var, '|', plasma_doc, plasma_arrivals, pl_win_size, pl_brv, pl_var, '|', result
         
-        if pl_win_size < 500: result = 0.
+        if pl_win_size < win_size/2: result = 0.
         if result < -15: result = -15
         
         return result
