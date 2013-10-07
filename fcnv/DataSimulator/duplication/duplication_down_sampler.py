@@ -45,8 +45,8 @@ def main():
     region = map(int, args.region[0].split(':')[1].split('-'))
     
     #read the plasma piled up info and compute prefix sums
-    prefix_sum = [0] * (region[1] - region[0] + readLength + 3)
-    prefix_count = [0] * (region[1] - region[0] + readLength + 3)
+    prefix_sum = [0] * (region[1] - region[0] + 2042)
+    prefix_count = [0] * (region[1] - region[0] + 2042)
     offset = -1
     last = 0
     for line in plasma_doc_file:
@@ -70,8 +70,8 @@ def main():
         # If the read is not aligned, ignore it
         if read['flag'] & UNMAPPED != 0: continue
         
-        begin = read['pos'] - offset
-        end = begin + readLength
+        begin = read['pos'] - 300 - offset
+        end = begin + readLength + 300 
         
         while prefix_sum[begin]==0: begin += 1
         while end > begin and prefix_sum[end]==0: end -= 1
@@ -79,7 +79,7 @@ def main():
         try:
             plasmaDOC = (prefix_sum[end]-prefix_sum[begin]) / (prefix_count[end]-prefix_count[begin])
         except ZeroDivisionError:
-            plasmaDOC = 30
+            plasmaDOC = 50
         
         targetDOC = plasmaDOC * ffmix / 2.
         outputRate = targetDOC / hapDOC

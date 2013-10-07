@@ -25,6 +25,7 @@ logfile=$results_path/log_simDel.$pid.log
 exec > $logfile 2>&1
 
 echo "SimDeletion: $region $haplotype $source"
+date
 
 #temp files names
 raw_reads_file=$tmp_path/raw_reads$pid

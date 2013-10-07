@@ -27,6 +27,7 @@ exec > $logfile 2>&1
 
 
 echo "SimDuplication: $region $haplotype $source $3"
+date
 
 #temp files names
 tmp_pileup_file=$tmp_path/plasma_pileup$pid.txt
@@ -37,7 +38,7 @@ filtered_res_file=$tmp_path/filteredResults$pid.sam
 plasma_file_prefix=$tmp_path/$source-$haplotype-$region-duplicate
 
 echo "Pileuping plasma reads in the region..."
-tmp_region=$chromosome':'$begin'-'$(($end + $readLength))
+tmp_region=$chromosome':'$(($begin - 1000))'-'$(($end + 1000))
 samtools mpileup $plasmaFile -q10 -Q10 -r $tmp_region | awk '{print $2, $4}' > $tmp_pileup_file
 
 echo "Copying all the reads in the region..."
