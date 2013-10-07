@@ -39,14 +39,14 @@ def main():
     hap_reads_file = open(args.hapReadsFile[0], "r")
     plasma_doc_file = open(args.plasmaPileup[0], "r")
     
-    numReads = float(args.numReads[0])
-    readLength = float(args.readLength[0])
+    numReads = int(args.numReads[0])
+    readLength = int(args.readLength[0])
     ffmix = float(args.fetalRate[0])
     region = map(int, args.region[0].split(':')[1].split('-'))
     
     #read the plasma piled up info and compute prefix sums
-    prefix_sum = [0] * (region[1] - region[0] + 42)
-    prefix_count = [0] * (region[1] - region[0] + 42)
+    prefix_sum = [0] * (region[1] - region[0] + readLength + 3)
+    prefix_count = [0] * (region[1] - region[0] + readLength + 3)
     offset = -1
     last = 0
     for line in plasma_doc_file:
@@ -61,7 +61,7 @@ def main():
     plasma_doc_file.close()
     
     #average DOC of target haplotype in filtered reads
-    hapDOC = numReads * readLength / (region[1] - region[0])
+    hapDOC = numReads * readLength / float(region[1] - region[0])
     
     #read the SAM file and down sample the reads
     for line in hap_reads_file:

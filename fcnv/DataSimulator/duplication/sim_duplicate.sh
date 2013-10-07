@@ -37,7 +37,8 @@ filtered_res_file=$tmp_path/filteredResults$pid.sam
 plasma_file_prefix=$tmp_path/$source-$haplotype-$region-duplicate
 
 echo "Pileuping plasma reads in the region..."
-samtools mpileup $plasmaFile -q10 -Q10 -r $region | awk '{print $2, $4}' > $tmp_pileup_file
+tmp_region=$chromosome':'$begin'-'$(($end + $readLength))
+samtools mpileup $plasmaFile -q10 -Q10 -r $tmp_region | awk '{print $2, $4}' > $tmp_pileup_file
 
 echo "Copying all the reads in the region..."
 samtools view $bamfile $region > $raw_reads_file
