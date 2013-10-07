@@ -39,7 +39,7 @@ samtools view $bamfile $region > $raw_reads_file
 samtools view -H $bamfile $region > $inside_sam_file
 
 echo "Filtering the reads that are not deleted..."
-python $exec_path/deletion.py $raw_reads_file $phase_sites $plasmaFetusRate $haplotype >> $inside_sam_file
+pypy $exec_path/deletion.py $raw_reads_file $phase_sites $plasmaFetusRate $haplotype >> $inside_sam_file
 samtools view -S -b $inside_sam_file > $inside_bam_file
 
 echo "Adding reads located out of the region..."

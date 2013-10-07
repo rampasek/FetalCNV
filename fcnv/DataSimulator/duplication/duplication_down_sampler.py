@@ -1,31 +1,91 @@
-#!/usr/bin/python2
-
+#!/usr/bin/pypy
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
+
 import argparse
 import random
 
+UNMAPPED = 0x4
+
+def mapping_parser(m):
+    '''
+    Parse a read in SAM format, return a dictionary with filled in fields of interest.
+    '''
+    if isinstance(m, str):
+        m = m.strip().split('\t')
+        d = {}
+        d['flag'] = int(m[1])   # flags
+        d['chr'] = m[2]         # chr
+        d['pos'] = int(m[3])    # pos
+        d['mapq'] = int(m[4])   # mapping quality
+        d['cigar'] = m[5]       # cigar string
+        d['seq'] = m[9]         # sequence
+        d['qual'] = m[10]       # sequencing quality
+
+    return d
+
 def main():
-    parser = argparse.ArgumentParser(description='Filter SNP positions by call quality and min. coverage. Awaits filenames for M, P .vcf files, and M, P .sam files.')
-    parser.add_argument('filenames', type=str, nargs='+', help='paths to .vcf files with M, P SNPs and to corresponding .sam files')
+    #duplication_down_sampler.py  $filtered_res_file $numReads $readLength $tmp_pileup_file $plasmaFetusRate $region
+    parser = argparse.ArgumentParser(description='Down sample reads from the target haplotype to DOC for mixing with plasma reads.')
+    parser.add_argument('hapReadsFile', type=str, nargs=1, help='path to SAM file with filtered target haplotype reads')
+    parser.add_argument('numReads', type=int, nargs=1, help='number of reads in the hapReadsFile')
+    parser.add_argument('readLength', type=int, nargs=1, help='read length')
+    parser.add_argument('plasmaPileup', type=str, nargs=1, help='path to file with piled up plasma reads for the target region')
+    parser.add_argument('fetalRate', type=float, nargs=1, help='fetal fraction in plasma')
+    parser.add_argument('region', type=str, nargs=1, help='coordinates of target region for duplication')
+    
+    
     args = parser.parse_args()
 
-    readsFiltered_file= open(args.filenames[0], "r")
+    hap_reads_file = open(args.hapReadsFile[0], "r")
+    plasma_doc_file = open(args.plasmaPileup[0], "r")
+    
+    numReads = float(args.numReads[0])
+    readLength = float(args.readLength[0])
+    ffmix = float(args.fetalRate[0])
+    region = map(int, args.region[0].split(':')[1].split('-'))
+    
+    #read the plasma piled up info and compute prefix sums
+    prefix_sum = [0] * (region[1] - region[0] + 42)
+    prefix_count = [0] * (region[1] - region[0] + 42)
+    offset = -1
+    last = 0
+    for line in plasma_doc_file:
+        row = map(int, line.split(' '))
+        if offset == -1:
+            offset = row[0]
+        row[0] -= offset
+        
+        prefix_sum[row[0]] = prefix_sum[last] + row[1]
+        prefix_count[row[0]] = prefix_count[last] + 1
+        last = row[0]
+    plasma_doc_file.close()
+    
+    #average DOC of target haplotype in filtered reads
+    hapDOC = numReads * readLength / (region[1] - region[0])
+    
+    #read the SAM file and down sample the reads
+    for line in hap_reads_file:
+        read = mapping_parser(line)
 
-    targetCoverage= float(args.filenames[1]) * float(args.filenames[2]) / 2.0
-
-    region= args.filenames[5].strip().split(':')[1].strip().split('-')
-    currentCoverage= float(args.filenames[3]) * int(args.filenames[4]) / (int(region[1])-int(region[0]))
-
-    outputRate= targetCoverage/currentCoverage
-
-    #print targetCoverage
-    #print currentCoverage
-    #print outputRate
-    #exit()
-
-    for line in readsFiltered_file:
+        # If the read is not aligned, ignore it
+        if read['flag'] & UNMAPPED != 0: continue
+        
+        begin = read['pos'] - offset
+        end = begin + readLength
+        
+        while prefix_sum[begin]==0: begin += 1
+        while end > begin and prefix_sum[end]==0: end -= 1
+        
+        try:
+            plasmaDOC = (prefix_sum[end]-prefix_sum[begin]) / (prefix_count[end]-prefix_count[begin])
+        except ZeroDivisionError:
+            plasmaDOC = 30
+        
+        targetDOC = plasmaDOC * ffmix / 2.
+        outputRate = targetDOC / hapDOC
         if random.random() < outputRate:             
-                print line,
+            print line,
+    
 
 if __name__ == '__main__':
     main()

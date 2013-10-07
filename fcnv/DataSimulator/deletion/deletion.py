@@ -1,4 +1,6 @@
+#!/usr/bin/pypy
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
+
 import argparse
 import random
 

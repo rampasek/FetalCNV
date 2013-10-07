@@ -25,17 +25,19 @@ pid=$$
 logfile=$results_path/log_simDup.$pid.log
 exec > $logfile 2>&1
 
-plasmaCoverage=$(samtools mpileup $plasmaFile -q10 -Q10 -r $region | awk '{sum+=$4; ct++} END {print sum/ct}')
-echo "$region plasmaCoverage: $plasmaCoverage"
 
-echo "SimDuplication: $region $haplotype $source $3" 
+echo "SimDuplication: $region $haplotype $source $3"
 
 #temp files names
-raw_reads_file=$tmp_path/raw_reads$pid
+tmp_pileup_file=$tmp_path/plasma_pileup$pid.txt
+raw_reads_file=$tmp_path/raw_reads$pid.sam
 inside_sam_file=$tmp_path/inside$pid.sam
 inside_bam_file=$tmp_path/inside$pid.bam
-filtered_res_file=$tmp_path/filteredResults$pid
+filtered_res_file=$tmp_path/filteredResults$pid.sam
 plasma_file_prefix=$tmp_path/$source-$haplotype-$region-duplicate
+
+echo "Pileuping plasma reads in the region..."
+samtools mpileup $plasmaFile -q10 -Q10 -r $region | awk '{print $2, $4}' > $tmp_pileup_file
 
 echo "Copying all the reads in the region..."
 samtools view $bamfile $region > $raw_reads_file
@@ -43,11 +45,11 @@ samtools view $bamfile $region > $raw_reads_file
 samtools view -H $bamfile $region > $inside_sam_file
 
 echo "Filtering for the correct haplotype..."
-python $exec_path/duplication.py $raw_reads_file $phase_sites $haplotype > $filtered_res_file
+pypy $exec_path/duplication.py $raw_reads_file $phase_sites $haplotype > $filtered_res_file
 
 echo "Down sampling the results..."
 numReads=`wc -l $filtered_res_file | awk '{print $1}'`
-python $exec_path/duplication_down_sampler.py $filtered_res_file $plasmaFetusRate $plasmaCoverage $readLength $numReads $region >> $inside_sam_file
+pypy $exec_path/duplication_down_sampler.py $filtered_res_file $numReads $readLength $tmp_pileup_file $plasmaFetusRate $region >> $inside_sam_file
 samtools view -S -b $inside_sam_file > $inside_bam_file
 
 echo "Merging"
@@ -62,7 +64,7 @@ samtools index $plasma_file_prefix.sort.bam
 mv $plasma_file_prefix.sort.bam* $results_path/
 
 rm $plasma_file_prefix.bam
-rm $raw_reads_file $filtered_res_file $inside_sam_file $inside_bam_file 
+rm $tmp_pileup_file $raw_reads_file $filtered_res_file $inside_sam_file $inside_bam_file 
 
 echo "sim_duplicate script - DONE."
 
