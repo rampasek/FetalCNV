@@ -9,7 +9,7 @@ exec_path=$7
 phase_sites=$data_path/trio.phase.vcf
 bamfile=$data_path'/__'$3'.part.bam'
 plasmaFile=$data_path/__plasma.part.bam
-tmp_path=$results_path
+tmp_path=/tmp
 readLength=100
 plasmaFetusRate=0.13
 
