@@ -4,6 +4,7 @@ import math
 import itertools
 import copy
 import functools
+from bisect import bisect_left
 
 class memoized(object):
        """Decorator that caches a function's return value each time it is called.
@@ -323,32 +324,34 @@ class FCNV(object):
         
         return px
     
-    def getCloseGCArrivalsSum(self, gc_ratio, wins):
-        num_neighbors = 50.
-        close_arrivals = 0
+    def getCloseGCArrivalsSum(self, gc_ratio, arrivals, wins):
+        num_neighbors = 200.
+        
+        pos = bisect_left(wins, (gc_ratio, arrivals)) #binary search the position
+        if pos == len(wins): pos -= 1
+        
+        close_arrivals = wins[pos][1]
+        have = 1
+        dis = 0
+        left = pos
+        right = pos+1
+        while have < num_neighbors:
+            dis += 1
+            if pos+dis < len(wins):
+                close_arrivals += wins[pos+dis][1]
+                right += 1
+                have += 1
+            if pos-dis > 0:
+                close_arrivals += wins[pos-dis][1]
+                left -= 1
+                have += 1
+        
         var = 0.
-        for i in range(len(wins)):
-            if i+1 == len(wins) or wins[i][0] <= gc_ratio <= wins[i+1][0]:
-                dis = 0
-                close_arrivals += wins[i][1]
-                have = 1
-                left = i
-                right = i+1
-                while have < num_neighbors:
-                    dis += 1
-                    if i+dis < len(wins):
-                        close_arrivals += wins[i+dis][1]
-                        right += 1
-                        have += 1
-                    if i-dis > 0:
-                        close_arrivals += wins[i-dis][1]
-                        left -= 1
-                        have += 1
-                mean = close_arrivals / num_neighbors
-                for x in range(left, right):
-                    var += (wins[x][1] - mean)**2
-                var /= num_neighbors
-                break
+        mean = close_arrivals / num_neighbors
+        for x in range(left, right):
+            var += (wins[x][1] - mean)**2
+        var /= num_neighbors
+            
         return close_arrivals, var
     
     def logLHGivenStateWCoverage(self, pos_ind, mix, state):
@@ -377,7 +380,7 @@ class FCNV(object):
         #get arrivals rate
         mu_arrivals = (mu_doc * 1000) / 200.
         ref_arrivals = (ref_doc * 1000) / 200.
-        ref_close_arrivals, ref_var = self.getCloseGCArrivalsSum(ref_gc_ratio, self.ref_wins)
+        ref_close_arrivals, ref_var = self.getCloseGCArrivalsSum(ref_gc_ratio, ref_arrivals, self.ref_wins)
         
         mu_brv  = mu_arrivals / ref_close_arrivals
         ref_brv = ref_arrivals / ref_close_arrivals
@@ -393,12 +396,12 @@ class FCNV(object):
         plasma_doc /= float(self.prefix_count_plasma[e] - self.prefix_count_plasma[b])
         plasma_arrivals = (plasma_doc * 1000) / 200.
         pl_gc_ratio = (self.gc_sum[e] - self.gc_sum[b]) / float(pl_win_size)
-        pl_close_arrivals, pl_var = self.getCloseGCArrivalsSum(pl_gc_ratio, self.plasma_wins)
+        pl_close_arrivals, pl_var = self.getCloseGCArrivalsSum(pl_gc_ratio, plasma_arrivals, self.plasma_wins)
         pl_brv = plasma_arrivals / pl_close_arrivals
         
         
         #noise_prob = self.logGaussian([pl_brv], [mu_brv], [mu_brv*20])
-        coverage_prob = self.logGaussian([pl_brv*1000], [ref_brv*1000], [ref_brv*1000])
+        coverage_prob = self.logGaussian([pl_brv*10000], [ref_brv*10000], [ref_brv*10000])
         result = coverage_prob
         
         #print ref_doc, ref_arrivals, ref_win_size, ref_brv, ref_var, '|', plasma_doc, plasma_arrivals, pl_win_size, pl_brv, pl_var, '|', result
