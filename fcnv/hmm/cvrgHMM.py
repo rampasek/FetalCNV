@@ -437,6 +437,7 @@ class FCNV(object):
         leftmost = self.positions[pos_ind] - win_size/2
         rightmost = self.positions[pos_ind] + win_size/2
         
+        #compute stats for REFERENCE
         b = leftmost
         e = rightmost
         while b < 0 or self.prefix_sum_ref[b] == 0: b += 1
@@ -446,10 +447,8 @@ class FCNV(object):
         mu_doc = self.prefix_sum_ref[e] - self.prefix_sum_ref[b]
         mu_doc /= float(self.prefix_count_ref[e] - self.prefix_count_ref[b])
         ref_gc_ratio = (self.gc_sum[e] - self.gc_sum[b]) / float(ref_win_size)
-        #scale to avg. plasma coverage
-        #mu_doc *= 67.3/49.9 #TODO: make this a parameter
         
-        #adjust conditional on inheritance pattern
+        #adjust DOC conditional on inheritance pattern
         ref_doc = mu_doc
         ref_doc += (state.inheritance_pattern - 2) * (mu_doc * mix/2.)
         #get arrivals rate
@@ -457,29 +456,30 @@ class FCNV(object):
         ref_arrivals = (ref_doc * win_size) / self.tag_size
         ref_close_arrivals, ref_var = self.getCloseGCArrivalsSum(ref_gc_ratio, ref_arrivals, self.ref_wins)
         
+        #compute bin ratio values
         mu_brv  = mu_arrivals / ref_close_arrivals
         ref_brv = ref_arrivals / ref_close_arrivals
         
-        
+        #compute stats for PLASMA
         b = leftmost
         e = rightmost
         while b < 0 or self.prefix_sum_plasma[b] == 0: b += 1
         while e >= len(self.prefix_sum_plasma) or self.prefix_sum_plasma[e] == 0: e -= 1
         pl_win_size = e - b
         if pl_win_size <= 0: return 0.
-        plasma_doc = self.prefix_sum_plasma[e] - self.prefix_sum_plasma[b]
-        plasma_doc /= float(self.prefix_count_plasma[e] - self.prefix_count_plasma[b])
-        plasma_arrivals = (plasma_doc * win_size) / self.tag_size
+        pl_doc = self.prefix_sum_plasma[e] - self.prefix_sum_plasma[b]
+        pl_doc /= float(self.prefix_count_plasma[e] - self.prefix_count_plasma[b])
+        pl_arrivals = (pl_doc * win_size) / self.tag_size
         pl_gc_ratio = (self.gc_sum[e] - self.gc_sum[b]) / float(pl_win_size)
-        pl_close_arrivals, pl_var = self.getCloseGCArrivalsSum(pl_gc_ratio, plasma_arrivals, self.plasma_wins)
-        pl_brv = plasma_arrivals / pl_close_arrivals
+        pl_close_arrivals, pl_var = self.getCloseGCArrivalsSum(pl_gc_ratio, pl_arrivals, self.plasma_wins)
+        pl_brv = pl_arrivals / pl_close_arrivals
         
         
         #noise_prob = self.logGaussian([pl_brv], [mu_brv], [mu_brv*20])
         coverage_prob = self.logGaussian([(pl_brv - ref_brv) * self.magic_scale_factor], [self.brv_diff_mean], [self.brv_diff_var])
         result = coverage_prob
         
-        #print ref_doc, ref_arrivals, ref_win_size, ref_brv, ref_var, '|', plasma_doc, plasma_arrivals, pl_win_size, pl_brv, pl_var, '|', result
+        #print ref_doc, ref_arrivals, ref_win_size, ref_brv, ref_var, '|', pl_doc, pl_arrivals, pl_win_size, pl_brv, pl_var, '|', result
         
         if pl_win_size < win_size/2: result = 0.
         if result < -15: result = -15

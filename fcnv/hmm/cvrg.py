@@ -267,8 +267,19 @@ def main():
     plasma_doc_file = open(args.plasma[0], "r")
     ref_doc_file = open(args.ref[0], "r")
     seq_file = open(args.seq[0], "r")
-
-    chr_length = 64000000
+    
+    #get genomic positions on the last lines of the pileup files to estimate the length of the chromosome
+    with open(args.plasma[0], 'rb') as fh:
+        fh.seek(-256, 2)
+        last_pos_plasma = int(fh.readlines()[-1].decode().split(' ')[0])
+        fh.close()
+    with open(args.ref[0], 'rb') as fh:
+        fh.seek(-256, 2)
+        last_pos_ref = int(fh.readlines()[-1].decode().split(' ')[0])
+        fh.close()    
+    
+    chr_length = max(last_pos_plasma, last_pos_ref) + 4742
+    
     gc_sum = [0] * chr_length
     prefix_sum_plasma = [0] * chr_length
     prefix_count_plasma = [0] * chr_length
