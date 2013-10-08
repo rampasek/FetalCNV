@@ -1,21 +1,21 @@
 #!/bin/bash
 
-# 1-CNV start position; 2-CNV length; 3-haplotype(A/B); 4-path to data;
-# 5-path where to store the simulated plasma BAM; 6-path to dir with scripts
+# 1-chromosome; 2-CNV start position; 3-CNV length; 4-haplotype(A/B); 5-path to data;
+# 6-path where to store the simulated plasma BAM; 7-path to dir with scripts
 
-data_path=$4
-results_path=$5
-exec_path=$6
+data_path=$5
+results_path=$6
+exec_path=$7
 phase_sites=$data_path/trio.phase.vcf
 bamfile=$data_path/__plasma.part.bam
 tmp_path=/tmp
 readLength=100
 plasmaFetusRate=0.13
 
-chromosome=chr20
-begin=$1
-end=$(($1 + $2))
-haplotype=$3
+chromosome=$1
+begin=$2
+end=$(($2 + $3))
+haplotype=$4
 
 regionCompliment=$chromosome':1-'$((begin-readLength))' '$chromosome':'$((end+readLength))
 region=$chromosome':'$begin'-'$end
@@ -28,7 +28,7 @@ echo "SimDeletion: $region $haplotype $source"
 date
 
 #temp files names
-raw_reads_file=$tmp_path/raw_reads$pid
+raw_reads_file=$tmp_path/raw_reads$pid.sam
 inside_sam_file=$tmp_path/inside$pid.sam
 inside_bam_file=$tmp_path/inside$pid.bam
 outside_bam_file=$tmp_path/outside$pid.bam

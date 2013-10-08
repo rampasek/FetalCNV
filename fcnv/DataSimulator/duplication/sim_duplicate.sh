@@ -1,23 +1,23 @@
 #!/bin/bash
 
-# 1-CNV start position; 2-CNV length; 3-origin(M/P); 4-haplotype(A/B); 5-path to data;
-# 6-path where to store the simulated plasma BAM; 7-path to dir with scripts
+# 1-chromosome; 2-CNV start position; 3-CNV length; 4-origin(M/P); 5-haplotype(A/B); 6-path to data;
+# 7-path where to store the simulated plasma BAM; 8-path to dir with scripts
 
-data_path=$5
-results_path=$6
-exec_path=$7
+data_path=$6
+results_path=$7
+exec_path=$8
 phase_sites=$data_path/trio.phase.vcf
-bamfile=$data_path'/__'$3'.part.bam'
+bamfile=$data_path'/__'$4'.part.bam'
 plasmaFile=$data_path/__plasma.part.bam
 tmp_path=/tmp
 readLength=100
 plasmaFetusRate=0.13
 
-chromosome=chr20
-begin=$1
-end=$(($1 + $2))
-haplotype=$4
-source='I'$3'1'
+chromosome=$1
+begin=$2
+end=$(($2 + $3))
+haplotype=$5
+source='I'$4'1'
 
 region=$chromosome':'$begin'-'$end
 

@@ -1,15 +1,22 @@
 #!/bin/bash
 
 pipeline_stage=$1
-data_path='/dupa-filer/laci/I1/chr20/'
-plasma_path='/dupa-filer/laci/I1/chr20/sim_plasma/'
-results_path='/dupa-filer/laci/I1/chr20/fcnv_data/'
-exec_path='/dupa-filer/laci/bin/'
+chr=$2
+data_path="/dupa-filer/laci/I1/$chr/"
+plasma_path="/dupa-filer/laci/I1/$chr/sim_plasma/"
+results_path="/dupa-filer/laci/I1/$chr/fcnv_data/"
+exec_path="/dupa-filer/laci/bin/"
+
+if [[ ! -d "$data_path" || ! -d "$plasma_path" ]]; then
+    echo "ERROR: data_path or plasma_path doesn't exist!"
+    exit
+fi
 
 length_set='10000000 1000000 500000 100000'
 haplo_set='A B'
 src_set='P M'
-begin_set='10000000 35000000 47000000'
+#begin_set='10000000 35000000 47000000'
+begin_set='10000000 75000000 150000000 190000000'
 
 export SGE_O_PATH=$PATH
 
@@ -21,12 +28,12 @@ do
 	do
 		for haplo in $haplo_set
 		do
-			qsub -q all.q -V -R y -l h_vmem=5G -l h_rt=05:00:00 -S /bin/bash $exec_path/sim_deletion.sh $begin $length $haplo $data_path $plasma_path $exec_path
+			qsub -q all.q -V -R y -l h_vmem=5G -l h_rt=05:00:00 -S /bin/bash $exec_path/sim_deletion.sh $chr $begin $length $haplo $data_path $plasma_path $exec_path
 			echo $begin' '$length' '$haplo
 
 			for src in $src_set
 			do
-				qsub -q all.q -V -R y -l h_vmem=5G -l h_rt=05:00:00 -S /bin/bash $exec_path/sim_duplicate.sh $begin $length $src $haplo $data_path $plasma_path $exec_path
+				qsub -q all.q -V -R y -l h_vmem=5G -l h_rt=05:00:00 -S /bin/bash $exec_path/sim_duplicate.sh $chr $begin $length $src $haplo $data_path $plasma_path $exec_path
 				echo $begin' '$length' '$src' '$haplo
 			done
 		done
@@ -40,6 +47,10 @@ fi
 #$exec_path/sim_deletion.sh 10000000 100000 A $data_path $plasma_path $exec_path &
 #wait
 
+if [[ ! -d "$results_path" ]]; then
+    echo "ERROR: results_path doesn't exist!"
+    exit
+fi
 
 if [[ "$pipeline_stage" == 2 ]] ; then
 echo "Starting BAM files processing by prepare_fcnv_input.py"
