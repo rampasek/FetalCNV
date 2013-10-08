@@ -100,7 +100,7 @@ def test(fcnv, snp_positions, mixture, ground_truth, file_name_prefix):
     byLL = fcnv.likelihoodDecoding(mixture)    
     
     date = datetime.now().strftime('%m-%d-%H-%M')
-    #fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')
+    #fout = file(file_name_prefix + ".cvrg.stats." + date + ".txt", 'w')
     annot_out = file(file_name_prefix + ".cvrg." + date + ".txt", 'w')
     
     
@@ -144,7 +144,17 @@ def test(fcnv, snp_positions, mixture, ground_truth, file_name_prefix):
         
         #print the results
         #print >>fout, i+1, samples[i], M[i], list(MSC[i]), P[i], list(PSC[i]), vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
-        print >>annot_out, snp_positions[i], ground_truth[i], vp[i], 'PP:', posterior[i], 'LL:', [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
+        
+        posterior_str = ''
+        for x in posterior[i]:
+            posterior_str += "%.8f"%math.exp(x[0])+' '+str(x[1])+' | '
+        posterior_str+='\t'
+        
+        ll_str = ''
+        for j in range(len(ll_state)):
+            ll_str += "%.8f"%math.exp(ll_value[j])+' '+str(ll_state[j])+' | '
+
+        print >>annot_out, snp_positions[i], ground_truth[i], vp[i], 'PP:', posterior_str, 'LL:', ll_str
             
         #print ground_truth[i], vp[i], pp[i], '|', post
         viterbi_correct += int(ground_truth[i] == vp[i])
@@ -288,14 +298,18 @@ def main():
     
     #get GC content prefix sums from the reference
     gen_pos = 0
-    while True:
+    keep_reading = True
+    while keep_reading:
         line = seq_file.readline().strip().upper()
         if len(line) == 0: break
         if line[0] == '>': continue
         for i in range(len(line)):
             gc_sum[gen_pos] = gc_sum[max(gen_pos - 1, 0)]
             if line[i] in 'GC': gc_sum[gen_pos] += 1
-            gen_pos += 1 
+            gen_pos += 1
+            if gen_pos >= chr_length:
+                keep_reading = False
+                break
     seq_file.close()
     
     last = 0

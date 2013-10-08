@@ -397,7 +397,10 @@ class FCNV(object):
         """
         num_neighbors = self.num_neighbors
         
-        pos = bisect_left(wins, (gc_ratio, arrivals)) #binary search the position
+        #binary search the position
+        pos_l = bisect_left(wins, (gc_ratio, 0.)) 
+        pos_r = bisect_left(wins, (gc_ratio, float("inf")))
+        pos = (pos_l + pos_r) / 2
         if pos == len(wins): pos -= 1
         
         close_arrivals = wins[pos][1]
