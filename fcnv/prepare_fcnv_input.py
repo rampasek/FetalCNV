@@ -191,25 +191,36 @@ def main():
             skipped_low_doc += 1
             continue
         
-        print >>out_files[ALDOC], str(pos) + '\t' + '\t'.join(tmp),
+        out_str = str(pos) + '\t' + '\t'.join(tmp)
         
         #output M, P alleles at this SNP locus
+        error = False
         for i, r in [(M, MR), (P, PR)]:
             a1 = alleles[i][0]
             a2 = alleles[i][1]
             count_a1 = 0
             count_a2 = 0
-            try: count_a1 = posInfo[r][pos][a1]
-            except: print i, pos, a1, posInfo[r][pos], alleles[i]
-            try: count_a2 = posInfo[r][pos][a2]
-            except: print i, pos, a2, posInfo[r][pos], alleles[i]
+            try:
+                count_a1 = posInfo[r][pos][a1]
+            except KeyError:
+                error = True
+                break
+                #print i, pos, a1, posInfo[r][pos], alleles[i]
+            try:
+                count_a2 = posInfo[r][pos][a2]
+            except KeyError:
+                error = True
+                break
+                #print i, pos, a2, posInfo[r][pos], alleles[i]
             
             if a1 == a2:
                 count_a1 /= 2.
                 count_a2 /= 2.
             
-            print >>out_files[ALDOC], '\t{0}\t{1}\t{2}\t{3}'.format(a1, a2, count_a1, count_a2),
-        print >>out_files[ALDOC], '\n',
+            out_str += '\t{0}\t{1}\t{2}\t{3}'.format(a1, a2, count_a1, count_a2)
+        if error: continue
+        
+        print >>out_files[ALDOC], out_str
         
         if reg_begin <= pos and pos <= reg_end:
             print >>out_files[GT], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', cnv_state_id)
