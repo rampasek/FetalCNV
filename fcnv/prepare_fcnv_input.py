@@ -39,7 +39,7 @@ def main():
     plasma_path = '/'.join(plasma_id.split('/')[:-1])
     if len(plasma_path) != 0: plasma_path += '/'
     plasma_id = plasma_id.split('/')[-1]
-    tmp_pos_file_name = plasma_path + "__tmp" + plasma_id + "_snp_pos.txt"
+    tmp_pos_file_name = "/tmp/__tmp" + plasma_id + "_snp_pos.txt"
     tmp_pos_file = open(tmp_pos_file_name, "w")
     
     #parse CNV type and position from the plasma .bam file name
@@ -126,7 +126,7 @@ def main():
     print "  Piling up the reads " + datetime.now().strftime('%m-%d-%H-%M')
     #call samtools mpileup to get allele counts for positions in 'loci'
     #cdir = os.getcwd() + '/'
-    tmp_vcf_prefix = plasma_path + '__tmp' + plasma_id
+    tmp_vcf_prefix = '/tmp/__tmp' + plasma_id
     pile_prefix = res_path + '/' + plasma_id
     cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} {4} {5} {6}".format(tmp_pos_file_name, \
         args.filenames[PLR], args.filenames[MR], args.filenames[PR], tmp_vcf_prefix, args.filenames[BED], pile_prefix)
@@ -186,7 +186,7 @@ def main():
                 tmp.append('0')
                 
         #if the plasma coverage is too low, skip this position        
-        if sum(map(int, tmp)) < 20: 
+        if sum(map(int, tmp)) < 30: 
             print pos, "- low overall coverage", sum(map(int, tmp))
             skipped_low_doc += 1
             continue
