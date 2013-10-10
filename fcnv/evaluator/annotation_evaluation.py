@@ -56,8 +56,6 @@ def main():
     #print regionSnips
     
 
-    print "recall: "+str(recall)
-    print "precision: "+str(precision)
     #print "F-Measure: "+str(fmeasure)
 
     length=0
@@ -112,6 +110,11 @@ def main():
     else:
         mPrecision=float(mRecall)/(badCalls+mRecall)
 
+    print ' '
+    print "recall: "+str(recall)
+    print "precision: "+str(precision)
+
+    print ' '
     print "Recall: "+str(mRecall)
     print "Precision: "+str(mPrecision)
 
