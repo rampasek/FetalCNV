@@ -8,7 +8,9 @@ normal=3
 def main():
     parser = argparse.ArgumentParser(description='Evaluates FCNV prediction recall and precision. Takes an annotation file produced by FCNV.')
     parser.add_argument('filenames', type=str, nargs=1, help='path to the annotation file')
+    parser.add_argument('thereshold', type=int, nargs=1, help='threshold for min length of false positives to be considered')
     args = parser.parse_args()
+    thresh=args.thereshold[0]
 
     results_file=open(args.filenames[0], "r")
     results=[]
@@ -71,6 +73,7 @@ def main():
             length=0
 
     length=0
+    badCalls=0
     lastCH='!'
     count=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     for res in results:
@@ -90,11 +93,29 @@ def main():
             if (length!=0):
                 if length!=ctMax or majority!=lastCH:
                     print str(res["pos"])+' predicted: '+str(lastCH)+' ['+str(length)+"] real: "+str(majority)+" ["+str(ctMax)+"]"
+            if length>thresh and lastCH!=normal and majority==normal:
+                badCalls+=1
             
             count=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
             length=1
             lastCH=res["pred"]
             count[res["real"]]=count[res["real"]]+1
+
+    mRecall=0
+    if (recall!='NAN' and recall>0.5):
+        mRecall=1
+    if (recall=='NAN'):
+        mRecall='NAN'
+
+    if badCalls+mRecall==0:
+        mPrecision='NAN'
+    else:
+        mPrecision=float(mRecall)/(badCalls+mRecall)
+
+    print "Recall: "+str(mRecall)
+    print "Precision: "+str(mPrecision)
+
+
 
     print ''
     print 'Inside the region'
