@@ -110,13 +110,13 @@ def main():
     else:
         mPrecision=float(mRecall)/(badCalls+mRecall)
 
-    print "Recall   :\t" + str(mRecall) + "\t(" + str(recall) + ')'
+    print "Recall:   \t" + str(mRecall) + "\t(" + str(recall) + ')'
     print "Precision:\t" + str(mPrecision) + "\t(" +str(precision) + ')'
 
     #print "recall: "+str(recall)
     #print "precision: "+str(precision)
     
-    print print_buffer
+    print print_buffer,
     
     print 'Inside the region'
     inTheRegion=False
