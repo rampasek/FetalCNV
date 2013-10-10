@@ -60,21 +60,21 @@ def main():
 
     length=0
     lastCH='!'
-
+    print_buffer=''
     for res in results:
         if res["pred"]!=res["real"]:
             if length==0:
-                print str(res["pred"])+": ",
+                print_buffer += str(res["pred"])+": "
             length=length+1
         if length!=0 and res["pred"]==res["real"]:
-            print length
+            print_buffer += str(length)+'\n'
             length=0
 
     length=0
     badCalls=0
     lastCH='!'
     count=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    for res in results:
+    for index, res in enumerate(results):
         if res["pred"]==lastCH:
             length=length+1
             count[res["real"]]=count[res["real"]]+1
@@ -90,7 +90,7 @@ def main():
 
             if (length!=0):
                 if length!=ctMax or majority!=lastCH:
-                    print str(res["pos"])+' predicted: '+str(lastCH)+' ['+str(length)+"] real: "+str(majority)+" ["+str(ctMax)+"]"
+                    print_buffer += str(results[index-length]["pos"])+'-'+str(results[index-1]["pos"])+' predicted: '+str(lastCH)+' ['+str(length)+"] real: "+str(majority)+" ["+str(ctMax)+"]\n"
             if length>thresh and lastCH!=normal and majority==normal:
                 badCalls+=1
             
@@ -106,16 +106,18 @@ def main():
         mRecall='NAN'
 
     if badCalls+mRecall==0:
-        mPrecision='NAN'
+        mPrecision=1
     else:
         mPrecision=float(mRecall)/(badCalls+mRecall)
 
-    print "Recall: "+str(mRecall)
-    print "Precision: "+str(mPrecision)
+    print "Recall   :\t" + str(mRecall) + "\t(" + str(recall) + ')'
+    print "Precision:\t" + str(mPrecision) + "\t(" +str(precision) + ')'
 
-    print "recall: "+str(recall)
-    print "precision: "+str(precision)
-
+    #print "recall: "+str(recall)
+    #print "precision: "+str(precision)
+    
+    print print_buffer
+    
     print 'Inside the region'
     inTheRegion=False
     for res in results:
