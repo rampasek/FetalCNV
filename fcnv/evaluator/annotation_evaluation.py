@@ -110,17 +110,12 @@ def main():
     else:
         mPrecision=float(mRecall)/(badCalls+mRecall)
 
-    print ' '
-    print "recall: "+str(recall)
-    print "precision: "+str(precision)
-
-    print ' '
     print "Recall: "+str(mRecall)
     print "Precision: "+str(mPrecision)
 
+    print "recall: "+str(recall)
+    print "precision: "+str(precision)
 
-
-    print ''
     print 'Inside the region'
     inTheRegion=False
     for res in results:
