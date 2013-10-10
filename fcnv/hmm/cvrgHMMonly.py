@@ -62,7 +62,7 @@ class HMMState(object):
     def __eq__(self, other):
         return self.inheritance_pattern == other.inheritance_pattern
 
-class coverageFCNV(object):
+class FCNV(object):
     """Hidden Markov Model for fetal CNV calling"""
     
     nucleotides = ['A', 'C', 'G', 'T']
@@ -75,7 +75,7 @@ class coverageFCNV(object):
     
     def __init__(self, positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum):
         """Initialize new FCNV object"""
-        super(coverageFCNV, self).__init__()
+        super(FCNV, self).__init__()
         
         #store the DOC prefix data
         self.positions = positions
@@ -257,8 +257,8 @@ class coverageFCNV(object):
         for ip in self.inheritance_patterns:
             
             if ip == 2: #generate Normal states transitions
-                pstay = 1./4. #0.4
-                pgo = 1./4. #0.6 / (num_real_states - 1)
+                pstay = 0.999998
+                pgo = 0.000002 / (num_real_states - 1)
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -272,8 +272,8 @@ class coverageFCNV(object):
                     trans[i][outState_id] = pgo
                     
             else: #generate CNV states transitions
-                pstay = 1./4. #0.4
-                pgo = 1./4. #0.6 / (num_real_states - 1)
+                pstay = 0.9998
+                pgo = 0.0002 / (num_real_states - 1)
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -283,7 +283,7 @@ class coverageFCNV(object):
                         elif state1.inheritance_pattern + state2.inheritance_pattern != 4:
                             trans[i][j] = pgo
                         else:
-                            trans[i][j] = 0.
+                            trans[i][j] = pgo / 100.
                     #to the silent exit node    
                     outState_id = self.getExitState()[0]
                     trans[i][outState_id] = pgo
@@ -302,7 +302,7 @@ class coverageFCNV(object):
             for j in range(num_states):
                 if trans[i][j] < 10e-10: trans[i][j] = self.neg_inf
                 else: trans[i][j] = math.log(trans[i][j])
-            #self.logNormalize(trans[i])
+            self.logNormalize(trans[i])
         
         return trans
     
@@ -435,10 +435,8 @@ class coverageFCNV(object):
         win_size = self.win_size
         begin_ind = max(0, pos_ind - 1)
         end_ind = min(pos_ind + 1, len(self.positions) - 1)
-        
-        mid_left = max(int((self.positions[pos_ind] + self.positions[begin_ind]) / 2.), self.positions[pos_ind] - win_size/2)
-        mid_right = min(int((self.positions[pos_ind] + self.positions[end_ind]) / 2.), self.positions[pos_ind] + win_size/2)
-        
+        #leftmost = max(int((self.positions[pos_ind] + self.positions[begin_ind]) / 2.), self.positions[pos_ind] - 1000)
+        #rightmost = min(int((self.positions[pos_ind] + self.positions[end_ind]) / 2.), self.positions[pos_ind] + 1000)
         leftmost = self.positions[pos_ind] - win_size/2
         rightmost = self.positions[pos_ind] + win_size/2
         
@@ -487,7 +485,6 @@ class coverageFCNV(object):
         #print ref_doc, ref_arrivals, ref_win_size, ref_brv, ref_var, '|', pl_doc, pl_arrivals, pl_win_size, pl_brv, pl_var, '|', result
         
         if pl_win_size < win_size/2: result = 0.
-        #if mid_right - mid_left < win_size/2: result = 0.
         if result < -15: result = -15
         
         return result

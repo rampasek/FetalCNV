@@ -4,6 +4,7 @@ import math
 import itertools
 import copy
 import functools
+from bisect import bisect_left
 
 class memoized(object):
        """Decorator that caches a function's return value each time it is called.
@@ -76,19 +77,17 @@ class HMMState(object):
 class FCNV(object):
     """Hidden Markov Model for fetal CNV calling"""
     
-    nucleotides = ['A', 'C', 'G', 'T'] 
+    nucleotides = ['A', 'C', 'G', 'T']
     
-    def __init__(self, positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_maternal, prefix_count_maternal):
+    def __init__(self, positions, cnv_prior):
         """Initialize new FCNV object"""
         super(FCNV, self).__init__()
         
-        #store the DOC prefix data
+        #store genomic positions of the SNPs
         self.positions = positions
-        self.prefix_sum_plasma = prefix_sum_plasma
-        self.prefix_count_plasma = prefix_count_plasma
-        self.prefix_sum_maternal = prefix_sum_maternal
-        self.prefix_count_maternal = prefix_count_maternal
         
+        #CNV per position prior
+        self.cnv_prior = cnv_prior
         
         #run intern tests
         self.neg_inf = float('-inf')
@@ -120,13 +119,17 @@ class FCNV(object):
         #generate phased variants of the inheritance patterns and list of HMM States
         self.states = []
         self.phased_patterns = []
+        self.max_component_size = 0
         for ip in self.inheritance_patterns:
+            num_phased_states = 0
             for mPhased in itertools.combinations_with_replacement([0,1], ip[0]):
                 for pPhased in itertools.combinations_with_replacement([0,1], ip[1]):
                     phased_pattern = (tuple(mPhased), tuple(pPhased))
                     self.phased_patterns.append(phased_pattern)
                     new_state = HMMState(ip, phased_pattern)
                     self.states.append(new_state)
+                    num_phased_states += 1
+            self.max_component_size = max(self.max_component_size, num_phased_states)
         
         #generate silent states
         self.states.append( HMMState("s", "s") ) #start state
@@ -193,7 +196,7 @@ class FCNV(object):
     
     @memoized   
     def isReal(self, state):
-        return isinstance(state.inheritance_pattern, tuple)
+        return isinstance(state.inheritance_pattern, tuple) and isinstance(state.phased_pattern, tuple)
     
     def areRecombination(self, state1, state2):
         if state1.inheritance_pattern != state2.inheritance_pattern:
@@ -270,22 +273,36 @@ class FCNV(object):
         num_real_states = self.getNumPP() 
         
         #precompute statistics
-        num_recombs = [0 for x in range(self.getNumIP())]
-        num_cnvs = 0
-        for state in self.states[:num_real_states]:
-            num_recombs[self.inheritance_patterns.index(state.inheritance_pattern)] += 1
-            num_cnvs += (not self.isNormal(state))
+        self.num_recombs = [0 for x in range(self.getNumIP())]
+        self.max_recombs = 0
+        for ip_id, ip in enumerate(self.inheritance_patterns):
+            for i, state1 in enumerate(self.states[:num_real_states]):
+                if state1.inheritance_pattern != ip: continue
+                #states "inside the IP component"
+                self.num_recombs[ip_id] = 0
+                for j, state2 in enumerate(self.states[:num_real_states]):
+                    if i == j: #the exactly same state
+                        self.num_recombs[ip_id] += 1
+                    elif state2.inheritance_pattern == ip: #to recombination of the same IP
+                        if state1.inheritance_pattern == (2, 1):
+                            if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
+                                continue
+                        if state1.inheritance_pattern == (1, 2):
+                            if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
+                                continue
+                        self.num_recombs[ip_id] += 1
+                self.max_recombs = max(self.max_recombs, self.num_recombs[ip_id])
         
         
         trans = [[0. for x in range(num_states)] for y in range(num_states)]
         #first generate transitions from the real states
-        for ip in self.inheritance_patterns:
+        for ip_id, ip in enumerate(self.inheritance_patterns):
             
             if ip == (1, 1): #generate Normal states transitions\
-                pstay = 0.98999
+                pstay = 0.97999
                 #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
                 #pstay = precomb = 0.999 / 6.
-                precomb = 0.01 / 5.
+                precomb = 0.02 / (self.max_recombs - 1)
                 pgo = 0.00001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
@@ -300,10 +317,10 @@ class FCNV(object):
                     trans[i][outState_id] = pgo
                     
             else: #generate CNV states transitions
-                pstay = 0.9899
+                pstay = 0.9799
                 #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
                 #pstay = precomb = 0.999 / 6.
-                precomb = 0.01 / 5.
+                precomb = 0.02 / (self.max_recombs - 1)
                 pgo = 0.0001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
@@ -312,13 +329,16 @@ class FCNV(object):
                         if i == j: #stay in the state
                             trans[i][i] = pstay
                         elif state2.inheritance_pattern == ip: #to recombination of the same IP
-                            trans[i][j] = precomb
                             if state1.inheritance_pattern == (2, 1):
                                 if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
-                                    trans[i][j] = 0.0005
+                                    trans[i][j] = 0.
+                                    continue
                             if state1.inheritance_pattern == (1, 2):
                                 if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
-                                    trans[i][j] = 0.0005
+                                    trans[i][j] = 0.
+                                    continue
+                            trans[i][j] = precomb
+                    
                     #to the silent exit node    
                     outState_id = self.getCorrespondingOutState(state1)[0]
                     trans[i][outState_id] = pgo
@@ -335,12 +355,12 @@ class FCNV(object):
             
             #if it is a silent exit node
             elif state1.phased_pattern == "out":
-                exit_prob = 1. / self.getNumIP()
+                prob = 1. / self.getNumIP()
                 j = self.getExitState()[0]
-                trans[i][j] = exit_prob
+                trans[i][j] = prob
                         
                 if self.isNormal(state1):
-                    prob = 1. / self.getNumIP()
+                    #prob = 1. / self.getNumIP()
                     for j, state2 in enumerate(self.states[num_real_states:]):
                         if state2.phased_pattern == "in" and \
                          state2.inheritance_pattern != state1.inheritance_pattern \
@@ -348,23 +368,94 @@ class FCNV(object):
                          and state2.inheritance_pattern != (2,0):
                             trans[i][num_real_states + j] = prob
                 else:
-                    trans[i][inNormal_id] = 1. - exit_prob
+                    trans[i][inNormal_id] = prob
                     
             #if it is a silent starting node
             elif state1.phased_pattern == "in":
-                prob = 1. / num_recombs[self.inheritance_patterns.index(state1.inheritance_pattern)]
+                prob = 1. / self.max_component_size
                 for j, state2 in enumerate(self.states[:num_real_states]):
                     if state2.inheritance_pattern == state1.inheritance_pattern:
                         trans[i][j] = prob
+        
+#        for i in range(num_states):
+#            print i, self.states[i]
+#        print '\n'
+#        for i in range(num_states):
+#            print "%2d"%i,
+#            for j in range(26,42):
+#                print "%.3f "%trans[i][j],
+#            print '\n',
+#        print '\n',
         
         #normalize and take logarithm
         for i in range(num_states):
             for j in range(num_states):
                 if trans[i][j] < 10e-10: trans[i][j] = self.neg_inf
                 else: trans[i][j] = math.log(trans[i][j])
-            #self.logNormalize(trans[i])
+            self.logPseudoNormalizeTrans(i, trans[i])
+        
+#        for i in range(num_states):
+#            print "%2d"%i,
+#            for j in range(26,42):
+#                print "%.3f "%math.exp(trans[i][j]),
+#            print '\n',
+#        print 0/0
         
         return trans
+    
+    def logPseudoNormalizeTrans(self, state_id, l):
+        """Normalize the given list of transition log-probabilities for state 'state_id'
+        
+        Normalizes the list in place and returns the used scale factor.
+        
+        """
+        num_real_states = self.getNumPP()
+        state1 = self.states[state_id]
+        if self.isReal(state1):
+            # 3types of transitions: stay, recomb, leave
+            # special case: normalize to max number of recombs
+            
+            sum_ = self.neg_inf
+            #recombs
+            recomb_num = 0
+            for j, state2 in enumerate(self.states[:num_real_states]):
+                if state_id != j and state2.inheritance_pattern == state1.inheritance_pattern:
+                    #recombination of the same IP
+                    if state1.inheritance_pattern == (2, 1):
+                        if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
+                            continue
+                    if state1.inheritance_pattern == (1, 2):
+                        if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
+                            continue
+                    sum_ = self.logSum(sum_, l[j])
+                    recomb_num += 1
+            sum_ = sum_ + math.log(self.max_recombs-1) - math.log(recomb_num)
+            
+            #stay
+            sum_ = self.logSum(sum_, l[state_id])
+            #leave
+            sum_ = self.logSum(sum_, l[self.getCorrespondingOutState(state1)[0]])
+            #print state1, sum_, math.exp(sum_), recomb_num
+            
+            #normalize
+            for i in range(len(l)): 
+                if l[i] != self.neg_inf: l[i] -= sum_
+            return sum_
+        elif state1.phased_pattern == "in":
+            # special case: normalize to max number of phased 'substates'
+            sum_ = self.neg_inf
+            num = 0
+            for x in l:
+                if x != self.neg_inf:
+                    num += 1
+                    sum_ = self.logSum(sum_, x)
+            sum_ = sum_ + math.log(self.max_component_size) - math.log(num)
+            for i in range(len(l)): 
+                if l[i] != self.neg_inf: l[i] -= sum_
+            return sum_
+        else:
+            return self.logNormalize(l)
+        
     
     def logNormalize(self, l):
         """Normalize the given list of log-probabilities.
@@ -428,67 +519,6 @@ class FCNV(object):
         assert self.logSum(float('-inf'), float('inf')) == float('inf')
         assert self.logSum(float('inf'), float('-inf')) == float('inf')
         assert self.logSum(float('inf'), float('inf')) == float('inf')
-
-    
-    def logMultinomial(self, xs, ps):
-        """Calculate probability mass function of multinomial distribution
-        returns log(Multi(xs | sum(xs), ps))
-        
-        Arguments:
-        xs -- [ints] -- counts
-        ps -- [floats] -- probabilities
-        returns float 
-        
-        >>> f = FCNV()
-        >>> f.logMultinomial([1,2,3], [.2,.3,.5])
-        -2.0024805005437072
-        """
-        
-        def gammaln(n):
-            """Compute logarithm of Euler's gamma function for discrete values."""
-            if n < 1:
-                return float('inf')
-            if n < 3:
-                return 0.0
-            c = [76.18009172947146, -86.50532032941677, \
-                 24.01409824083091, -1.231739572450155, \
-                 0.001208650973866179, -0.5395239384953 * 0.00001]
-            x, y = float(n), float(n)
-            tm = x + 5.5
-            tm -= (x + 0.5) * math.log(tm)
-            se = 1.0000000000000190015
-            for j in range(6):
-                y += 1.0
-                se += c[j] / y
-            return -tm + math.log(2.5066282746310005 * se / x)
-        
-        def logFactorial(x):
-            """Calculate ln(x!).
-                
-            Arguments:
-            x -- list(floats)
-            returns list(floats)
-                
-            """
-            if isinstance(x, tuple):
-                res = []
-                for val in x:
-                    res.append(gammaln(val+1))
-                return tuple(res)
-            else: 
-                return gammaln(x+1)
-        
-        n = sum(xs)
-        '''#numpy implementation:
-        xs, ps = np.array(xs), np.array(ps)
-        result = logFactorial(n) - sum(logFactorial(xs)) + sum(xs * np.log(ps))
-        '''
-        
-        result = logFactorial(n) - sum(logFactorial(xs))
-        for i in range(len(ps)):
-            result += xs[i] * math.log(ps[i])
-            
-        return result
     
     #memoized
     def allelesDistribution(self, maternal, fetal, mix):
@@ -528,125 +558,6 @@ class FCNV(object):
         '''self.distributionCache[code] = dist'''
         return dist
     
-    def allelesDistributionExtended(self, Malleles, Falleles, Mcounts, Fcounts, mix):
-        """Compute nucleotides distribution in maternal plasma for a position with
-        given maternal and fetal alleles, assuming the given fetal admixture.
-        
-        Arguments:
-        maternal -- maternal alleles
-        paternal -- paternal alleles
-        mix -- fetal admixture ratio
-        returns list(floats) -- list of nucleotides probabilities
-        """
-
-        #adjusted_fetal_admix = mix/2. * len(fetal)
-        #adjusted_maternal_admix = (1.-mix)/ 2. * len(maternal)
-        #cmix = adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix)
-        dist = {}
-        for nuc in self.nucleotides: dist[nuc] = 0.
-        alpha = 15
-        
-        for i, nuc in enumerate(Malleles):
-            dist[nuc] += (alpha + Mcounts[i]) * (1.-mix)
-        
-        for i, nuc in enumerate(Falleles):
-            dist[nuc] += (alpha + Fcounts[i]) * mix
-        
-        dist_list = [dist[nuc] for nuc in self.nucleotides]
-        
-        #normalize
-        summ = float(sum(dist_list))
-        dist_list = [dist_list[i] / summ for i in range(len(dist_list)) ]
-
-        return dist_list
-    
-    def allelesMeans(self, plasma, Malleles, Palleles, Mcounts, Pcounts, pattern, mix):
-        """Compute nucleotides distribution in maternal plasma for a position with
-        given maternal and fetal alleles, assuming the given fetal admixture.
-        
-        Arguments:
-        maternal -- maternal alleles
-        paternal -- paternal alleles
-        mix -- fetal admixture ratio
-        returns list(floats) -- list of nucleotides probabilities
-        """
-        plasma_avg_doc = 67.3
-        maternal_avg_doc = 29.6
-        paternal_avg_doc = 36.8
-        Mseq_ratio = sum(Mcounts)/float(maternal_avg_doc)
-        Pseq_ratio = sum(Pcounts)/float(paternal_avg_doc)
-        
-        Falleles = []
-        Fpseudocounts = []
-        for mHpatt in pattern[0]:
-            Falleles.append(Malleles[mHpatt])
-            Fpseudocounts.append(Mcounts[mHpatt])
-        for pHpatt in pattern[1]:
-            Falleles.append(Palleles[pHpatt])
-            Fpseudocounts.append(Pcounts[pHpatt])
-            
-        #adjust mixture to currently considered event (deletion, duplication, normal)
-        adjusted_fetal_admix = mix/2. * len(Falleles)
-        adjusted_maternal_admix = (1.-mix)/2. * len(Malleles) 
-        cmix = adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix)
-        
-        #adjust the mixture by DOC in pure maternal and paternal sequencing
-        #adjusted_maternal_admix = (1. - cmix) * sum(Mcounts)/float(40.)
-        #adjusted_fetal_admix = cmix/float(len(pattern[0])) * sum(Mcounts)/float(40.) + cmix/float(len(pattern[1])) * sum(Pcounts)/float(40.)
-        #cmix = adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix)
-        
-        maternal_pos_doc = (sum(Mcounts) + maternal_avg_doc) / 2.
-        scaled_M_doc = (maternal_pos_doc * plasma_avg_doc / maternal_avg_doc)
-        paternal_pos_doc = (sum(Pcounts) + paternal_avg_doc) / 2.
-        scaled_P_doc = (paternal_pos_doc * plasma_avg_doc / paternal_avg_doc)
-        scaled_M_doc = scaled_P_doc = plasma_avg_doc
-        
-        Mcounts = list(Mcounts)
-        Pcounts = list(Pcounts)
-        
-        Mcounts[0] += maternal_avg_doc
-        Mcounts[1] += maternal_avg_doc
-        
-        Pcounts[0] += paternal_avg_doc
-        Pcounts[1] += paternal_avg_doc
-        
-        mus = []
-        for nuc in self.nucleotides:
-            nuc_count_in_M = 0.
-            if Malleles[0] == nuc: nuc_count_in_M += Mcounts[0]
-            if Malleles[1] == nuc: nuc_count_in_M += Mcounts[1]
-            
-            mu = 0.
-            if nuc_count_in_M != 0:
-                #p = Malleles.count(nuc) / float(len(Malleles)) * (1.-cmix)
-                mu = (1.-cmix) * (nuc_count_in_M / float(sum(Mcounts))) * scaled_M_doc #(0.5+0.5*(Malleles[0] == Malleles[1]))
-            for mHpatt in pattern[0]:
-                if Malleles[mHpatt] == nuc:
-                    mu += cmix/float(len(pattern[0])) * (Mcounts[mHpatt] / float(sum(Mcounts))) * scaled_M_doc
-            for pHpatt in pattern[1]:
-                if Palleles[pHpatt] == nuc:
-                    mu += cmix/float(len(pattern[1])) * (Pcounts[pHpatt] / float(sum(Pcounts))) * scaled_P_doc
-            #if p < 0.01: p = 0.01
-            mus.append(mu)
-        
-        dist = []
-        for nuc in self.nucleotides:
-            p = Malleles.count(nuc) / float(len(Malleles)) * (1.-cmix)
-            p += Falleles.count(nuc) / float(len(Falleles)) * (cmix)
-            dist.append(p)    
-            
-        #normalize
-        #summ = sum(dist)
-        #dist = [dist[i] / summ for i in range(len(dist)) ]
-        mus = [mus[i] * sum(plasma)/float(sum(mus)) for i in range(len(mus)) ]
-        
-        #mus = [(mus[i] + sum(plasma)*dist[i])/2. for i in range(len(mus)) ]
-        #mus = [mus[i] * sum(plasma)/float(sum(mus)) for i in range(len(mus)) ]
-        
-        
-        return mus
-     
-    
     def logGaussian(self, x, mus, cov_diagonal):
         '''
         log probability of x ~ N(mu, cov)
@@ -668,116 +579,12 @@ class FCNV(object):
         
         return px
     
-    #TODO: NEEDS OPTIMIZATION if possible !!!!!!!!!!!!!!!!!
-    def logLHGivenState(self, nuc_counts, maternal_alleles, paternal_alleles, maternal_sq_counts,\
-           paternal_sq_counts, mix, state, multinom = False):
-        '''
-        >>> f = FCNV()
-        >>> f.logLHGivenState([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [1,1])
-        -3.6974187244239025
-        >>> f.logLHGivenState([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [2,1]) #-3.4838423152150568
-        -3.6507523341244412
-        >>> f.logLHGivenState([3, 0, 0, 71], ['T', 'T'], ['T', 'A'], 0.1, [0,2])
-        -3.1614953504205028
-        '''
-        pattern = state.phased_pattern
-               
-        fetal_alleles = []
-        fetal_pseudocounts = []
-        for mHpatt in pattern[0]:
-            fetal_alleles.append(maternal_alleles[mHpatt])
-            fetal_pseudocounts.append(maternal_sq_counts[mHpatt])
-        for pHpatt in pattern[1]:
-            fetal_alleles.append(paternal_alleles[pHpatt])
-            fetal_pseudocounts.append(paternal_sq_counts[pHpatt])
-        
-        #Caching:
-        #code = (tuple(nuc_counts), tuple(maternal_alleles), tuple(fetal_alleles), mix)
-        #try: return self.logLikelihoodCache[code]
-        #except KeyError: pass
-
-        #result = self.logMultinomial(nuc_counts, ps)
-        if multinom:
-            ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
-            for i in range(4):
-                if ps[i] == 0: ps[i] = 0.01
-            a = sum(ps)
-            ps = [ps[i] / a for i in range(4)]
-            return self.logMultinomial(tuple(nuc_counts), tuple(ps))
-        
-        N = sum(nuc_counts)
-        ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
-        #ps = self.allelesDistributionExtended(maternal_alleles, tuple(fetal_alleles), maternal_sq_counts, fetal_pseudocounts, mix)
-        mus = [ N*ps[i] for i in range(4) ]
-        
-        mus = self.allelesMeans(nuc_counts, maternal_alleles, paternal_alleles, maternal_sq_counts, paternal_sq_counts, pattern, mix)
-        
-        cov_diagonal = [ max(0.8, mus[x]) for x in range(4)]
-        result = self.logGaussian(nuc_counts, mus, cov_diagonal)
-        if result < -20: result = -20
-        
-        #debug log
-        #if random.random()> 0.999: print self.avgCoverage, sum(nuc_counts)
-        #if random.random()> 1:
-        #    print "---------------------------------------"
-        #    print nuc_counts, maternal_alleles, maternal_sq_counts, paternal_alleles, paternal_sq_counts, fetal_alleles, mix, state
-        #    print ps
-        #   
-        #    N = sum(nuc_counts)
-        #   nps = [ ps[i]*N for i in range(4)]
-        #    ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
-        #    for i in range(4):
-        #        if ps[i] == 0: ps[i] = 0.01
-        #    a = sum(ps)
-        #    ps = [ps[i] / a for i in range(4)]
-        #    print ps, nps, cov_diagonal, result, '   ', self.logMultinomial(nuc_counts, tuple(ps))
-        
-        #self.logLikelihoodCache[code] = result
-        return result
-    
     def logLHGivenStateWCoverage(self, pos_ind, nuc_counts, maternal_alleles, paternal_alleles,\
            maternal_sq_counts, paternal_sq_counts, mix, state):
         
-        begin_ind = max(0, pos_ind - 1)
-        end_ind = min(pos_ind + 1, len(self.positions) - 1)
-        leftmost = max(int((self.positions[pos_ind] + self.positions[begin_ind]) / 2.), self.positions[pos_ind] - 1000)
-        rightmost = min(int((self.positions[pos_ind] + self.positions[end_ind]) / 2.), self.positions[pos_ind] + 1000)
-        #leftmost = self.positions[pos_ind] - 500
-        #rightmost = self.positions[pos_ind] + 500
-        
-        b = leftmost
-        e = rightmost
-        while b < 0 or self.prefix_sum_maternal[b] == 0: b += 1
-        while e >= len(self.prefix_sum_maternal) or self.prefix_sum_maternal[e] == 0: e -= 1
-        m_win_size = e - b
-        mu_doc = self.prefix_sum_maternal[e] - self.prefix_sum_maternal[b]
-        mu_doc /= float(self.prefix_count_maternal[e] - self.prefix_count_maternal[b])
-        #scale to avg. plasma coverage
-        mu_doc *= 67.3/49.9 #TODO: make this a parameter
-        
-        #adjust conditional on inheritance pattern
-        maternal_doc = mu_doc
-        maternal_doc += (sum(state.inheritance_pattern) - 2) * (67.3 * mix/2.)
-        
-        #get arrivals rate
-        mu_arrivals = (mu_doc * m_win_size) / 200.
-        maternal_arrivals = (maternal_doc * m_win_size) / 200.
-        
-        b = leftmost
-        e = rightmost
-        while b < 0 or self.prefix_sum_plasma[b] == 0: b += 1
-        while e >= len(self.prefix_sum_plasma) or self.prefix_sum_plasma[e] == 0: e -= 1
-        pl_win_size = e - b
-        plasma_doc = self.prefix_sum_plasma[e] - self.prefix_sum_plasma[b]
-        plasma_doc /= float(self.prefix_count_plasma[e] - self.prefix_count_plasma[b])
-        plasma_arrivals = (plasma_doc * pl_win_size) / 200.
-        
-        
         pattern = state.phased_pattern
-        N = sum(nuc_counts)
-        
+
         #mus = self.allelesMeans(nuc_counts, maternal_alleles, paternal_alleles, maternal_sq_counts, paternal_sq_counts, pattern, mix)
-        #mus.append(maternal_doc)
         
         pattern = state.phased_pattern
         fetal_alleles = []
@@ -789,31 +596,19 @@ class FCNV(object):
             fetal_alleles.append(paternal_alleles[pHpatt])
             fetal_pseudocounts.append(paternal_sq_counts[pHpatt])
         ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
-        mus = [ N*ps[i] for i in range(4) ]
         
-        cov_diagonal = [ max(0.8, mus[x]) for x in range(4)]
-        #cov_diagonal.append(50.)
+        N = sum(nuc_counts)
+        avg_doc = 67. #TODO: make this a parameter
+        norm_coef = avg_doc / N
         
-        nuc_counts = list(nuc_counts)
-        #nuc_counts.append(plasma_doc)
-        
-        noise_prob = max(-7., self.logGaussian([plasma_arrivals], [mu_arrivals], [mu_arrivals*20]))/14.
-        coverage_prob = self.logGaussian([plasma_arrivals], [maternal_arrivals], [mu_arrivals])/14.
-        coverage_prob = min(0., coverage_prob - noise_prob)
-        coverage_prob2 = self.logGaussian([plasma_arrivals], [(mu_doc-(67.3 * mix/2.)) * m_win_size / 200.], [mu_arrivals])/14.
-        coverage_prob2 = min(0., coverage_prob2 - noise_prob)
-        coverage_prob3 = self.logGaussian([plasma_arrivals], [(mu_doc+(67.3 * mix/2.)) * m_win_size / 200.], [mu_arrivals])/14.
-        coverage_prob3 = min(0., coverage_prob3 - noise_prob)
-        
-        
-        if sum(state.inheritance_pattern) == 2 and pl_win_size >= 1000: coverage_prob = max(coverage_prob, coverage_prob2-0.1, coverage_prob3-0.1)
-        if noise_prob > coverage_prob or pl_win_size < 1000: coverage_prob = 0.
+        mus = [ avg_doc * ps[i] for i in range(4) ]
+        cov_diagonal = [ max(0.8, (N * ps[x]) * norm_coef**2) for x in range(4)]
+        nuc_counts = [ x * norm_coef for x in nuc_counts ]
         
         ratios_prob = self.logGaussian(nuc_counts, mus, cov_diagonal)
-        result = ratios_prob + coverage_prob
-        #if maternal_alleles[0] ==  maternal_alleles[1]: result = ratios_prob + coverage_prob
-        #else: result = ratios_prob + noise_prob
-        #print maternal_doc, maternal_arrivals, m_win_size, '|', plasma_doc, plasma_arrivals, pl_win_size, '|', sum(nuc_counts), ratios_prob, coverage_prob, coverage_prob2, coverage_prob3, noise_prob, result
+        result = ratios_prob
+
+        #print sum(nuc_counts), ratios_prob, result
         if result < -15: result = -15
         
         return result
@@ -857,14 +652,94 @@ class FCNV(object):
         result = sum(map(sum, samples)) / float(len(samples))
         return result
     
+    '''
+    def adjustInTransitionProbForPos(self, pos, trans, inplace=False):
+        """Multiply the CNV prior into transition probabilities of incoming 
+        edges of the 'in' silent states at the specified position
+        """
+        return
+        #if not inplace: trans = copy.deepcopy(self.transitions)
+        num_states = self.getNumStates()
+        pos = min(pos, len(self.cnv_prior) - 1)
+        for state_id, state in enumerate(self.states):
+            if state.phased_pattern == "in":
+                for prev_id in range(num_states):
+                    if trans[prev_id][state_id] == self.neg_inf: continue
+                    trans[prev_id][state_id] += self.cnv_prior[pos][sum(state.inheritance_pattern) - 1]
+        for st_id in range(num_states):
+            self.logNormalizeTrans(st_id, trans[st_id])
     
+    def adjustOutTransitionProbForPos(self, pos, trans, inplace=False):
+        """Multiply the negation of CNV prior into transition probabilities
+        of incoming edges of the 'out' silent states at the specified position
+        """
+        return 
+        #if not inplace: trans = copy.deepcopy(self.transitions)
+        num_states = self.getNumStates()
+        pos = min(pos, len(self.cnv_prior) - 1)
+        for state_id, state in enumerate(self.states):
+            if state.phased_pattern == "out":
+                for prev_id in range(num_states):
+                    if trans[prev_id][state_id] == self.neg_inf: continue
+                    trans[prev_id][state_id] -= math.log(1. - math.exp(self.cnv_prior[pos][sum(state.inheritance_pattern) - 1]))
+                    if trans[prev_id][state_id] == self.inf:
+                        trans[prev_id][state_id] = self.neg_inf
+#            if self.isReal(state):
+#                outState_id = self.getCorrespondingOutState(state)[0]
+#                for next_id in range(num_states):
+#                    if trans[state_id][next_id] == self.neg_inf or next_id == outState_id: continue
+#                    trans[state_id][next_id] += math.log(1. - math.exp(self.cnv_prior[pos][sum(state.inheritance_pattern) - 1]))
+#                    if trans[state_id][next_id] == self.inf:
+#                        trans[state_id][next_id] = self.neg_inf
+        for st_id in range(num_states):
+            self.logNormalizeTrans(st_id, trans[st_id])
+    '''
+            
+    def adjustTransitionProbForPos(self, pos, trans):
+        """Multiply the CNV prior into transition probabilities at the specified position
+        """
+        num_real_states = self.getNumPP()
+        num_states = self.getNumStates()
+        pos = min(pos, len(self.cnv_prior) - 1)
+        logP1n3 = self.logSum(self.cnv_prior[pos][0], self.cnv_prior[pos][2])
+        for state_id, state in enumerate(self.states):
+            if self.isReal(state):
+                #inState_id = self.getCorrespondingInState(state)[0]
+                for prev_id in range(num_real_states):
+                    #if prev_id == inState_id: continue
+                    if trans[prev_id][state_id] == self.neg_inf: continue
+                    trans[prev_id][state_id] += self.cnv_prior[pos][sum(state.inheritance_pattern) - 1]
+                    if trans[prev_id][state_id] == self.inf:
+                        trans[prev_id][state_id] = self.neg_inf
+            
+#            if state.phased_pattern == "out":
+#                for prev_id in range(num_real_states):
+#                    if trans[prev_id][state_id] == self.neg_inf: continue
+#                    if state.inheritance_pattern == (1, 1):
+#                        trans[prev_id][state_id] += logP1n3 #prior of going to a CNV
+#                    else:
+#                        trans[prev_id][state_id] += self.cnv_prior[pos][1] #prior of going to (1, 1)
+#                    if trans[prev_id][state_id] == self.inf:
+#                        trans[prev_id][state_id] = self.neg_inf
+            
+            if state.phased_pattern == "in" and state.inheritance_pattern != (1, 1):
+                for prev_id in range(num_real_states, num_states):
+                    if trans[prev_id][state_id] == self.neg_inf: continue
+                    trans[prev_id][state_id] += self.cnv_prior[pos][sum(state.inheritance_pattern) - 1]
+                    if trans[prev_id][state_id] == self.inf:
+                        trans[prev_id][state_id] = self.neg_inf
+       
+        for st_id in range(num_states):
+            self.logPseudoNormalizeTrans(st_id, trans[st_id])
+            
+            
     def viterbiPath(self, samples, M, P, MSC, PSC, mixture):
         """
         Viterbi decoding of the most probable path.
         """
         num_states = self.getNumStates()
         num_real_states = self.getNumPP() 
-        transitions = self.transitions
+        transitions = copy.deepcopy(self.transitions)
         self.avgCoverage = self.estimateCoverage(samples)
         
         n = len(samples)
@@ -877,6 +752,8 @@ class FCNV(object):
         
         
         '''INITIALIZE'''
+        #multiply the CNV prior into transition probabilities
+        self.adjustTransitionProbForPos(0, transitions)
         #the start state probability is 1 -> log(1)=0
         table[0][start_id] = 0. 
         #propagate over all silent states
@@ -890,7 +767,7 @@ class FCNV(object):
         #for all SNP positions do:
         for pos in xrange(1, n+1):
             #real positions are <1..n+1), pos 1 is the base case
-
+            
             #(i) compute new values for all phased patterns - "real" states of the HMM:
             for state_id, state in enumerate(self.states[:num_real_states]):
                 #emission probability in the given state
@@ -907,6 +784,10 @@ class FCNV(object):
                         arg_max = prev_id
                 table[pos][state_id] = max_prev + emis_p
                 predecessor[pos][state_id] = arg_max
+            
+            #multiply the CNV prior into transition probabilities
+            transitions = copy.deepcopy(self.transitions)
+            self.adjustTransitionProbForPos(pos, transitions)
             
             #(ii, iii) transitions from 'real' states and silent states with lower id to silent states
             #note: the states in self.states are already ordered such that a transistion from a silent 
@@ -1263,7 +1144,7 @@ class FCNV(object):
         num_states = self.getNumStates()
         num_real_states = self.getNumPP()
         patterns = self.inheritance_patterns
-        transitions = self.transitions
+        transitions = copy.deepcopy(self.transitions)
         self.avgCoverage = self.estimateCoverage(samples)
         
         n = len(samples)
@@ -1277,6 +1158,8 @@ class FCNV(object):
         
         
         '''INITIALIZE'''
+        #multiply the CNV prior into transition probabilities
+        self.adjustTransitionProbForPos(0, transitions)
         #the start state probability is 1 -> log(1)=0
         table[0][start_id] = 0. 
         #propagate over all silent states
@@ -1302,6 +1185,10 @@ class FCNV(object):
                     tmp =  table[pos-1][prev_id] + transitions[prev_id][state_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = emis_p + summ
+            
+            #multiply the CNV prior into transition probabilities
+            transitions = copy.deepcopy(self.transitions)
+            self.adjustTransitionProbForPos(pos, transitions)
             
             #(ii, iii) transitions from 'real' states and silent states with *lower* id to silent states
             #note: the states in self.states are already ordered such that a transistion from a silent 
@@ -1335,7 +1222,7 @@ class FCNV(object):
         num_states = self.getNumStates()
         num_real_states = self.getNumPP()
         patterns = self.inheritance_patterns
-        transitions = self.transitions
+        transitions = copy.deepcopy(self.transitions)
         self.avgCoverage = self.estimateCoverage(samples)
         
         n = len(samples)
@@ -1347,6 +1234,8 @@ class FCNV(object):
         
         
         '''INITIALIZE'''
+        #multiply the CNV prior into transition probabilities
+        self.adjustTransitionProbForPos(n-1, transitions)
         #the exit state probability is 1 -> log(1)=0
         table[n][exit_id] = 0. 
         #(iii) add transitions from silent to silent states with *higher* id (*no emission*)
@@ -1379,6 +1268,10 @@ class FCNV(object):
             for state in self.states[:num_real_states]:
                 emis_p.append(self.logLHGivenStateWCoverage(pos, samples[pos], M[pos], P[pos], MSC[pos], PSC[pos], mixture, state))
                 
+            #multiply the CNV prior into transition probabilities
+            #transitions = copy.deepcopy(self.transitions)
+            #self.adjustTransitionProbForPos(pos, transitions)
+            
             #(i) transitions from all states to 'real' states of the HMM:
             for state_id in range(num_states):
                 # \sum {emission_in_'next' * 'next'_state * transition_from_here}
@@ -1388,6 +1281,10 @@ class FCNV(object):
                     tmp = transitions[state_id][next_id] + table[pos+1][next_id] + emis_p[next_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = summ
+            
+            #multiply the CNV prior into transition probabilities
+            transitions = copy.deepcopy(self.transitions)
+            self.adjustTransitionProbForPos(pos-1, transitions)
             
             #(iii) add transitions from silent to silent states with *higher* id (*no emission*)
             for state_id in reversed(range(num_real_states, num_states)):
