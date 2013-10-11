@@ -20,6 +20,7 @@ def main():
             results.append({"pos": int(line[0]),
                             "real": int(line[1]),
                             "pred": int(line[2]),})
+    normal=int(results[0]['real'])
 
     foundSnips=0
     regionSnips=0
