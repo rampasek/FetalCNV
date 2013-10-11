@@ -5,14 +5,11 @@ import argparse
 
 k=1000
 beanSizes= [0, 100, 500, 1000, 10000] 
-'''
-truePos= {'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0]}
-falsePos={'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0]} 
-total= {'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0]}
-'''
-truePos=[0, 0, 0, 0, 0]
-falsePos=[0, 0, 0, 0, 0]
-total=[0, 0, 0, 0, 0]
+
+truePos= {'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'zsum':[0, 0, 0, 0, 0]}
+falsePos={'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'zsum':[0, 0, 0, 0, 0]} 
+total= {'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'zsum':[0, 0, 0, 0, 0]}
+
 beanSizes= map(lambda x: x*k, beanSizes)
 
 def findIndex(sz):
@@ -26,18 +23,27 @@ def main():
 
     summary_file=open(args.summaryFile[0], "r")
    
-    delmap={}
-    '''
+    nameMap={}
+    
     for line in summary_file:
-        if line.endswith(".txt\n"):
+        if line.find(".txt")!=-1:
             rawHeader=line
         if line.find('predicted')!=-1:
             parts=line.split()
-            if (rawHeader.find('cvrg')==-1 and (int(parts[5])==2 or int(parts[5])==0)) or (rawHeader.find('cvrg')!=-1 and int(parts[5])==):
-    '''
+            nameMap[rawHeader]='MDel'
+            if (rawHeader.find('cvrg')==-1 and int(parts[5])==2) or (rawHeader.find('cvrg')!=-1 and int(parts[5])==0):
+                nameMap[rawHeader]='MDel'
+            if (rawHeader.find('cvrg')==-1 and int(parts[5])==0):
+                nameMap[rawHeader]='PDel'
+            if (rawHeader.find('cvrg')==-1 and int(parts[5])==6) or (rawHeader.find('cvrg')!=-1 and int(parts[5])==2):
+                nameMap[rawHeader]='MDup'
+            if (rawHeader.find('cvrg')==-1 and int(parts[5])==4):
+                nameMap[rawHeader]='PDup'
+    
 
 
 
+    summary_file.seek(0)
     for line in summary_file:
         
         #if a new result has started
@@ -53,47 +59,55 @@ def main():
             reg= map(int, parts[0].split('-'))
             sz=reg[1]-reg[0]
             if int(parts[2])!=int(parts[5]) and ((rawHeader.find('cvrg')==-1 and (int(parts[5])==3)) or (rawHeader.find('cvrg')!=-1 and int(parts[5])==1)):
-                falsePos[findIndex(sz)]+=1
+                falsePos[nameMap[rawHeader]][findIndex(sz)]+=1
+                falsePos['zsum'][findIndex(sz)]+=1
         if (line.startswith('Recall')):
-            truePos[findIndex(simSZ)]+= int(line.split('\t')[1])
+            truePos[nameMap[rawHeader]][findIndex(simSZ)]+= int(line.split('\t')[1])
+            truePos['zsum'][findIndex(simSZ)]+= int(line.split('\t')[1])
         if (line.startswith('Recall')):
-            total[findIndex(simSZ)]+=1
+            total[nameMap[rawHeader]][findIndex(simSZ)]+=1
+            total['zsum'][findIndex(simSZ)]+=1
 #        if (line.startswith('Recall')):
 #            if int(line.split('\t')[1])==0 and simSZ==1000*k:
 #                print rawHeader
 
 
+    print 'A',
+    print "\t",
     print 'Size :',
     print "\t",
     print "\t",
     for (i,num) in enumerate(beanSizes):
-            print num,
-            print "\t",
-    print ''
-    print 'Recall :',
-    print "\t",
-    for (i,num) in enumerate(beanSizes):
-        if total[i]==0:
-            print 1,
-            print "\t",
-        else: 
-            print '%0.4f' % (float(truePos[i])/total[i]),
-            print "\t",
-    #        print "Recall for ",
-    #        print num,
-    #        print ":: ",
-    print ''
-    print 'Precision :',
-    print "\t",
-    for (i,num) in enumerate(beanSizes):
-        if truePos[i]+falsePos[i]==0:
-            print 1,
-            print "\t",
-        else:
-            #print float(truePos[i])/(truePos[i]+falsePos[i]),
-            print str(truePos[i])+'/'+str(truePos[i]+falsePos[i]),
-            print "\t",
-    print ''
+            print num/k,
+            print "k\t",
+    for key in total:
+        print ''
+        print key,
+        print '\tRecall :',
+        print "\t",
+        for (i,num) in enumerate(beanSizes):
+            if total[key][i]==0:
+                print 1,
+                print "\t",
+            else: 
+                print '%0.4f' % (float(truePos[key][i])/total[key][i]),
+                print "\t",
+        #        print "Recall for ",
+        #        print num,
+        #        print ":: ",
+        print ''
+        print key,
+        print '\tPrecision :',
+        print "\t",
+        for (i,num) in enumerate(beanSizes):
+            if truePos[key][i]+falsePos[key][i]==0:
+                print 1,
+                print "\t",
+            else:
+                #print float(truePos[i])/(truePos[i]+falsePos[i]),
+                print str(truePos[key][i])+'/'+str(truePos[key][i]+falsePos[key][i]),
+                print "\t",
+        print ''
     #        print "Precision for ",
     #        print num,
     #        print ":: ",
