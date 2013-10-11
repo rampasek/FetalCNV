@@ -167,9 +167,9 @@ def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, fi
     for i in xrange(len(vp)):
         state_stats[ground_truth[i]] += 1
         post = []
-        #for x in posterior[i]:   
-        #    post.append(x[1])
-        #pp.append(post[0])
+        for x in posterior[i]:   
+            post.append(x[1])
+        pp.append(post[0])
         
         ll_state = []
         ll_value = []
@@ -181,7 +181,6 @@ def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, fi
         #print the results
         #print >>fout, i+1, samples[i], M[i], list(MSC[i]), P[i], list(PSC[i]), vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
         print >>annot_out, snp_positions[i], ground_truth[i], vp[i], v_state_path[i]
-        continue
             
         #print ground_truth[i], vp[i], pp[i], '|', post
         #labeling_correct += int(ground_truth[i] == el[i])
@@ -403,13 +402,14 @@ def main():
     
     cvrg = cvrgHMM.coverageFCNV(snp_positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum)
     cvrg_posterior = cvrg.posteriorDecoding(mix)
-    byLL = cvrg.likelihoodDecoding(mix)
+#    byLL = cvrg.likelihoodDecoding(mix)
     del prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum
     
     cnv_prior = [ [0., 0., 0.] for x in range(len(snp_positions)) ]
     for pos in range(len(cvrg_posterior)):
         for cp_num_posterior in cvrg_posterior[pos]:
             cnv_prior[pos][cp_num_posterior[1]] = cp_num_posterior[0]
+    del cvrg, cvrg_posterior
     
 #        ll_state = []
 #        ll_value = []
@@ -428,7 +428,7 @@ def main():
 #        posterior_str+='\t'
 
 #        print snp_positions[pos], 'PP:', posterior_str, 'LL:', ll_str
-    del cvrg, cvrg_posterior, byLL
+#    del cvrg, cvrg_posterior, byLL
     
     fcnv = fcnvHMM.FCNV(snp_positions, cnv_prior)
     

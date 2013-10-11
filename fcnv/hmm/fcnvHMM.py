@@ -299,11 +299,11 @@ class FCNV(object):
         for ip_id, ip in enumerate(self.inheritance_patterns):
             
             if ip == (1, 1): #generate Normal states transitions\
-                pstay = 0.97999
+                pstay = 0.9799
                 #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
                 #pstay = precomb = 0.999 / 6.
                 precomb = 0.02 / (self.max_recombs - 1)
-                pgo = 0.00001
+                pgo = 0.0001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -317,11 +317,11 @@ class FCNV(object):
                     trans[i][outState_id] = pgo
                     
             else: #generate CNV states transitions
-                pstay = 0.9799
+                pstay = 0.979
                 #precomb = 0.5 / (num_recombs[self.inheritance_patterns.index(ip)] - 1)
                 #pstay = precomb = 0.999 / 6.
                 precomb = 0.02 / (self.max_recombs - 1)
-                pgo = 0.0001
+                pgo = 0.001
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -701,6 +701,7 @@ class FCNV(object):
         num_real_states = self.getNumPP()
         num_states = self.getNumStates()
         pos = min(pos, len(self.cnv_prior) - 1)
+        pos = max(pos, 0)
         logP1n3 = self.logSum(self.cnv_prior[pos][0], self.cnv_prior[pos][2])
         for state_id, state in enumerate(self.states):
             if self.isReal(state):
@@ -712,15 +713,15 @@ class FCNV(object):
                     if trans[prev_id][state_id] == self.inf:
                         trans[prev_id][state_id] = self.neg_inf
             
-#            if state.phased_pattern == "out":
-#                for prev_id in range(num_real_states):
-#                    if trans[prev_id][state_id] == self.neg_inf: continue
-#                    if state.inheritance_pattern == (1, 1):
-#                        trans[prev_id][state_id] += logP1n3 #prior of going to a CNV
-#                    else:
-#                        trans[prev_id][state_id] += self.cnv_prior[pos][1] #prior of going to (1, 1)
-#                    if trans[prev_id][state_id] == self.inf:
-#                        trans[prev_id][state_id] = self.neg_inf
+            if state.phased_pattern == "out":
+                for prev_id in range(num_real_states):
+                    if trans[prev_id][state_id] == self.neg_inf: continue
+                    if state.inheritance_pattern == (1, 1):
+                        trans[prev_id][state_id] += logP1n3 #prior of going to a CNV
+                    else:
+                        trans[prev_id][state_id] += self.cnv_prior[pos][1] #prior of going to (1, 1)
+                    if trans[prev_id][state_id] == self.inf:
+                        trans[prev_id][state_id] = self.neg_inf
             
             if state.phased_pattern == "in" and state.inheritance_pattern != (1, 1):
                 for prev_id in range(num_real_states, num_states):
@@ -1282,10 +1283,6 @@ class FCNV(object):
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = summ
             
-            #multiply the CNV prior into transition probabilities
-            transitions = copy.deepcopy(self.transitions)
-            self.adjustTransitionProbForPos(pos-1, transitions)
-            
             #(iii) add transitions from silent to silent states with *higher* id (*no emission*)
             for state_id in reversed(range(num_real_states, num_states)):
                 #\sum {'next'_state * transition_from_here} (no emission)
@@ -1305,6 +1302,10 @@ class FCNV(object):
                     tmp = transitions[state_id][next_id] + table[pos][next_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = self.logSum(summ, table[pos][state_id])
+            
+            #multiply the CNV prior into transition probabilities
+            transitions = copy.deepcopy(self.transitions)
+            self.adjustTransitionProbForPos(pos-1, transitions)
             
             #pseudonormalize by scaling factor from fwd
             for state_id in range(num_states):

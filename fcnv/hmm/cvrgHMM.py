@@ -257,8 +257,8 @@ class coverageFCNV(object):
         for ip in self.inheritance_patterns:
             
             if ip == 2: #generate Normal states transitions
-                pstay = 1./4. #0.4
-                pgo = 1./4. #0.6 / (num_real_states - 1)
+                pstay = 3./6. #0.4
+                pgo = 1./6. #0.6 / (num_real_states - 1)
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -272,8 +272,8 @@ class coverageFCNV(object):
                     trans[i][outState_id] = pgo
                     
             else: #generate CNV states transitions
-                pstay = 1./4. #0.4
-                pgo = 1./4. #0.6 / (num_real_states - 1)
+                pstay = 1./6. #0.4
+                pgo = 1./6. #0.6 / (num_real_states - 1)
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -302,7 +302,7 @@ class coverageFCNV(object):
             for j in range(num_states):
                 if trans[i][j] < 10e-10: trans[i][j] = self.neg_inf
                 else: trans[i][j] = math.log(trans[i][j])
-            #self.logNormalize(trans[i])
+            self.logNormalize(trans[i])
         
         return trans
     
