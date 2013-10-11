@@ -119,13 +119,14 @@ def main():
     
     print print_buffer,
     
-    print 'Inside the region'
     inTheRegion=False
     for res in results:
         if inTheRegion==False and res["real"]!=normal:
             count=0
             lastch=res['pred']
             inTheRegion=True
+            print 'Real State:',res["real"]
+            print 'Inside the region'
         if inTheRegion and res["real"]==normal:
             print '[('+str(lastch)+') - '+str(count)+']',
             break
