@@ -80,6 +80,7 @@ def main():
             print num/k,
             print "k\t",
 
+    print 'total',
     for key in sorted(total.keys()):
         print ''
         print key,
@@ -95,18 +96,23 @@ def main():
         #        print "Recall for ",
         #        print num,
         #        print ":: ",
+        if sum(total[key])==0:
+            print 1,
+            print "\t",
+        else:
+            print '%0.4f' % (float(sum(truePos[key]))/sum(total[key])),
+            print "\t",
+
         print ''
         print key,
         print '\tPrecision :',
         print "\t",
         for (i,num) in enumerate(beanSizes):
-            if truePos[key][i]+falsePos[key][i]==0:
-                print 1,
-                print "\t",
-            else:
-                #print float(truePos[i])/(truePos[i]+falsePos[i]),
-                print str(truePos[key][i])+'/'+str(truePos[key][i]+falsePos[key][i]),
-                print "\t",
+            #print float(truePos[i])/(truePos[i]+falsePos[i]),
+            print str(truePos[key][i])+'/'+str(truePos[key][i]+falsePos[key][i]),
+            print "\t",
+        print str(sum(truePos[key]))+'/'+str(sum(truePos[key])+sum(falsePos[key])),
+        print "\t",
         print ''
     #        print "Precision for ",
     #        print num,
