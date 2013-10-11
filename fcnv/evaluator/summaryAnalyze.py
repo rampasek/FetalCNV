@@ -28,16 +28,15 @@ def main():
     for line in summary_file:
         if line.find(".txt")!=-1:
             rawHeader=line
-        if line.find('predicted')!=-1:
-            parts=line.split()
-            nameMap[rawHeader]='MDel'
-            if (rawHeader.find('cvrg')==-1 and int(parts[5])==2) or (rawHeader.find('cvrg')!=-1 and int(parts[5])==0):
+        if line.find('Real State:')!=-1:
+            parts=line.split(' ')
+            if (rawHeader.find('cvrg')==-1 and int(parts[2])==2) or (rawHeader.find('cvrg')!=-1 and int(parts[2])==0):
                 nameMap[rawHeader]='MDel'
-            if (rawHeader.find('cvrg')==-1 and int(parts[5])==0):
+            if (rawHeader.find('cvrg')==-1 and int(parts[2])==0):
                 nameMap[rawHeader]='PDel'
-            if (rawHeader.find('cvrg')==-1 and int(parts[5])==6) or (rawHeader.find('cvrg')!=-1 and int(parts[5])==2):
+            if (rawHeader.find('cvrg')==-1 and int(parts[2])==6) or (rawHeader.find('cvrg')!=-1 and int(parts[2])==2):
                 nameMap[rawHeader]='MDup'
-            if (rawHeader.find('cvrg')==-1 and int(parts[5])==4):
+            if (rawHeader.find('cvrg')==-1 and int(parts[2])==4):
                 nameMap[rawHeader]='PDup'
     
 
