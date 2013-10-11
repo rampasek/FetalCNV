@@ -116,8 +116,8 @@ def main():
 
     #print "recall: "+str(recall)
     #print "precision: "+str(precision)
-    
-    print print_buffer
+    if len(print_buffer)!=0:
+        print print_buffer
     
     inTheRegion=False
     for res in results:
