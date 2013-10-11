@@ -15,6 +15,7 @@ def mapping_parser(m):
     if isinstance(m, str):
         m = m.strip().split('\t')
         d = {}
+        if len(m) < 10: return d
         d['flag'] = int(m[1])   # flags
         d['chr'] = m[2]         # chr
         d['pos'] = int(m[3])    # pos
@@ -117,7 +118,7 @@ def main():
     # For each read count the snips in the read and check if it belongs to the target hapoltype:
     for read in reads_file:
         parsed_read= mapping_parser(read)
-
+        if len(read) < 10: continue
         # If the read is not aligned properly, ignore it
         #if parsed_read['flag'] & ALL_PROPERLY_ALIGNED == 0: continue
         if parsed_read['flag'] & UNMAPPED != 0: continue

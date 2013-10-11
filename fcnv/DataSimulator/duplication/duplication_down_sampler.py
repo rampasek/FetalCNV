@@ -70,7 +70,7 @@ def main():
         # If the read is not aligned, ignore it
         if read['flag'] & UNMAPPED != 0: continue
         
-        begin = read['pos'] - 300 - offset
+        begin = max(0, read['pos'] - 300 - offset)
         end = begin + readLength + 300 
         
         while prefix_sum[begin]==0: begin += 1

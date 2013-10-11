@@ -9,9 +9,12 @@ exec_path=$8
 phase_sites=$data_path/trio.phase.vcf
 bamfile=$data_path'/__'$4'.part.bam'
 plasmaFile=$data_path/__plasma.part.bam
-tmp_path=/tmp
 readLength=100
 plasmaFetusRate=0.13
+tmp_path=/tmp
+if [[ -n "$TMPDIR" ]]; then
+    tmp_path=$TMPDIR
+fi
 
 chromosome=$1
 begin=$2
@@ -42,9 +45,9 @@ tmp_region=$chromosome':'$(($begin - 1000))'-'$(($end + 1000))
 samtools mpileup $plasmaFile -q10 -Q10 -r $tmp_region | awk '{print $2, $4}' > $tmp_pileup_file
 
 echo "Copying all the reads in the region..."
-samtools view $bamfile $region > $raw_reads_file
+samtools view $bamfile $region -o $raw_reads_file
 # Copying the header
-samtools view -H $bamfile $region > $inside_sam_file
+samtools view -H $bamfile $region -o $inside_sam_file
 
 echo "Filtering for the correct haplotype..."
 pypy $exec_path/duplication.py $raw_reads_file $phase_sites $haplotype > $filtered_res_file
@@ -52,20 +55,21 @@ pypy $exec_path/duplication.py $raw_reads_file $phase_sites $haplotype > $filter
 echo "Down sampling the results..."
 numReads=`wc -l $filtered_res_file | awk '{print $1}'`
 pypy $exec_path/duplication_down_sampler.py $filtered_res_file $numReads $readLength $tmp_pileup_file $plasmaFetusRate $region >> $inside_sam_file
-samtools view -S -b $inside_sam_file > $inside_bam_file
+samtools view -S -b $inside_sam_file -o $inside_bam_file
 
 echo "Merging"
 # Outside has the headers
-samtools merge -f $plasma_file_prefix.bam $plasmaFile $inside_bam_file
-echo "Sorting"
-samtools sort $plasma_file_prefix.bam $plasma_file_prefix.sort
+samtools merge -f $plasma_file_prefix.sort.bam $plasmaFile $inside_bam_file
+#echo "Sorting"
+#samtools sort $plasma_file_prefix.bam $plasma_file_prefix.sort
 echo "Indexing"
 samtools index $plasma_file_prefix.sort.bam
 
 #move to results_path
-mv $plasma_file_prefix.sort.bam* $results_path/
+mv $plasma_file_prefix.sort.bam $results_path/
+mv $plasma_file_prefix.sort.bam.bai $results_path/
 
-rm $plasma_file_prefix.bam
+#rm $plasma_file_prefix.bam
 rm $tmp_pileup_file $raw_reads_file $filtered_res_file $inside_sam_file $inside_bam_file 
 
 echo "sim_duplicate script - DONE."
