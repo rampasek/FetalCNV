@@ -6,9 +6,9 @@ import argparse
 k=1000
 beanSizes= [0, 100, 500, 1000, 10000] 
 
-truePos= {'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'zsum':[0, 0, 0, 0, 0]}
-falsePos={'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'zsum':[0, 0, 0, 0, 0]} 
-total= {'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'zsum':[0, 0, 0, 0, 0]}
+truePos= {'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'sum':[0, 0, 0, 0, 0]}
+falsePos={'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'sum':[0, 0, 0, 0, 0]} 
+total= {'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'sum':[0, 0, 0, 0, 0]}
 
 beanSizes= map(lambda x: x*k, beanSizes)
 
@@ -59,19 +59,19 @@ def main():
             sz=reg[1]-reg[0]
             if int(parts[2])!=int(parts[5]) and ((rawHeader.find('cvrg')==-1 and (int(parts[5])==3)) or (rawHeader.find('cvrg')!=-1 and int(parts[5])==1)):
                 falsePos[nameMap[rawHeader]][findIndex(sz)]+=1
-                falsePos['zsum'][findIndex(sz)]+=1
+                falsePos['sum'][findIndex(sz)]+=1
         if (line.startswith('Recall')):
             truePos[nameMap[rawHeader]][findIndex(simSZ)]+= int(line.split('\t')[1])
-            truePos['zsum'][findIndex(simSZ)]+= int(line.split('\t')[1])
+            truePos['sum'][findIndex(simSZ)]+= int(line.split('\t')[1])
         if (line.startswith('Recall')):
             total[nameMap[rawHeader]][findIndex(simSZ)]+=1
-            total['zsum'][findIndex(simSZ)]+=1
+            total['sum'][findIndex(simSZ)]+=1
 #        if (line.startswith('Recall')):
 #            if int(line.split('\t')[1])==0 and simSZ==1000*k:
 #                print rawHeader
 
 
-    print 'A',
+    print '*',
     print "\t",
     print 'Size :',
     print "\t",
@@ -79,7 +79,8 @@ def main():
     for (i,num) in enumerate(beanSizes):
             print num/k,
             print "k\t",
-    for key in total:
+
+    for key in sorted(total.keys()):
         print ''
         print key,
         print '\tRecall :',
