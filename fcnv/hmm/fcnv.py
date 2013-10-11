@@ -250,6 +250,10 @@ def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, fi
     print 'Posterior: ',(max_posterior_correct*100.)/len(vp), '% OK'
     print 'LikeliH. : ',(ll_correct*100.)/len(vp), '% OK'
     
+    if len(vp) != len(ground_truth) or len(pp) != len(ground_truth):
+        print "UNEXPECTED ERROR: different prediction lengths:", len(vp), len(pp), len(ground_truth)
+        return
+    
     for i in [2]: #, 2, 4, 8, 16]:
         #precision and recall
         print "sensitivity: 1 /", i
