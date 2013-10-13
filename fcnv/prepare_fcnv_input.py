@@ -76,7 +76,6 @@ def main():
         line = line.rstrip('\n').split('\t')
         if line[0] not in centromeres.keys(): centromeres[line[0]] = []
         centromeres[line[0]] += [(int(line[1]), int(line[2]))]
-        
     
     #allele counts in plasma samples for particular positions
     loci = dict()
@@ -119,6 +118,31 @@ def main():
             skipped_in_centromere += 1
             continue
         
+        #get +/-20MB window begin and end
+        wbegin = reg_begin - 20000000
+        wend = reg_end + 20000000
+        tel1_end = centromeres[processed_chr][0][1]
+        cent_beg = centromeres[processed_chr][1][0]
+        cent_end = centromeres[processed_chr][1][1]
+        tel2_beg = centromeres[processed_chr][2][0]
+        #check centromiers for wbegin 
+        if wbegin <= tel1_end: 
+            wend = wend + tel1_end - wbegin
+            wbegin = tel1_end
+        if cent_beg <= wbegin <= cent_end:
+            wend = wend + cent_end - wbegin
+            wbegin = cent_beg
+            
+        #check centromiers for wend
+        if wend >= tel2_beg:
+            wbegin = wbegin - (wend-tel2_beg)
+            wend = tel2_beg
+        if cent_beg <= wend <= cent_end:
+            wbegin = wbegin - (wend-cent_beg)    
+            wend = cent_beg
+        
+        if not (wbegin <= pos <= wend): continue
+        
         #take note that for this position we need to get allele counts in plasma samaples
         alleles = (snps[M], snps[P], (ref, alt))
         loci[pos] = alleles
@@ -131,8 +155,8 @@ def main():
     #cdir = os.getcwd() + '/'
     tmp_vcf_prefix = tmp_dir + '/__tmp' + plasma_id
     pile_prefix = res_path + '/' + plasma_id
-    cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} {4} {5} {6}".format(tmp_pos_file_name, \
-        args.filenames[PLR], args.filenames[MR], args.filenames[PR], tmp_vcf_prefix, args.filenames[BED], pile_prefix)
+    cmd = "span_samtools.sh /filer/hg19/hg19.fa {0} {1} {2} {3} {4} {5} {6} {7} {8}".format(tmp_pos_file_name, \
+        args.filenames[PLR], args.filenames[MR], args.filenames[PR], tmp_vcf_prefix, wbegin, wend, processed_chr, pile_prefix)
     os.system(cmd)
     
     posInfo = [dict() for i in range(4)]
