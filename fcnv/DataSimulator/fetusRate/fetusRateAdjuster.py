@@ -169,27 +169,27 @@ def main():
                     pos_qr += 1
 
 
-        count = 0
+        ALLcount = 0
+        Fcount = 0
         if hitmap_f["HA"]:
-            count += originalFetusRate/2.
+            ALLcount += originalFetusRate/2.
+            Fcount += originalFetusRate/2.
         if hitmap_f["HB"]:
-            count += originalFetusRate/2.
+            ALLcount += originalFetusRate/2.
+            Fcount += originalFetusRate/2.
         if hitmap_m["HA"]:
-            count += (1-originalFetusRate)/2.
+            ALLcount += (1-originalFetusRate)/2.
         if hitmap_m["HB"]:
-            count += (1-originalFetusRate)/2.
-
-        fetusHit=0.;
-        if hitmap_f["HA"]:
-            fetusHit+=.5
-        if hitmap_f["HB"]:
-            fetusHit+=.5
-        if count == 0:
+            ALLcount += (1-originalFetusRate)/2.
+        
+        
+        if ALLcount == 0:
             if random.random() > (originalFetusRate-targetFetusRate):
                 print read,
             continue
-            
-        rate = fetusHit*(originalFetusRate-targetFetusRate)/count
+
+        probComesFromFetus = Fcount / float(ALLcount)
+        rateOfRejection = probComesFromFetus * (originalFetusRate-targetFetusRate) / originalFetusRate
         if random.random() > rate:
             print read,
 
