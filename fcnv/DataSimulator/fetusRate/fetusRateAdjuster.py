@@ -133,6 +133,8 @@ def main():
 
         # Count the snips for each haplotype using the cigar string
         for o in op:
+            if snip==len(snips_f) or snips_f[snip]['chr']!=parsed_read['chr']:
+                break
             while pos_db>snips_f[snip]['pos'] and snip<len(snips_f) and snips_f[snip]['chr']==parsed_read['chr']:
                 snip += 1
             if snip==len(snips_f) or snips_f[snip]['chr']!=parsed_read['chr']:
@@ -160,6 +162,8 @@ def main():
                         if snips_m[snip]['HB']!=plasma:
                             hitmap_m["HB"]=False
                         snip += 1
+                        if snip==len(snips_f) or snips_f[snip]['chr']!=parsed_read['chr']:
+                            break
 
                     pos_db += 1
                     pos_qr += 1
