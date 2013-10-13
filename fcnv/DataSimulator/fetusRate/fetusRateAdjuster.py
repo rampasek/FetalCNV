@@ -190,7 +190,7 @@ def main():
 
         probComesFromFetus = Fcount / float(ALLcount)
         rateOfRejection = probComesFromFetus * (originalFetusRate-targetFetusRate) / originalFetusRate
-        if random.random() > rate:
+        if random.random() > rateOfRejection:
             print read,
 
 if __name__ == '__main__':
