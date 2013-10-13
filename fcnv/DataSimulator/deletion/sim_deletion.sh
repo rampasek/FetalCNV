@@ -24,6 +24,10 @@ begin=$2
 end=$(($2 + $3))
 haplotype=$4
 
+regionComplementA=$chromosome':1-'$((begin-readLength))
+regionComplementB=$chromosome':'$((end+readLength))
+region=$chromosome':'$begin'-'$end
+
 pid=$$
 logfile=$results_path/log_simDel.$pid.log
 exec > $logfile 2>&1
@@ -36,10 +40,6 @@ inside_bam_file=$tmp_path/inside$pid.bam
 outsideA_bam_file=$tmp_path/outsideA$pid.bam
 outsideB_bam_file=$tmp_path/outsideB$pid.bam
 plasma_file_prefix=$tmp_path/$haplotype-$region-delete
-
-regionComplementA=$chromosome':1-'$((begin-readLength))
-regionComplementB=$chromosome':'$((end+readLength))
-region=$chromosome':'$begin'-'$end
 
 echo "SimDeletion: $region $haplotype $source"
 date

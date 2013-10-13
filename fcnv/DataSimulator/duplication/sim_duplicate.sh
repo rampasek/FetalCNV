@@ -102,7 +102,7 @@ samtools view -S -b $inside_sam_file -o $inside_bam_file
 
 echo "Merging"
 # Outside has the headers
-samtools merge -f $plasma_file_prefix.sort.bam $plasmaFile $inside_bam_file
+samtools merge -f $plasma_file_prefix.sort.bam $tmp_plasma $inside_bam_file
 #echo "Sorting"
 #samtools sort $plasma_file_prefix.bam $plasma_file_prefix.sort
 echo "Indexing"
@@ -112,7 +112,7 @@ samtools index $plasma_file_prefix.sort.bam
 mv $plasma_file_prefix.sort.bam* $results_path/
 
 #rm $plasma_file_prefix.bam
-rm $tmp_pileup_file $raw_reads_file $filtered_res_file $inside_sam_file $inside_bam_file $tmp_plasma
+rm $tmp_pileup_file $raw_reads_file $filtered_res_file $inside_sam_file $inside_bam_file $tmp_plasma*
 
 echo "sim_duplicate script - DONE."
 
