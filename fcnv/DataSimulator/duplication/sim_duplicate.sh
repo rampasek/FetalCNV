@@ -7,13 +7,21 @@ data_path=$6
 results_path=$7
 exec_path=$8
 phase_sites=$data_path/trio.phase.vcf
-bamfile=$data_path'/__'$4'.part.bam'
+bamfile=$data_path/__$4.part.bam
+local_bam=/tmp/data/__$4.part.bam
 plasmaFile=$data_path/__plasma.part.bam
+local_plasma=/tmp/data/__plasma.part.bam
 readLength=100
 plasmaFetusRate=0.13
 tmp_path=/tmp
 if [[ -n "$TMPDIR" ]]; then
     tmp_path=$TMPDIR
+fi
+if [[ -r "$local_plasma" ]]; then
+    plasmaFile=$local_plasma
+fi
+if [[ -r "$local_bam" ]]; then
+    bamfile=$local_bam
 fi
 
 chromosome=$1
@@ -66,8 +74,7 @@ echo "Indexing"
 samtools index $plasma_file_prefix.sort.bam
 
 #move to results_path
-mv $plasma_file_prefix.sort.bam $results_path/
-mv $plasma_file_prefix.sort.bam.bai $results_path/
+mv $plasma_file_prefix.sort.bam* $results_path/
 
 #rm $plasma_file_prefix.bam
 rm $tmp_pileup_file $raw_reads_file $filtered_res_file $inside_sam_file $inside_bam_file 
