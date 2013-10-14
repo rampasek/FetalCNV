@@ -19,6 +19,7 @@ if [[ -n "$TMPDIR" ]]; then
 fi
 if [[ -r "$local_plasma" ]]; then
     plasmaFile=$local_plasma
+    echo $plasmaFile
 fi
 if [[ -r "$local_bam" ]]; then
     bamfile=$local_bam
@@ -80,17 +81,17 @@ fi
 window=chr1:$wbegin-$wend
 echo "window: $window"
 
-samtools view -b $bamfile $window -o $tmp_plasma
+samtools view -b $plasmaFile $window -o $tmp_plasma
 samtools index $tmp_plasma
 
 echo "Pileuping plasma reads in the region..."
 tmp_region=$chromosome':'$(($begin - 1000))'-'$(($end + 1000))
-samtools mpileup $plasmaFile -q10 -Q10 -r $tmp_region | awk '{print $2, $4}' > $tmp_pileup_file
+samtools mpileup $tmp_plasma -q10 -Q10 -r $tmp_region | awk '{print $2, $4}' > $tmp_pileup_file
 
 echo "Copying all the reads in the region..."
-samtools view $tmp_plasma $region -o $raw_reads_file
+samtools view $bamfile $region -o $raw_reads_file
 # Copying the header
-samtools view -H $tmp_plasma $region -o $inside_sam_file
+samtools view -H $bamfile $region -o $inside_sam_file
 
 echo "Filtering for the correct haplotype..."
 pypy $exec_path/duplication.py $raw_reads_file $phase_sites $haplotype > $filtered_res_file

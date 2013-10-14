@@ -7,16 +7,17 @@ data_path=$5
 results_path=$6
 exec_path=$7
 phase_sites=$data_path/trio.phase.vcf
-bamfile=$data_path/__plasma.part.bam
-local_bam=/tmp/fcnv/__plasma.part.bam
+plasmaFile=$data_path/__plasma.part.bam
+local_plasma=/tmp/fcnv/__plasma.part.bam
 readLength=100
 plasmaFetusRate=0.13
 tmp_path=/tmp
 if [[ -n "$TMPDIR" ]]; then
     tmp_path=$TMPDIR
 fi
-if [[ -r "$local_bam" ]]; then
-    bamfile=$local_bam
+if [[ -r "$local_plasma" ]]; then
+    plasmaFile=$local_plasma
+    echo $plasmaFile
 fi
 
 chromosome=$1
@@ -51,14 +52,12 @@ if ((wbegin <= 2300000))
 then   
     ((wend=$wend+2300000-$wbegin))
     wbegin=2300000
-    echo $wbegin $wend
 fi
 
 if ((120600000 <= wbegin && wbegin <= 147000000))
 then   
     ((wend=$wend+147000000-$wbegin))
     wbegin=147000000
-    echo $wbegin $wend
 fi
 
 #check centromiers for wend
@@ -66,20 +65,18 @@ if ((wend >= 243700000))
 then   
     (( wbegin= $wbegin - ($wend-243700000) ))
     wend=243700000
-    echo $wbegin $wend
 fi
 
 if ((120600000 <= wend && wend <= 147000000))
 then   
     (( wbegin= $wbegin - ($wend-120600000) ))
     wend=120600000
-    echo $wbegin $wend
 fi
 
 window=chr1:$wbegin-$wend
 echo "window: $window"
 
-samtools view -b $bamfile $window -o $tmp_plasma
+samtools view -b $plasmaFile $window -o $tmp_plasma
 samtools index $tmp_plasma
 
 
@@ -108,7 +105,7 @@ samtools index $plasma_file_prefix.sort.bam
 mv $plasma_file_prefix.sort.bam* $results_path/
 
 #rm $plasma_file_prefix.bam
-rm $outsideA_bam_file $outsideB_bam_file $inside_sam_file $inside_bam_file $raw_reads_file $tmp_plasma
+rm $outsideA_bam_file $outsideB_bam_file $inside_sam_file $inside_bam_file $raw_reads_file $tmp_plasma*
 
 echo "sim_deletion script - DONE."
 

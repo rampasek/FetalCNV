@@ -70,7 +70,9 @@ def main():
         if length!=0 and res["pred"]==res["real"]:
             print_buffer += str(length)+'\n'
             length=0
-
+    if length!=0:
+        print_buffer += str(length)+'\n'
+            
     length=0
     badCalls=0
     lastCH='!'
@@ -105,8 +107,11 @@ def main():
         mRecall=1
     if (recall=='NAN'):
         mRecall='NAN'
-
-    if badCalls+mRecall==0:
+    
+    if recall == 'NAN':
+        mRecall=1
+    
+    if badCalls == 0 and (mRecall==0 or mRecall=='NAN'):
         mPrecision=1
     else:
         mPrecision=float(mRecall)/(badCalls+mRecall)
@@ -119,6 +124,7 @@ def main():
 
     if len(print_buffer)!=0:
         print print_buffer,
+    
         
     inTheRegion=False
     for res in results:
