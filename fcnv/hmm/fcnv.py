@@ -134,8 +134,8 @@ def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, fi
     #el = fcnv.extendedLabeling(samples, M, P, mixture)
     #el = fcnv.mixedDecoding(samples, M, P, mixture) 
     vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture)
-    posterior = fcnv.posteriorDecoding(samples, M, P, MSC, PSC, mixture)
-    byLL = fcnv.likelihoodDecoding(samples, M, P, MSC, PSC, mixture)    
+#    posterior = fcnv.posteriorDecoding(samples, M, P, MSC, PSC, mixture)
+#    byLL = fcnv.likelihoodDecoding(samples, M, P, MSC, PSC, mixture)    
     
     date = datetime.now().strftime('%m-%d-%H-%M')
     #fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')
@@ -147,111 +147,111 @@ def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, fi
     
     #labeling_correct = 0
     viterbi_correct = 0
-    max_posterior_correct = 0
-    ll_correct = 0
+#    max_posterior_correct = 0
+#    ll_correct = 0
     #states distributions for posterior and pure likelihood
-    posterior_dist = [0 for x in range(num_patt)]
-    ll_dist = [0 for x in range(num_patt)]
+#    posterior_dist = [0 for x in range(num_patt)]
+#    ll_dist = [0 for x in range(num_patt)]
     #other stats
-    state_stats = [0 for x in range(num_patt)]
+#    state_stats = [0 for x in range(num_patt)]
     #state_correct_el = [0 for x in range(num_patt)]
     state_correct_vp = [0 for x in range(num_patt)]
-    state_correct_pp = [0 for x in range(num_patt)]
-    state_correct_ll = [0 for x in range(num_patt)]
-    pp = []
-    tableLH = []
-    avg_distance = 0.
-    distance_set = {}
-    ll_misclass = [[0]*num_patt for x in range(num_patt)]
-    state3_stats = [{ (0,0):0, (0,1):0, (1,0):0, (1,1):0 } for x in range(num_patt)]
+#    state_correct_pp = [0 for x in range(num_patt)]
+#    state_correct_ll = [0 for x in range(num_patt)]
+#    pp = []
+#    tableLH = []
+#    avg_distance = 0.
+#    distance_set = {}
+#    ll_misclass = [[0]*num_patt for x in range(num_patt)]
+#    state3_stats = [{ (0,0):0, (0,1):0, (1,0):0, (1,1):0 } for x in range(num_patt)]
     for i in xrange(len(vp)):
-        state_stats[ground_truth[i]] += 1
-        post = []
-        for x in posterior[i]:   
-            post.append(x[1])
-        pp.append(post[0])
-        
-        ll_state = []
-        ll_value = []
-        for x in byLL[i]:   
-            ll_state.append(x[1])
-            ll_value.append(x[0])
-        tableLH.append(ll_value)
+#        state_stats[ground_truth[i]] += 1
+#        post = []
+#        for x in posterior[i]:   
+#            post.append(x[1])
+#        pp.append(post[0])
+#        
+#        ll_state = []
+#        ll_value = []
+#        for x in byLL[i]:   
+#            ll_state.append(x[1])
+#            ll_value.append(x[0])
+#        tableLH.append(ll_value)
         
         #print the results
         #print >>fout, i+1, samples[i], M[i], list(MSC[i]), P[i], list(PSC[i]), vp[i], post[0], [ (ll_state[x], int(ll_value[x]*1e5)/1.e5) for x in range(len(ll_state))]
-        print >>annot_out, snp_positions[i], ground_truth[i], vp[i], v_state_path[i]
+        print >>annot_out, snp_positions[i], ground_truth[i], vp[i] #, v_state_path[i]
             
         #print ground_truth[i], vp[i], pp[i], '|', post
         #labeling_correct += int(ground_truth[i] == el[i])
         #state_correct_el[ground_truth[i]] += int(ground_truth[i] == el[i])
         viterbi_correct += int(ground_truth[i] == vp[i])
         state_correct_vp[ground_truth[i]] += int(ground_truth[i] == vp[i])
-        max_posterior_correct += int(ground_truth[i] == post[0])
-        state_correct_pp[ground_truth[i]] += int(ground_truth[i] == post[0])
-        x = post.index(ground_truth[i])
-        posterior_dist[x] += 1
+#        max_posterior_correct += int(ground_truth[i] == post[0])
+#        state_correct_pp[ground_truth[i]] += int(ground_truth[i] == post[0])
+#        x = post.index(ground_truth[i])
+#        posterior_dist[x] += 1
         
-        #for pure likelihood
-        threshold = .1
-        x = ll_state.index(ground_truth[i])
-        ll_diff = abs(ll_value[x]-ll_value[0])
-        if ll_diff < threshold:
-            ll_dist[0] += 1
-            #ll_correct += int(ground_truth[i] == ll_state[0])
-            ll_correct += 1
-            #state_correct_ll[ground_truth[i]] += int(ground_truth[i] == ll_state[0])
-            state_correct_ll[ground_truth[i]] += 1
-        else:            
-            ll_dist[x] += 1
-            for j in range(num_patt):
-                if ll_value[x] - ll_value[j] < 0.01:
-                #if abs(ll_value[0] - ll_value[j]) < 1.:
-                    ll_misclass[ground_truth[i]][ll_state[j]] += 1
-                    if ground_truth[i] == 3:
-                        m_poly = M[i][0] == M[i][1]
-                        p_poly = P[i][0] == P[i][1]
-                        state3_stats[ll_state[j]][(m_poly, p_poly)] += 1
-        
-        avg_distance += ll_diff
-        int_distance = int(round(ll_diff))
-        if int_distance not in distance_set:
-            distance_set[int_distance] = 1
-        else:
-            distance_set[int_distance] += 1
-        #print ground_truth[i], vp[i], post, '|', post.index(int(ground_truth[i]))
+#        #for pure likelihood
+#        threshold = .1
+#        x = ll_state.index(ground_truth[i])
+#        ll_diff = abs(ll_value[x]-ll_value[0])
+#        if ll_diff < threshold:
+#            ll_dist[0] += 1
+#            #ll_correct += int(ground_truth[i] == ll_state[0])
+#            ll_correct += 1
+#            #state_correct_ll[ground_truth[i]] += int(ground_truth[i] == ll_state[0])
+#            state_correct_ll[ground_truth[i]] += 1
+#        else:            
+#            ll_dist[x] += 1
+#            for j in range(num_patt):
+#                if ll_value[x] - ll_value[j] < 0.01:
+#                #if abs(ll_value[0] - ll_value[j]) < 1.:
+#                    ll_misclass[ground_truth[i]][ll_state[j]] += 1
+#                    if ground_truth[i] == 3:
+#                        m_poly = M[i][0] == M[i][1]
+#                        p_poly = P[i][0] == P[i][1]
+#                        state3_stats[ll_state[j]][(m_poly, p_poly)] += 1
+#        
+#        avg_distance += ll_diff
+#        int_distance = int(round(ll_diff))
+#        if int_distance not in distance_set:
+#            distance_set[int_distance] = 1
+#        else:
+#            distance_set[int_distance] += 1
+#        #print ground_truth[i], vp[i], post, '|', post.index(int(ground_truth[i]))
     
     
-    posterior_dist = np.array(posterior_dist)
-    posterior_dist = (posterior_dist*100.)/len(vp)    
-    print posterior_dist  
-    ll_dist = np.array(ll_dist)
-    ll_dist = (ll_dist*100.)/len(vp)    
-    print ll_dist
-    print "stats of misclassified by LL:"
-    ll_misclass = np.array(ll_misclass, float)
-    for i in range(len(ll_misclass)):
-        ll_misclass[i] = 100.*ll_misclass[i]/float(state_stats[i])
-        for j in range(len(ll_misclass[i])): ll_misclass[i][j] = round(ll_misclass[i][j]*100)/100.
-    print ll_misclass
+#    posterior_dist = np.array(posterior_dist)
+#    posterior_dist = (posterior_dist*100.)/len(vp)    
+#    print posterior_dist  
+#    ll_dist = np.array(ll_dist)
+#    ll_dist = (ll_dist*100.)/len(vp)    
+#    print ll_dist
+#    print "stats of misclassified by LL:"
+#    ll_misclass = np.array(ll_misclass, float)
+#    for i in range(len(ll_misclass)):
+#        ll_misclass[i] = 100.*ll_misclass[i]/float(state_stats[i])
+#        for j in range(len(ll_misclass[i])): ll_misclass[i][j] = round(ll_misclass[i][j]*100)/100.
+#    print ll_misclass
     #print "mistakes for state3: "
     #for x in range(7):
     #    print x,":", state3_stats[x]
-    print "stats  : ", state_stats
+#    print "stats  : ", state_stats
     #print "mplabel: ", state_correct_el
     print "viterbi: ", state_correct_vp
-    print "mposter: ", state_correct_pp
-    print "byLHood: ", state_correct_ll
-    print "avgDist: ", avg_distance / len(vp) 
-    print "dist_set:", distance_set
+#    print "mposter: ", state_correct_pp
+#    print "byLHood: ", state_correct_ll
+#    print "avgDist: ", avg_distance / len(vp) 
+#    print "dist_set:", distance_set
     
     #print 'Labeling : ',(labeling_correct*100.)/len(vp), '% OK'
     print 'Viterbi  : ',(viterbi_correct*100.)/len(vp), '% OK'
-    print 'Posterior: ',(max_posterior_correct*100.)/len(vp), '% OK'
-    print 'LikeliH. : ',(ll_correct*100.)/len(vp), '% OK'
+#    print 'Posterior: ',(max_posterior_correct*100.)/len(vp), '% OK'
+#    print 'LikeliH. : ',(ll_correct*100.)/len(vp), '% OK'
     
-    if len(vp) != len(ground_truth) or len(pp) != len(ground_truth):
-        print "UNEXPECTED ERROR: different prediction lengths:", len(vp), len(pp), len(ground_truth)
+    if len(vp) != len(ground_truth):
+        print "UNEXPECTED ERROR: different prediction lengths:", len(vp), len(ground_truth)
         return
     
     for i in [2]: #, 2, 4, 8, 16]:
@@ -274,13 +274,13 @@ def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, fi
         print not_called
         computeStats(ok_called, not_called, "VR", num_patt)
         
-        #recall max posterior
-        called_p, real, ok_called, not_called = computeEval(ground_truth, pp, i, num_patt)       
-        print "mposter recall   : ", called_p, '/',  real, " => ",
-        print "%0.3f" % (called_p*100./real), "%"
-        print ok_called
-        print not_called
-        computeStats(ok_called, not_called, "PR", num_patt)
+#        #recall max posterior
+#        called_p, real, ok_called, not_called = computeEval(ground_truth, pp, i, num_patt)       
+#        print "mposter recall   : ", called_p, '/',  real, " => ",
+#        print "%0.3f" % (called_p*100./real), "%"
+#        print ok_called
+#        print not_called
+#        computeStats(ok_called, not_called, "PR", num_patt)
         
         #precision Labeling 
         #correct_l, claimed_l, ok_prediction, wr_prediction = computeEval(el, ground_truth, i, num_patt)
@@ -298,23 +298,23 @@ def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, fi
         print wr_prediction
         computeStats(ok_prediction, wr_prediction, "VP", num_patt)
         
-        #precision max posterior
-        correct_p, claimed_p, ok_prediction, wr_prediction = computeEval(pp, ground_truth, i, num_patt)
-        print "mposter precision: ", correct_p , '/',  claimed_p, " => ", 
-        print "%0.3f" % (correct_p*100./claimed_p), "%"
-        print ok_prediction
-        print wr_prediction
-        computeStats(ok_prediction, wr_prediction, "PP", num_patt)
+#        #precision max posterior
+#        correct_p, claimed_p, ok_prediction, wr_prediction = computeEval(pp, ground_truth, i, num_patt)
+#        print "mposter precision: ", correct_p , '/',  claimed_p, " => ", 
+#        print "%0.3f" % (correct_p*100./claimed_p), "%"
+#        print ok_prediction
+#        print wr_prediction
+#        computeStats(ok_prediction, wr_prediction, "PP", num_patt)
         
         #format for LaTeX tabular
         #print "%0.3f" % ((viterbi_correct*100.)/len(vp)), "\%"
         #print "%0.3f" % ((max_posterior_correct*100.)/len(vp)), "\%"
         #print "%0.3f" % (called_l*100./real), "\%"
         print "%0.3f" % (called_v*100./real), "\%"
-        print "%0.3f" % (called_p*100./real), "\%"
+#        print "%0.3f" % (called_p*100./real), "\%"
         #print "%0.3f" % (correct_l*100./claimed_l), "\%"
         print "%0.3f" % (correct_v*100./claimed_v), "\%"
-        print "%0.3f" % (correct_p*100./claimed_p), "\%"
+#        print "%0.3f" % (correct_p*100./claimed_p), "\%"
         
         
 def main():

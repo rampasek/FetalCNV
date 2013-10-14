@@ -558,6 +558,73 @@ class FCNV(object):
         '''self.distributionCache[code] = dist'''
         return dist
     
+    def allelesDistributionExtended(self, Malleles, Mcounts, Palleles, Pcounts, pattern, mix):
+        """Compute nucleotides distribution in maternal plasma for a position with
+        given maternal and fetal alleles, assuming the given fetal admixture.
+        
+        Arguments:
+        maternal -- maternal alleles
+        paternal -- paternal alleles
+        mix -- fetal admixture ratio
+        returns list(floats) -- list of nucleotides probabilities
+        """
+
+#        Falleles = []
+#        #maternaly inherited
+#        for mHpatt in pattern[0]:
+#            Falleles.append(Malleles[mHpatt])
+#        #paternaly inherited
+#        for pHpatt in pattern[1]:
+#            Falleles.append(Palleles[pHpatt])
+            
+        numFalleles = float(len(pattern[0]) + len(pattern[1]))
+        numMinherited = len(pattern[0])
+        numPinherited = len(pattern[1])
+        numMalleles = float(len(Malleles))
+        sumMcount = float(sum(Mcounts))
+        sumPcount = float(sum(Pcounts))
+        
+        #adjust mixture to currently considered event (deletion, duplication, normal)
+        adjusted_fetal_admix = mix/2. * numFalleles
+        adjusted_maternal_admix = (1.-mix)/2. * numMalleles
+        cmix = adjusted_fetal_admix / (adjusted_maternal_admix + adjusted_fetal_admix)
+        
+        dist = {}
+        for nuc in self.nucleotides: dist[nuc] = 0.
+        alphaM = 32
+        alphaP = 39
+        
+        #fraction that is trully from mother DNA
+        for i, nuc in enumerate(Malleles):
+            dist[nuc] += (alphaM + Mcounts[i]) / float(2*alphaM + sumMcount) * (1.-cmix)
+            
+        #fraction that is fetal but maternaly inherited
+        for mHpatt in pattern[0]:
+            nuc = Malleles[mHpatt]
+            if numMinherited == 2 and pattern[0][0] != pattern[0][1]:
+                #if both haplotypes are inherited, use the maternal seq. ratio
+                dist[nuc] += (alphaM + Mcounts[mHpatt]) / float(2*alphaM + sumMcount) * (cmix*2./numFalleles)
+            else:
+                dist[nuc] += cmix / numFalleles
+            
+        #fraction that is fetal but paternaly inherited
+        for pHpatt in pattern[1]:
+            nuc = Palleles[pHpatt]
+            if numPinherited == 2 and pattern[1][0] != pattern[1][1]:
+                #if both haplotypes are inherited, use the paternal seq. ratio
+                dist[nuc] += (alphaP + Pcounts[pHpatt]) / float(2*alphaP + sumPcount) * (cmix*2./numFalleles)
+            else:
+                dist[nuc] += cmix / numFalleles
+        
+        dist_list = [dist[nuc] for nuc in self.nucleotides]
+        #print pattern, Malleles, Mcounts, Palleles, Pcounts,':', dist_list, sum(dist_list)
+        
+        #normalize
+        #summ = float(sum(dist_list))
+        #dist_list = [dist_list[i] / summ for i in range(len(dist_list)) ]
+
+        return dist_list
+    
     def logGaussian(self, x, mus, cov_diagonal):
         '''
         log probability of x ~ N(mu, cov)
@@ -582,23 +649,25 @@ class FCNV(object):
     def logLHGivenStateWCoverage(self, pos_ind, nuc_counts, maternal_alleles, paternal_alleles,\
            maternal_sq_counts, paternal_sq_counts, mix, state):
         
-        pattern = state.phased_pattern
-
+        if state.inheritance_pattern == (2, 0) or state.inheritance_pattern == (0, 2): return -50
+        
+        #pattern = state.phased_pattern
         #mus = self.allelesMeans(nuc_counts, maternal_alleles, paternal_alleles, maternal_sq_counts, paternal_sq_counts, pattern, mix)
         
         pattern = state.phased_pattern
-        fetal_alleles = []
-        fetal_pseudocounts = []
-        for mHpatt in pattern[0]:
-            fetal_alleles.append(maternal_alleles[mHpatt])
-            fetal_pseudocounts.append(maternal_sq_counts[mHpatt])
-        for pHpatt in pattern[1]:
-            fetal_alleles.append(paternal_alleles[pHpatt])
-            fetal_pseudocounts.append(paternal_sq_counts[pHpatt])
-        ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
-        
+#        fetal_alleles = []
+#        fetal_pseudocounts = []
+#        for mHpatt in pattern[0]:
+#            fetal_alleles.append(maternal_alleles[mHpatt])
+#            fetal_pseudocounts.append(maternal_sq_counts[mHpatt])
+#        for pHpatt in pattern[1]:
+#            fetal_alleles.append(paternal_alleles[pHpatt])
+#            fetal_pseudocounts.append(paternal_sq_counts[pHpatt])
+#        ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
+        ps = self.allelesDistributionExtended(maternal_alleles, maternal_sq_counts, paternal_alleles, paternal_sq_counts, pattern, mix)
+
         N = sum(nuc_counts)
-        avg_doc = 67. #TODO: make this a parameter
+        avg_doc = 70. #TODO: make this a parameter
         norm_coef = avg_doc / N
         
         mus = [ avg_doc * ps[i] for i in range(4) ]
@@ -608,7 +677,7 @@ class FCNV(object):
         ratios_prob = self.logGaussian(nuc_counts, mus, cov_diagonal)
         result = ratios_prob
 
-        #print sum(nuc_counts), ratios_prob, result
+        #print sum(nuc_counts), ratios_prob
         if result < -15: result = -15
         
         return result
