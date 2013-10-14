@@ -1,9 +1,4 @@
-\documentclass[10pt,a4paper]{article}
-\usepackage[utf8]{inputenc}
-\usepackage{amsmath}
-\usepackage{amsfonts}
-\usepackage{amssymb}
-\begin{document}
+\section{Simulations}
 	In our experiments, we used the sequencing data of family trio (?) and the plasma DNA sample (?). Using these data, we simulated plasma data sets with duplications and deletions of different sizes and locations.
 
 	In order to simulate a duplication, either maternal or paternal origin, we selected reads from the parent's sequencing data which were located in the intended region. Using the parent's phasing information, we filtered the reads for the ones which match the target haplotype of the parent. For the reads which either didn't include any SNPs or only had homozygous SNPs, selection was performed randomly with a probability of $0.5$. These reads were mixed with the plasma data after getting down sampled according to the plasma coverage at the intended region and the cell-free fetal DNA rate in the plasma.
@@ -20,4 +15,3 @@
 	 $$p_f(read)= \frac{ \frac{r_f}{2}N_f } { \frac{1-r_f}{2} N_m + \frac{r_f}{2} N_f}$$
 	 	 
 	Where $0 \leq N_f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read..
- \end{document}
