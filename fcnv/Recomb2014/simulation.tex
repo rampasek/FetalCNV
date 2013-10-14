@@ -1,0 +1,23 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\begin{document}
+	In our experiments, we used the sequencing data of family trio (?) and the plasma DNA sample (?). Using these data, we simulated plasma data sets with duplications and deletions of different sizes and locations.
+
+	In order to simulate a duplication, either maternal or paternal origin, we selected reads from the parent's sequencing data which were located in the intended region. Using the parent's phasing information, we filtered the reads for the ones which match the target haplotype of the parent. For the reads which either didn't include any SNPs or only had homozygous SNPs, selection was performed randomly with a probability of $0.5$. These reads were mixed with the plasma data after getting down sampled according to the plasma coverage at the intended region and the cell-free fetal DNA rate in the plasma.
+	
+	For deletions, reads were filtered and removed from the plasma sequencing data at the aimed region according to the probability of that read belonging to the target fetal haplotype. To find this probability we used the phasing information to check which maternal and fetal haplotypes match all the SNPs in the read. If none of the four haplotypes matched the read, we removed the read with the probability of $\frac{r_f}{2}$ where $r_f$ is the cell-free fetal DNA rate in the plasma. If the fetal target haplotype matched the read, it was removed with the probability of:
+	$$\frac{ \frac{r_f}{2} } { \frac{1-r_f}{2} N_m + \frac{r_f}{2} N_f}$$
+	Where $0 < N_f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read.
+	
+	We also down sampled the fetal reads in the plasma with a similar approach to deletion simulation, to conduct experiments with lower cell-free fetal DNA rate. For this purpose, each read sequence in the plasma sample was removed with the probability of:
+	 $$p_f(read) \times r_{del}$$
+	 Where $p_f(read)$ is the probability of the read belonging to the fetus and $r_{del}$ is the ratio of fetal DNA reads which have to be removed in order to gain the desired cell-free fetal DNA rate. If $r_f$ and $r'_f$ are respectively the original fetal DNA rate and the intended fetal DNA rate, $r_{del}$ will be equal to:
+	 $$r_{del}= 1 - \frac{1 - r_f } { r_f} \times \frac{r'_f}{1-r'_f}$$
+	 In order to find $p_f(read)$ we matched the read SNPs to the maternal and fetal haplotypes. If the read didn't match any of the haplotypes we considered $r_f$ for $p_f(read)$. For other cases we computed $p_f(read)$ as:
+	 $$p_f(read)= \frac{ \frac{r_f}{2}N_f } { \frac{1-r_f}{2} N_m + \frac{r_f}{2} N_f}$$
+	 	 
+	Where $0 \leq N_f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read..
+ \end{document}
