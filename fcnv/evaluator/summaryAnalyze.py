@@ -4,16 +4,17 @@
 import argparse
 
 k=1000
-beanSizes= [0, 100, 500, 1000, 10000] 
+binSizes = [0, 100, 300, 500, 1000, 5000, 10000] 
+numBins = 7
 
-truePos= {'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'sum':[0, 0, 0, 0, 0]}
-falsePos={'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'sum':[0, 0, 0, 0, 0]} 
-total= {'MDup': [0, 0, 0, 0, 0], 'MDel': [0, 0, 0, 0, 0],'PDup': [0, 0, 0, 0, 0],'PDel': [0, 0, 0, 0, 0], 'sum':[0, 0, 0, 0, 0]}
+truePos= {'MDup': [0]*numBins, 'MDel': [0]*numBins,'PDup': [0]*numBins,'PDel': [0]*numBins, 'sum':[0]*numBins}
+falsePos={'MDup': [0]*numBins, 'MDel': [0]*numBins,'PDup': [0]*numBins,'PDel': [0]*numBins, 'sum':[0]*numBins} 
+total= {'MDup': [0]*numBins, 'MDel': [0]*numBins,'PDup': [0]*numBins,'PDel': [0]*numBins, 'sum':[0]*numBins}
 
-beanSizes= map(lambda x: x*k, beanSizes)
+binSizes= map(lambda x: x*k, binSizes)
 
 def findIndex(sz):
-    difs=map(lambda x: abs(sz-x), beanSizes)
+    difs=map(lambda x: abs(sz-x), binSizes)
     return difs.index(min(difs))
 
 def main():
@@ -76,7 +77,7 @@ def main():
     print 'Size :',
     print "\t",
     print "\t",
-    for (i,num) in enumerate(beanSizes):
+    for (i,num) in enumerate(binSizes):
             print num/k,
             print "k\t",
 
@@ -86,7 +87,7 @@ def main():
         print key,
         print '\tRecall :',
         print "\t",
-        for (i,num) in enumerate(beanSizes):
+        for (i,num) in enumerate(binSizes):
             if total[key][i]==0:
                 print 1,
                 print "\t",
@@ -107,7 +108,7 @@ def main():
         print key,
         print '\tPrecision :',
         print "\t",
-        for (i,num) in enumerate(beanSizes):
+        for (i,num) in enumerate(binSizes):
             #print float(truePos[i])/(truePos[i]+falsePos[i]),
             print str(truePos[key][i])+'/'+str(truePos[key][i]+falsePos[key][i]),
             print "\t",
