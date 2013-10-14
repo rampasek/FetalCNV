@@ -130,6 +130,8 @@ def main():
         # Search for the start of the related snips
         snip = upper_bound(snips_f, parsed_read['chr'], parsed_read['pos'], 0, len(snips_f));
 
+        hitmap_f = {"HA":True, "HB":True}
+        hitmap_m = {"HA":True, "HB":True}
 
         # Count the snips for each haplotype using the cigar string
         for o in op:
@@ -140,8 +142,6 @@ def main():
             if snip==len(snips_f) or snips_f[snip]['chr']!=parsed_read['chr']:
                 break
 
-            hitmap_f = {"HA":True, "HB":True}
-            hitmap_m = {"HA":True, "HB":True}
             if o[0] == 'H': continue
             elif o[0] in 'SI': pos_qr += o[1]
             elif o[0] in 'ND': pos_db += o[1]
@@ -182,14 +182,17 @@ def main():
         if hitmap_m["HB"]:
             ALLcount += (1-originalFetusRate)/2.
         
-        
+        #compute the ratio of original fetal reads we have to delete to obtain the target ratio
+        fetulDeletionRate = 1 - ((1-originalFetusRate) / originalFetusRate) * (targetFetusRate / (1-targetFetusRate))
+
+        #if we don't know where this read belongs specificly
         if ALLcount == 0:
-            if random.random() > (originalFetusRate-targetFetusRate):
+            if random.random() > originalFetusRate * fetulDeletionRate :
                 print read,
             continue
 
         probComesFromFetus = Fcount / float(ALLcount)
-        rateOfRejection = probComesFromFetus * (originalFetusRate-targetFetusRate) / originalFetusRate
+        rateOfRejection = probComesFromFetus * fetulDeletionRate
         if random.random() > rateOfRejection:
             print read,
 
