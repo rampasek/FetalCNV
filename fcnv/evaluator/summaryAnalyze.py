@@ -45,7 +45,6 @@ def main():
 
     summary_file.seek(0)
     for line in summary_file:
-        
         #if a new result has started
         if line.find(".txt")!=-1:
             rawHeader=line
@@ -53,7 +52,14 @@ def main():
             if (header[4].startswith('delete')):
                 simSZ=int(header[3])-int(header[2])
             else:
-                simSZ=int(header[4])-int(header[3])
+                simSZ=int(header[4])-int(header[3])    
+                     
+        if rawHeader not in nameMap:
+            if rawHeader[-4:]!='!@#$':
+                print '>>ERROR: ', rawHeader,
+                rawHeader += '!@#$'
+            continue
+        
         if line.find('predicted')!=-1:
             parts=line.split(' ')
             reg= map(int, parts[0].split('-'))
@@ -61,9 +67,11 @@ def main():
             if int(parts[2])!=int(parts[5]) and ((rawHeader.find('cvrg')==-1 and (int(parts[5])==3)) or (rawHeader.find('cvrg')!=-1 and int(parts[5])==1)):
                 falsePos[nameMap[rawHeader]][findIndex(sz)]+=1
                 falsePos['sum'][findIndex(sz)]+=1
+        
         if (line.startswith('Recall')):
             truePos[nameMap[rawHeader]][findIndex(simSZ)]+= int(line.split('\t')[1])
             truePos['sum'][findIndex(simSZ)]+= int(line.split('\t')[1])
+        
         if (line.startswith('Recall')):
             total[nameMap[rawHeader]][findIndex(simSZ)]+=1
             total['sum'][findIndex(simSZ)]+=1
@@ -74,25 +82,25 @@ def main():
 
     print '*',
     print "\t",
-    print 'Size :',
+    print 'Size:',
     print "\t",
     print "\t",
     for (i,num) in enumerate(binSizes):
-            print num/k,
-            print "k\t",
+            print "{0}k\t".format(num/k),
 
     print 'total',
     for key in sorted(total.keys()):
         print ''
         print key,
-        print '\tRecall :',
+        print '\tRecall:',
         print "\t",
         for (i,num) in enumerate(binSizes):
             if total[key][i]==0:
                 print 1,
                 print "\t",
             else: 
-                print '%0.4f' % (float(truePos[key][i])/total[key][i]),
+                #print '%0.4f' % (float(truePos[key][i])/total[key][i]),
+                print str(truePos[key][i])+'/'+str(total[key][i]),
                 print "\t",
         #        print "Recall for ",
         #        print num,
@@ -101,12 +109,13 @@ def main():
             print 1,
             print "\t",
         else:
-            print '%0.4f' % (float(sum(truePos[key]))/sum(total[key])),
+            #print '%0.4f' % (float(sum(truePos[key]))/sum(total[key])),
+            print str(sum(truePos[key]))+'/'+str(sum(total[key])),
             print "\t",
 
         print ''
         print key,
-        print '\tPrecision :',
+        print '\tPrecision:',
         print "\t",
         for (i,num) in enumerate(binSizes):
             #print float(truePos[i])/(truePos[i]+falsePos[i]),
