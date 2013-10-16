@@ -26,8 +26,14 @@ def main():
    
     nameMap={}
     
+    stateToType=['MDel', '', 'PDel', '', 'PDup', '', 'MDup']
+    
+    rawHeader = ''
     for line in summary_file:
         if line.find(".txt")!=-1:
+            if len(rawHeader) > 0 and rawHeader not in nameMap.keys():
+                print '>>UNCATEGORIZED: ', rawHeader,
+                nameMap[rawHeader]='PDel'
             rawHeader=line
         if line.find('Real State:')!=-1:
             parts=line.split(' ')
@@ -40,7 +46,9 @@ def main():
             if (rawHeader.find('cvrg')==-1 and int(parts[2])==4):
                 nameMap[rawHeader]='PDup'
     
-
+    if len(rawHeader) > 0 and rawHeader not in nameMap.keys():
+        print '>>UNCATEGORIZED: ', rawHeader,
+        nameMap[rawHeader]='PDel'
 
 
     summary_file.seek(0)
@@ -65,7 +73,7 @@ def main():
             reg= map(int, parts[0].split('-'))
             sz=reg[1]-reg[0]
             if int(parts[2])!=int(parts[5]) and ((rawHeader.find('cvrg')==-1 and (int(parts[5])==3)) or (rawHeader.find('cvrg')!=-1 and int(parts[5])==1)):
-                falsePos[nameMap[rawHeader]][findIndex(sz)]+=1
+                falsePos[stateToType[int(parts[2])]][findIndex(sz)]+=1
                 falsePos['sum'][findIndex(sz)]+=1
         
         if (line.startswith('Recall')):
