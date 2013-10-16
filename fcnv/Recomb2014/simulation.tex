@@ -8,9 +8,9 @@
 	Where $0 < N_f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read.
 	
 	We also down sampled the fetal reads in the plasma with a similar approach to deletion simulation, to conduct experiments with lower cell-free fetal DNA rate. For this purpose, each read sequence in the plasma sample was removed with the probability of:
-	 $$p_f(read) \times r_{del}$$
+	 $$p_f(read) \cdot r_{del}$$
 	 Where $p_f(read)$ is the probability of the read belonging to the fetus and $r_{del}$ is the ratio of fetal DNA reads which have to be removed in order to gain the desired cell-free fetal DNA rate. If $r_f$ and $r'_f$ are respectively the original fetal DNA rate and the intended fetal DNA rate, $r_{del}$ will be equal to:
-	 $$r_{del}= 1 - \frac{1 - r_f } { r_f} \times \frac{r'_f}{1-r'_f}$$
+	 $$r_{del}= 1 - \frac{1 - r_f } { r_f} \cdot \frac{r'_f}{1-r'_f}$$
 	 In order to find $p_f(read)$ we matched the read SNPs to the maternal and fetal haplotypes. If the read didn't match any of the haplotypes we considered $r_f$ for $p_f(read)$. For other cases we computed $p_f(read)$ as:
 	 $$p_f(read)= \frac{ \frac{r_f}{2}N_f } { \frac{1-r_f}{2} N_m + \frac{r_f}{2} N_f}$$
 	 	 
