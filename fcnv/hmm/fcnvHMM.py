@@ -88,6 +88,9 @@ class FCNV(object):
         
         #CNV per position prior
         self.cnv_prior = cnv_prior
+        self.alphaM = 32
+        self.alphaP = 39
+        print "Regularization priors: ", self.alphaM, self.alphaP
         
         #run intern tests
         self.neg_inf = float('-inf')
@@ -591,8 +594,8 @@ class FCNV(object):
         
         dist = {}
         for nuc in self.nucleotides: dist[nuc] = 0.
-        alphaM = 32
-        alphaP = 39
+        alphaM = 32/2. + sum(Mcounts)/2.
+        alphaP = 39/2. + sum(Pcounts)/2.
         
         #fraction that is trully from mother DNA
         for i, nuc in enumerate(Malleles):

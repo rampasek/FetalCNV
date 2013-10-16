@@ -400,10 +400,12 @@ def main():
         ground_truth.append(int(line[-1]))
     target_file.close()
     
+    fcnv = fcnvHMM.FCNV(None, None)
+    mix = fcnv.estimateMixture(samples, M, P)
+    print "Est. Mixture: ", mix,
     mix = 0.13 #proportion of fetal genome in plasma
-    #mix = fcnv.estimateMixture(samples, M, P)
-    print "Est. Mixture: ", mix
-    
+    print "used:", mix
+     
     cvrg = cvrgHMM.coverageFCNV(snp_positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum)
     cvrg_posterior = cvrg.posteriorDecoding(mix)
 #    byLL = cvrg.likelihoodDecoding(mix)
@@ -434,6 +436,7 @@ def main():
 #        print snp_positions[pos], 'PP:', posterior_str, 'LL:', ll_str
 #    del cvrg, cvrg_posterior, byLL
     
+    del fcnv
     fcnv = fcnvHMM.FCNV(snp_positions, cnv_prior)
     
     ground_truth = []
