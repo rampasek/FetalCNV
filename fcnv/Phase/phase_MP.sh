@@ -6,8 +6,8 @@
 # $3 - reference sequence .fa file
 # $4 - region to extract
 
-logfile=log_phaseMP_$4.$$.log
-exec > $logfile 2>&1
+#logfile=log_phaseMP_$4.$$.log
+#exec > $logfile 2>&1
 
 date
 
@@ -49,7 +49,7 @@ time bcftools view $prefix.genotype.raw.bcf | vcfutils.pl varFilter -d50 -D150 -
 
 #annotate SNPs by rs-ids from dbSNP
 echo  "annotating called SNPs"
-java -jar ~/apps/snpEff/SnpSift.jar annotate -v /dupa-filer/laci/dbSnp.vcf $prefix.genotype.vcf > $prefix.genotype.annot.vcf
+java -Xmx24000m -jar ~/apps/snpEff/SnpSift.jar annotate -v /dupa-filer/laci/dbSnp.vcf $prefix.genotype.vcf > $prefix.genotype.annot.vcf
  
 #extract only SNPs with reasonable quality score TODO: change qlimit depending on nummber of samples
 snpsFile=$prefix.snps.annot
@@ -64,7 +64,9 @@ sed "s/$chr/$chrno/g" $snpsFile.ftr.vcf > $snpsFile.ftr2.vcf
 
 #phase by Beagle
 echo  "invoking Beagle for phasing w/ reference panels"
-time java -jar $bindir/b4.r1128.jar gt=$snpsFile.ftr2.vcf out=$prefix.phase ref=$refpanels impute=false
+time java -Xmx24000m -jar $bindir/b4.r1128.jar gt=$snpsFile.ftr2.vcf out=$prefix.phase ref=$refpanels impute=false
+
+zcat $prefix.phase.vcf.gz > $prefix.phase.vcf
 
 # CLEAN-UP
 #rm __*.*
