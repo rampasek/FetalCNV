@@ -5,15 +5,18 @@
 	In order to simulate a duplication, either maternal or paternal origin, we used the parent's DNA sequencing data from the family trio data set. We filtered the data to have read sequences that are positioned in the intended region for duplication and also match the target haplotype of the parent according to the parent's phasing information.	In cases that the phasing information couldn't specify the source haplotype of the read, i.e. it either didn't have any SNPs or only had homozygous ones, the read was selected randomly with a probability of $0.5$. The filtered reads were uniformly down sampled according to fetal DNA mixture rate and the original plasma coverage at that region. Afterwards the final sequences were mixed with the plasma data.
 	
 	For deletions, we filtered the plasma data and removed some reads to simulate the CNV. For each read positioned in the intended deletion region, the read was removed with the probability of it belonging to the fetus and also being inherited from the intended parent. In order to find this probability we used the phasing information to check which maternal and fetal haplotypes match all the SNPs in the read. If none of the four haplotypes matched the read, we removed the read with the probability of $\frac{r_f}{2}$ where $r_f$ is the fetal DNA mixture rate. If the fetal target haplotype matched the read, it was removed with the probability of:
-	$$\frac{ \frac{r_f}{2} } { \frac{1-r_f}{2} N_m + \frac{r_f}{2} N_f}$$
-	Where $0 < N_f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read.
+	$$\frac{ \frac{r_f}{2} } { \frac{1-r_f}{2} N_m + \frac{r_\f}{2} N_\f}$$
+	Where $0 < N_\f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read.
 	
-	We also simulated plasma data sets with decreased fetal DNA mixture ratio. This was done with a similar approach to simulating deletions; for each fetal read sequence in the original plasma, we removed the read with the probability of $r_{del}$, that is the ratio of fetal DNA reads which have to be removed in order to gain the desired fetal DNA mixture rate. So if $p_f(seq)$ is the probability of that read sequence belonging to the fetus, the overall probability for removing each read in plasma is equal to:
-	 $$p_f(seq)r_{del}$$
-	 If $r_f$ and $r'_f$ are respectively the original fetal DNA mixture rate and the intended mixture rate, and also $0 \leq N_f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read, we will have the following equations to compute $r_{del}$ and $p_f$:
-	 $$r_{del}= 1 - \frac{1 - r_f } { r_f} \times \frac{r'_f}{1-r'_f}$$
-	$$ p_f(seq) = \left\{ 
-  \begin{array}{l l}
-    \frac{ \frac{r_f}{2}N_f } { \frac{1-r_f}{2} N_m + \frac{r_f}{2} N_f} & \quad \text{if $N_m+N_f>0$}\\
-    r_f & \quad \text{if $N_m+N_f=0$}
-  \end{array} \right.$$	 
+	We also simulated plasma data sets with decreased fetal DNA mixture ratio. This was done with a similar approach to simulating deletions; for each fetal read sequence in the original plasma, we removed the read with the probability of $r_{del}$, that is the ratio of fetal DNA reads which have to be removed in order to gain the desired fetal DNA mixture rate. So if $p_\f(seq)$ is the probability of that read sequence belonging to the fetus, the overall probability for removing each read in plasma is equal to:
+	 $$p_\f(seq) \cdot r_{del}$$
+	 If $r_\f$ and $r'_\f$ are respectively the original fetal DNA mixture rate and the intended mixture rate, and also $0 \leq N_\f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read, we will have the following equations to compute $r_{del}$ and $p_\f$:
+\begin{align*}
+r_{del} =& 1 - \frac{1 - r_\f } { r_\f} \cdot \frac{r'_\f}{1-r'_\f}  \\
+p_\f(seq) =& 
+  \begin{cases}
+    \frac{ r_\f/2 \cdot N_\f } { (1-r_\f)/2 \cdot N_m + r_\f/2 \cdot N_\f} & \text{iff } N_m+N_\f>0 \\
+    r_\f & \text{iff } N_m+N_\f=0
+  \end{cases}
+\end{align*}
+
