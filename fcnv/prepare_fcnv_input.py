@@ -253,7 +253,9 @@ def main():
             print >>out_files[GT], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', cnv_state_id)
         else:
             print >>out_files[GT], '{0}\t{1}\t{2}\t{3}'.format(pos, 'N', 'N', 3)
-     
+    
+    out_files[ALDOC].close()
+    out_files[GT].close() 
     print "Low overall coverage positions ignored:", skipped_low_doc
     print "Forced to ignore due to missing in plasma:", forced_to_ignore
     print "Ignored positions in centromere regions:", skipped_in_centromere   

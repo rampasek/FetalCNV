@@ -5,6 +5,8 @@ import argparse
 
 normal=3
 
+sameCopyCount={0:[0, 2], 2:[0, 2], 3:[3], 4:[4, 6], 6:[4, 6]}
+
 def main():
     parser = argparse.ArgumentParser(description='Evaluates FCNV prediction recall and precision. Takes an annotation file produced by FCNV.')
     parser.add_argument('filenames', type=str, nargs=1, help='path to the annotation file')
@@ -27,7 +29,7 @@ def main():
     for res in results:
         if res["real"]!=normal:
             regionSnips=regionSnips+1
-            if res["real"]==res["pred"]:
+            if res["real"] in sameCopyCount[res["pred"]]:
                 foundSnips=foundSnips+1
     #print foundSnips
     #print regionSnips

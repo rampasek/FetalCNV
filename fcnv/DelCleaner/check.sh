@@ -26,7 +26,7 @@ do
 	then
 		continue
 	fi	
-	res=`pypy delOrigin.py /dupa-filer/laci/I1/chr1/trio.phase.vcf $file`
+	res=`pypy delOriginCleaner.py /dupa-filer/laci/I1/chr1/trio.phase.vcf $file`
 	prob=`echo $res | awk '{print $2}'`
 	echo $prob
 	if (( `echo "$prob > $threshToDelete" | bc` == 1 ))
@@ -45,7 +45,7 @@ do
 		fi
 	fi
 	
-	#pypy delOrigin.py /dupa-filer/laci/I1/chr1/trio.phase.vcf A-chr1-192925846-193025846-delete.alleles_doc.txt 
+	#pypy delOriginCleaner.py /dupa-filer/laci/I1/chr1/trio.phase.vcf A-chr1-192925846-193025846-delete.alleles_doc.txt 
 done 
 
 num=`wc -l mfile | awk '{print $1}'`
@@ -58,7 +58,7 @@ then
 		do
 			file=`pypy getRandomName.py $lenn`
 			echo $file
-			res=`pypy delOrigin.py /dupa-filer/laci/I1/chr1/trio.phase.vcf $file`
+			res=`pypy delOriginCleaner.py /dupa-filer/laci/I1/chr1/trio.phase.vcf $file`
 			echo $res
 			echo $file
 			source=`echo $res | awk '{print $1}'`
@@ -82,7 +82,7 @@ then
 		do
 			file=`pypy getRandomName.py $lenn`
 			echo $file
-			res=`pypy delOrigin.py /dupa-filer/laci/I1/chr1/trio.phase.vcf $file`
+			res=`pypy delOriginCleaner.py /dupa-filer/laci/I1/chr1/trio.phase.vcf $file`
 			echo $res
 			echo $file
 			source=`echo $res | awk '{print $1}'`
