@@ -115,6 +115,7 @@ def main():
 #   print upper_bound(snips, 'chr20', 10281440, 0, len(snips));
 #   exit()
 
+    
     # For each read count the snips in the read and check if it belongs to the target hapoltype:
     for read in reads_file:
         parsed_read= mapping_parser(read)
@@ -131,8 +132,7 @@ def main():
         # Search for the start of the related snips
         snip = upper_bound(snips_f, parsed_read['chr'], parsed_read['pos'], 0, len(snips_f));
 
-        hitmap_f = {"HA":True, "HB":True}
-        hitmap_m = {"HA":True, "HB":True}
+        
         # Count the snips for each haplotype using the cigar string
         for o in op:
             while pos_db>snips_f[snip]['pos'] and snip<len(snips_f) and snips_f[snip]['chr']==parsed_read['chr']:
@@ -140,6 +140,8 @@ def main():
             if snip==len(snips_f) or snips_f[snip]['chr']!=parsed_read['chr']:
                 break
             
+            hitmap_f = {"HA":True, "HB":True}
+            hitmap_m = {"HA":True, "HB":True}
             if o[0] == 'H': continue
             elif o[0] in 'SI': pos_qr += o[1]
             elif o[0] in 'ND': pos_db += o[1]
