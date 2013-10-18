@@ -1,9 +1,9 @@
 \section{Methods}
-Our method models two types of signal from the data (i) change in number of fragments sequenced from a particular genomic region, and (ii) change of the allele distributions at SNP loci. Each of them is individual noisy but they can be assumed independent for modelling purposes. Thus we combine them into one model. For this purpose we use a hidden Markov model, where we interpret the allele counts at SNP loci as emissions. The coverage is used as a prior multiplied into transition probabilities. In what follows, we first describe each signal processing separately and later show how we combine them into a joint prediction of fetal CNVs.
+For our method we assume that we have WGS data for both parental genomes and deep sequencing data of cell free DNA from maternal plasma. We model CNVs corresponding to a single parental haplotype duplication or deletion event. For each inheritance pattern (normal inheritance, maternal duplication, paternal duplication, maternal deletion, paternal deletion) we introduce a set of \emph{phased inheritance patterns} that enumerates all the possible configurations of fetal haplotypes corresponding to the respective inheritance pattern. E.g. for maternal duplication we have six phased inheritance patterns: $M_AM_AP_A, M_AM_BP_A, M_BM_BP_A, M_AM_AP_B, M_AM_BP_B, M_BM_BP_B$. This also enables us to reconstruct the origin of a CNV.
 
-\todo[inline]{describe inheritance patterns and phased patterns here}
+Our method models two types of signal from the data (i) change of the allele distributions at SNP loci, and (ii) change in number of fragments sequenced from a particular genomic region. Each of them is individual noisy but the two can be assumed independent for modelling purposes. Thus we combine them into one model. For this purpose we use a hidden Markov model, where we interpret the allele counts at SNP loci as emissions, and the coverage is used as a prior multiplied into transition probabilities. In the following we first describe each signal processing separately and then show how we combine them into a joint prediction of fetal CNVs.
 
-\subsection{SNP Allele Distribution}
+\subsection{SNP Allele Distribution}\label{ss:allele_distrib}
 For every SNP locus we observe a distribution of nucleotides in maternal plasma reads mapping to this particular position. Here we focus on calculating the probability of the observation w.r.t. a phased inheritance pattern. Formally, for observed 4-tuple $\(k_\A, k_\C, k_\G, k_\T\)$ of number of occurrences of each nucleotide, and phased inheritance pattern $\PP$ we model the conditional probability as Poisson distribution approximated by a Gaussian, i.e.
 \begin{align}
 Pr[\(k_\A, k_\C, k_\G, k_\T\) ~|~ \text{mat. haplotypes } M_A, M_B; \text{pat. haplotypes } P_A, P_B; \text{admixture } r; \PP] \sim \N\(\vmu, \vSigma \)
@@ -54,18 +54,49 @@ Now we estimate the probability of the observed number of fragments $N_{W_i}$ in
 As mentioned earlier, our goal here is not to detect CNVs right away, but to rather compute a distribution over the number of haplotypes the fetus has inherited, which can later be used as a prior in our more complex model. In order to obtain these priors, we compute the posterior distribution in a hidden Markov model with three states -- duplication, deletion, and normal inheritance. For each state $s$ the emission probability of observed $\WRV_i^S$ is computed as $\N(\WRV_i^{R,s}-\WRV_i^S; \mu=0, \sigma_{\text{noise}})$. The HMM is depicted in Figure \ref{fig:hmm_coverage}.
 
 \begin{figure}[h]
-\missingfigure{HMM for coverage}
-%\center\includegraphics[width = 0.95\textwidth]{}
+%\missingfigure{HMM for coverage}
+\center\includegraphics[width = 0.4\textwidth]{figures/cov-HMM}
 \caption{Hidden Markov model used to compute distribution over number of haplotypes inherited by a fetus.}\label{fig:hmm_coverage}
 \end{figure}
 
 \subsection{Hidden Markov Model for CNV Inference}\label{ss:hmm}
-%To combine the signals form individual SNP positions, we use a hidden Markov model. For each inheritance pattern we use a model like in Figure \ref{fig:model}, to compute likelihood of the observed samples under assumption of such inheritance pattern. To the possible inheritance patterns correspond the states of the HMM (for each SNP position) with emission probabilities proportional to the likelihood. See Figure \ref{fig:hmm}. As the likelihood which we get from the graphical model is already probability, we can interpret it right away as the emission probability. In practice we add some small positive constant $\varepsilon$ to these probabilities (and then normalize) to account for noise in the data.
+To combine the signals form individual SNP positions, we use a hidden Markov model with states corresponding to modelled phased inheritance patterns, Figure \ref{fig:hmm_main}, totalling to 20 states. States representing normal inheritance are central to the model assuming that two CNVs cannot be immediately subsequent. Between states of the same inheritance pattern, we allow for transitions reflecting recombinations, but mainly errors in phasing.
+
+For each state, the emissions are counts of individual alleles in reads mapped to particular SNP position. The probability of the observed emission is the probability of such allele counts in the expected allele distribution conditional on phased pattern as describe above in \ref{ss:allele_distrib}.
+
+The default 
+
 
 \begin{figure}[h]
-\missingfigure{The main HMM}
-%\center\includegraphics[width = 0.95\textwidth]{hmm}
-\caption{Hidden Markov model used for CNV inference. We do not allow two CNVs to be adjacent, thus the switching always has to go through normal inheritance state ``1M 1P''.}\label{fig:hmm}
+%\missingfigure{The main HMM}
+\centering
+\subfigure[Overall HMM architecture]{
+	\includegraphics[height=0.3\textheight]{figures/main-HMM}
+	\quad
+}
+\hspace{20pt}
+\subfigure[States for normal inheritance]{
+	\begin{minipage}[b]{0.45\textwidth}
+		\centering
+		\includegraphics[height=0.3\textheight]{figures/NOR-HMM}
+		\vspace{8pt}
+	\end{minipage}	
+}
+
+\vspace{10pt}
+\subfigure[States for maternal duplication]{
+	\includegraphics[height=0.3\textheight]{figures/DUP-HMM}
+	\quad
+}
+\hspace{0pt}
+\subfigure[States for maternal deletion]{
+	\begin{minipage}[b]{0.4\textwidth}
+		\centering
+		\includegraphics[height=0.3\textheight]{figures/DEL-HMM}
+	\end{minipage}	
+}
+
+\caption{Hidden Markov model used for CNV inference. We do not allow two CNVs to be adjacent, thus the switching always has to go through normal inheritance state.}\label{fig:hmm_main}
 \end{figure}
 
 %The HMM as depicted in Figure \ref{fig:hmm} is in a more general form, when we allow for different transition probabilities, depending on the given SNP site. This is useful if we want to model for non-uniform distance between individual SNPs. However in this project we assume uniform distribution and thus the transition probabilities are independent of actual position.
