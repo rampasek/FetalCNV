@@ -1,7 +1,7 @@
 \section{Methods}
 For our method we assume that we have WGS data for both parental genomes and deep sequencing data of cell free DNA from maternal plasma. We model CNVs corresponding to a single parental haplotype duplication or deletion event. For each inheritance pattern (normal inheritance, maternal duplication, paternal duplication, maternal deletion, paternal deletion) we introduce a set of \emph{phased inheritance patterns} that enumerates all the possible configurations of fetal haplotypes corresponding to the respective inheritance pattern. E.g. for maternal duplication we have six phased inheritance patterns: $M_AM_AP_A, M_AM_BP_A, M_BM_BP_A, M_AM_AP_B, M_AM_BP_B, M_BM_BP_B$. This also enables us to reconstruct the origin of a CNV.
 
-Our method models two types of signal from the data (i) change of the allele distributions at SNP loci, and (ii) change in number of fragments sequenced from a particular genomic region. Each of them is individual noisy but the two can be assumed independent for modelling purposes. Thus we combine them into one model. For this purpose we use a hidden Markov model, where we interpret the allele counts at SNP loci as emissions, and the coverage is used as a prior multiplied into transition probabilities. In the following we first describe each signal processing separately and then show how we combine them into a joint prediction of fetal CNVs.
+Our method models two types of signal from the data (i) change of the allele distributions at SNP loci, and (ii) change in number of fragments sequenced from a particular genomic region. Though each of them is individual noisy, the two can be assumed independent for modelling purposes and combined into one model. For this purpose we use a hidden Markov model, where we interpret the allele counts at SNP loci as emissions, and the coverage is used as a prior multiplied into transition probabilities. In the following we first describe each signal processing separately and then show how we combine them into a joint prediction of fetal CNVs.
 
 \subsection{SNP Allele Distribution}\label{ss:allele_distrib}
 For every SNP locus we observe a distribution of nucleotides in maternal plasma reads mapping to this particular position. Here we focus on calculating the probability of the observation w.r.t. a phased inheritance pattern. Formally, for observed 4-tuple $\(k_\A, k_\C, k_\G, k_\T\)$ of number of occurrences of each nucleotide, and phased inheritance pattern $\PP$ we model the conditional probability as Poisson distribution approximated by a Gaussian, i.e.
@@ -62,14 +62,16 @@ As mentioned earlier, our goal here is not to detect CNVs right away, but to rat
 \subsection{Hidden Markov Model for CNV Inference}\label{ss:hmm}
 To combine the signals form individual SNP positions, we use a hidden Markov model with states corresponding to modelled phased inheritance patterns, Figure \ref{fig:hmm_main}, totalling to 20 states. States representing normal inheritance are central to the model assuming that two CNVs cannot be immediately subsequent. Between states of the same inheritance pattern, we allow for transitions reflecting recombinations, but mainly errors in phasing.
 
-For each state, an emission are the counts of individual alleles in reads mapped to that particular SNP position. The probability of the observed emission is the probability of such allele counts in the expected allele distribution conditional on phased pattern as describe above in \ref{ss:allele_distrib}.
+For each state, an emission are the counts of individual alleles in reads mapped to that particular SNP position. The probability of the observed emission is the probability of such allele counts in the expected allele distribution conditional on phased inheritance pattern as describe above in \ref{ss:allele_distrib}.
 
-\todo[inline]{explain the transitions and application of priors}
+Additionally, for each SNP position we multiply transitions by the copy number priors obtained by the method above. Specifically, each edge incoming to a state is multiplied by the corresponding prior of inheriting that many haplotypes. %the transition probabilities  \ref{fig:hmm_main:a}
+
+\todo[inline]{argue about default transition probs}
 
 \begin{figure}[h]
 %\missingfigure{The main HMM}
 \centering
-\subfigure[Overall HMM architecture]{
+\subfigure[Overall HMM architecture]{\label{fig:hmm_main:a}
 	\includegraphics[height=0.2\textheight]{figures/main-HMM}
 	\quad
 }
