@@ -79,7 +79,7 @@ class FCNV(object):
     
     nucleotides = ['A', 'C', 'G', 'T']
     
-    def __init__(self, positions, cnv_prior):
+    def __init__(self, positions, cnv_prior, use_prior):
         """Initialize new FCNV object"""
         super(FCNV, self).__init__()
         
@@ -87,10 +87,9 @@ class FCNV(object):
         self.positions = positions
         
         #CNV per position prior
+        self.use_prior = use_prior
         self.cnv_prior = cnv_prior
-        self.alphaM = 32
-        self.alphaP = 39
-        print "Regularization priors: ", self.alphaM, self.alphaP
+        print "Use priors: ", self.use_prior
         
         #run intern tests
         self.neg_inf = float('-inf')
@@ -396,6 +395,7 @@ class FCNV(object):
                 if trans[i][j] < 10e-10: trans[i][j] = self.neg_inf
                 else: trans[i][j] = math.log(trans[i][j])
             self.logPseudoNormalizeTrans(i, trans[i])
+#            self.logNormalize(trans[i])
         
 #        for i in range(num_states):
 #            print "%2d"%i,
@@ -697,9 +697,10 @@ class FCNV(object):
         """
         mix = 0.
         num = 0
+        estimates = []
         for i in xrange(len(samples)):
             #if mother is homozygous A and father has at least one alternative B
-            if M[i][0] == M[i][1] and (P[i][0] != M[i][0] or P[i][1] != M[i][0]):
+            if M[i][0] == M[i][1] and (P[i][0] != M[i][0] and P[i][1] != M[i][0]):
                 #print M[i], P[i], samples[i]            
                 type1 = M[i][0]
                 type2 = P[i][0]
@@ -714,9 +715,13 @@ class FCNV(object):
                     sum_all = sum(samples[i])
                     num += 1
                     mix += (2.*num_type2)/sum_all
+                    estimates.append((2.*num_type2)/sum_all)
                 else:
-                    num += 0.5
-        return mix/num
+                    num += 1.
+                    estimates.append(0.)
+
+        estimates.sort()
+        return mix/num, estimates[len(estimates)/2], len(estimates)
         
     def estimateCoverage(self, samples):
         """Estimate coverage of the SNP loci in the plasma samples as empirical mean.
@@ -770,6 +775,7 @@ class FCNV(object):
     def adjustTransitionProbForPos(self, pos, trans):
         """Multiply the CNV prior into transition probabilities at the specified position
         """
+        if self.use_prior == False: return
         num_real_states = self.getNumPP()
         num_states = self.getNumStates()
         pos = min(pos, len(self.cnv_prior) - 1)
@@ -804,6 +810,7 @@ class FCNV(object):
        
         for st_id in range(num_states):
             self.logPseudoNormalizeTrans(st_id, trans[st_id])
+#            self.logNormalize(trans[st_id])
             
             
     def viterbiPath(self, samples, M, P, MSC, PSC, mixture):

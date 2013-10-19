@@ -325,6 +325,8 @@ def main():
     parser.add_argument('plasma', type=str, nargs=1, help='path to file with plasma sequencing DOC for all chromosomal positions')
     parser.add_argument('ref', type=str, nargs=1, help='path to file with reference plasma sequencing DOC for all chromosomal positions')
     parser.add_argument('seq', type=str, nargs=1, help='path to ref. genomic sequence in fasta format')
+    parser.add_argument('--ff', type=float, help='fetal mixture ratio', default=-1.)
+    parser.add_argument('--useCvrg', help='use coverage flag', action="store_true")
     args = parser.parse_args()
     
     in_file_name = args.input[0]
@@ -332,6 +334,7 @@ def main():
     plasma_doc_file = open(args.plasma[0], "r")
     ref_doc_file = open(args.ref[0], "r")
     seq_file = open(args.seq[0], "r")
+    if args.ff > 0: mix = args.ff
     
     #read the pre-processed input
     snp_positions, samples, M, P, MSC, PSC = readInput(in_file_name)
@@ -341,11 +344,11 @@ def main():
         fh.seek(-256, 2)
         last_pos_plasma = int(fh.readlines()[-1].decode().split(' ')[0])
         fh.close()
-    with open(args.ref[0], 'rb') as fh:
-        fh.seek(-256, 2)
-        last_pos_ref = int(fh.readlines()[-1].decode().split(' ')[0])
-        fh.close()
-    chr_length = max(last_pos_plasma, last_pos_ref) + 4742
+#    with open(args.ref[0], 'rb') as fh:
+#        fh.seek(-256, 2)
+#        last_pos_ref = int(fh.readlines()[-1].decode().split(' ')[0])
+#        fh.close()
+    chr_length = last_pos_plasma + 4742
     
     gc_sum = [0] * chr_length
     prefix_sum_plasma = [0] * chr_length
@@ -374,6 +377,7 @@ def main():
         line = plasma_doc_file.readline()
         if not line: break
         row = map(int, line.split(' '))
+        if row[0] >= chr_length: break
         prefix_sum_plasma[row[0]] = prefix_sum_plasma[last] + row[1]
         prefix_count_plasma[row[0]] = prefix_count_plasma[last] + 1
         last = row[0]
@@ -384,6 +388,7 @@ def main():
         line = ref_doc_file.readline()
         if not line: break
         row = map(int, line.split(' '))
+        if row[0] >= chr_length: break
         prefix_sum_ref[row[0]] = prefix_sum_ref[last] + row[1]
         prefix_count_ref[row[0]] = prefix_count_ref[last] + 1
         last = row[0]
@@ -400,22 +405,25 @@ def main():
         ground_truth.append(int(line[-1]))
     target_file.close()
     
-    fcnv = fcnvHMM.FCNV(None, None)
-    mix = fcnv.estimateMixture(samples, M, P)
-    print "Est. Mixture: ", mix,
-    mix = 0.13 #proportion of fetal genome in plasma
+    fcnv = fcnvHMM.FCNV(None, None, False)
+    mix, mix_median, ct = fcnv.estimateMixture(samples, M, P)
+    print "Est. Mixture: ", mix, mix_median, '(', ct ,')',
+    #mix = 0.13 #proportion of fetal genome in plasma
+    if args.ff > 0: mix = args.ff
     print "used:", mix
-     
-    cvrg = cvrgHMM.coverageFCNV(snp_positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum)
-    cvrg_posterior = cvrg.posteriorDecoding(mix)
-#    byLL = cvrg.likelihoodDecoding(mix)
-    del prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum
     
-    cnv_prior = [ [0., 0., 0.] for x in range(len(snp_positions)) ]
-    for pos in range(len(cvrg_posterior)):
-        for cp_num_posterior in cvrg_posterior[pos]:
-            cnv_prior[pos][cp_num_posterior[1]] = cp_num_posterior[0]
-    del cvrg, cvrg_posterior
+    cnv_prior = None
+    if args.useCvrg:
+        cvrg = cvrgHMM.coverageFCNV(snp_positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum)
+        cvrg_posterior = cvrg.posteriorDecoding(mix)
+#       byLL = cvrg.likelihoodDecoding(mix)
+        del prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum
+        
+        cnv_prior = [ [0., 0., 0.] for x in range(len(snp_positions)) ]
+        for pos in range(len(cvrg_posterior)):
+            for cp_num_posterior in cvrg_posterior[pos]:
+                cnv_prior[pos][cp_num_posterior[1]] = cp_num_posterior[0]
+        del cvrg, cvrg_posterior
     
 #        ll_state = []
 #        ll_value = []
@@ -437,7 +445,7 @@ def main():
 #    del cvrg, cvrg_posterior, byLL
     
     del fcnv
-    fcnv = fcnvHMM.FCNV(snp_positions, cnv_prior)
+    fcnv = fcnvHMM.FCNV(snp_positions, cnv_prior, args.useCvrg)
     
     ground_truth = []
     target_file = open(target_file_name, 'r')
