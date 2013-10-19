@@ -36,7 +36,7 @@ Note, that some observations have very similar probability under different phase
 \subsection{CNVs and Depth of Coverage}\label{ss:coverage}
 Variations in number of fragments sequenced per a region is a standard measure used for detection of mid to large sized CNVs [TODO: ref], and has lately been used for CNV detection from maternal plasma \cite{srinivasan2013, chen2013} as well. However the relatively low admixture of fetal DNA in the maternal plasma together with cfDNA sequencing biases considerably limit potential of methods relying on coverage signal from a single sample. Thus methods \cite{srinivasan2013, chen2013} require multiple datasets to establish a baseline for CNV calling.
 
-In our method, we use the coverage information as a noisy predictor to complement the signal we obtain from SNP loci. For a reference plasma sequencing coverage we use plasma sample of the G1 trio of \cite{kitzman2012} dataset.
+In our method, we use the coverage information as a noisy predictor to complement the signal we obtain from SNP loci. For a reference plasma sequencing coverage we use plasma sample of the G1 trio of \cite{kitzman2012} dataset, as coverage of two unrelated plasma cfDNA sequencing samples correlates better than the plasma sample with whole genome sequencing of the trio mother (Figure \ref{fig:fpkm}).
 
 First, for each SNP $i$ we compute \emph{window ratio value} $\WRV_i$ for a window $W_i$ of size 1Kb centred to the $i$-th SNP. This measure is analogous to the \emph{bin ratio value} in \cite{srinivasan2013}, and we compute it as a ratio of number of fragments $N_{W_i}$ mapped to $W_i$ to sum of fragments mapped to 200 1Kb windows with $\G\C$ content closest to $W_i$
 \begin{align}
@@ -51,7 +51,14 @@ Now we estimate the probability of the observed number of fragments $N_{W_i}$ in
 \WRV_i^{R,DEL} = \frac{ N_{W_i^R} \cdot (1-r/2) }{ \mathlarger{\sum_{W \in neigh_{\G\C}^{200}(W_i^R)}} N_{W^R} }
 \end{align}
 
-As mentioned earlier, our goal here is not to detect CNVs right away, but to rather compute a distribution over the number of haplotypes the fetus has inherited, which can later be used as a prior in our more complex model. In order to obtain these priors, we compute the posterior distribution in a hidden Markov model with three states -- duplication, deletion, and normal inheritance. For each state $s$ the emission probability of observed $\WRV_i^S$ is computed as $\N(\WRV_i^{R,s}-\WRV_i^S; \mu=0, \sigma_{\text{noise}})$. The HMM is depicted in Figure \ref{fig:hmm_coverage}.
+As mentioned earlier, our goal here is not to detect CNVs right away, but to rather compute a distribution over the number of haplotypes the fetus has inherited, which can later be used as a prior in our more complex model. In order to obtain these priors, we compute the posterior distribution in a hidden Markov model with three states -- duplication, deletion, and normal inheritance. For each state $s$ the emission probability of observed $\WRV_i^S$ is computed as $\N(\WRV_i^{R,s}-\WRV_i^S; \mu=0, \sigma_{\text{noise}})$. The HMM, slightly favouring normal inheritance, is depicted in Figure \ref{fig:hmm_coverage}.
+
+\begin{figure}[h]
+\vspace{-20pt}
+\center\includegraphics[width = 0.7\textwidth]{figures/fpkm}
+\vspace{-12pt}
+\caption{Correlation of fragments per kilobase of chromosome 1 per million fragments mapped between plasma samples of I1 and G1 trio (circles), and between I1 plasma sample and I1 maternal sample (crosses). Sequencing of cfDNA from plasma has much wider distribution than standard WGS. Thus sample from different plasma is more suitable then the same trio maternal sample for purpose of coverage distribution reference in our model.}\label{fig:fpkm}
+\end{figure}
 
 \begin{figure}[h]
 %\missingfigure{HMM for coverage}
@@ -66,7 +73,7 @@ For each state, an emission are the counts of individual alleles in reads mapped
 
 Additionally, for each SNP position we multiply transitions by the copy number priors obtained by the method above. Specifically, each edge incoming to a state is multiplied by the corresponding prior of inheriting that many haplotypes. %the transition probabilities  \ref{fig:hmm_main:a}
 
-\todo[inline]{argue about default transition probs}
+The default transition probabilities were set to reflect expected haplotype block lengths of several hundred SNPs. Further, the prior probability for a CNV was set to one in ten thousand SNP loci with length expected to span thousand SNPs on average.
 
 \begin{figure}[h]
 %\missingfigure{The main HMM}
@@ -98,5 +105,5 @@ Additionally, for each SNP position we multiply transitions by the copy number p
 	\end{minipage}	
 }
 
-\caption{Hidden Markov model used for CNV inference. We do not allow two CNVs to be adjacent, thus the switching always has to go through normal inheritance state.}\label{fig:hmm_main}
+\caption{Hidden Markov model used for CNV inference. (a) High-level architecture of the HMM with 5 sets of states corresponding to 5 types of fetal inheritance. Note, we do not allow two CNVs to be adjacent, thus switching between two CNVs always has to go through normal inheritance state. Edges in (a) represent edges coming in/out of all states between two sets of states. Inner edges in (b-d) serve to model errors in phasing or recombinations.}\label{fig:hmm_main}
 \end{figure}
