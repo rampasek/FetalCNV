@@ -1,5 +1,4 @@
-\section{simulation}
-
+\subsection{Realistic CNV Simulation}
 	In our experiments, we used the sequencing data of family trio (?) and the plasma DNA sample (?). Using this data, in addition to the original $13\%$ fetal mixture ratio(?) we simulated and used plasma data sets of $10\%$ and $7\%$ ratio. with duplications and deletions of different sizes and locations.
 
 	In order to simulate a duplication, either maternal or paternal origin, we used the parent's DNA sequencing data from the family trio data set. We filtered the data to have read sequences that are positioned in the intended region for duplication and also match the target haplotype of the parent according to the parent's phasing information.	In cases that the phasing information couldn't specify the source haplotype of the read, i.e. it either didn't have any SNPs or only had homozygous ones, the read was selected randomly with a probability of $0.5$. The filtered reads were uniformly down sampled according to fetal DNA mixture rate and the original plasma coverage at that region. Afterwards the final sequences were mixed with the plasma data.

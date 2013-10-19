@@ -31,10 +31,10 @@ This way, we obtain the expected multinomial probability distribution over nucle
 \mu_x &= p_x \cdot \#\text{mapped reads}
 \end{align}
 As we describe later, we can use this probability distribution $\N\(\vmu, \vSigma \)$ that is conditional on phased pattern $\PP$ as an emission distribution in our HMM.
-\todo[inline]{discussion that some observations have the same probability under different phased patterns and we use the coverage to help to discriminate them}
+Note, that some observations have very similar probability under different phased patterns, e.g. some states of maternal deletion may yield distribution similar to paternal duplication. Incorporating the coverage signal into our main HMM helps to discriminate such states.
 
-\subsection{CNVs and Depth of Sequencing}
-Variations in number of sequenced fragments per a region is a standard measure used for detection of mid to large sized CNVs\todo{citation}, and has lately been used for CNV detection from maternal plasma \cite{srinivasan2013, chen2013} as well. However the relatively low admixture of fetal DNA in the maternal plasma together with cell-free DNA sequencing biases considerably limit potential of methods relying on coverage signal from a single sample. Thus methods \cite{srinivasan2013, chen2013} require multiple datasets to establish a baseline for CNV calling.
+\subsection{CNVs and Depth of Coverage}\label{ss:coverage}
+Variations in number of fragments sequenced per a region is a standard measure used for detection of mid to large sized CNVs\todo{citation}, and has lately been used for CNV detection from maternal plasma \cite{srinivasan2013, chen2013} as well. However the relatively low admixture of fetal DNA in the maternal plasma together with cell-free DNA sequencing biases considerably limit potential of methods relying on coverage signal from a single sample. Thus methods \cite{srinivasan2013, chen2013} require multiple datasets to establish a baseline for CNV calling.
 
 In our method, we use the coverage information as a noisy predictor to complement the signal we obtain from SNP loci. For a reference plasma sequencing coverage we use plasma sample of the G1 trio of \cite{kitzman2012} dataset.
 
@@ -55,50 +55,46 @@ As mentioned earlier, our goal here is not to detect CNVs right away, but to rat
 
 \begin{figure}[h]
 %\missingfigure{HMM for coverage}
-\center\includegraphics[width = 0.4\textwidth]{figures/cov-HMM}
-\caption{Hidden Markov model used to compute distribution over number of haplotypes inherited by a fetus.}\label{fig:hmm_coverage}
+\center\includegraphics[width = 0.25\textwidth]{figures/cov-HMM}
+\caption{Hidden Markov model used to compute posterior distribution over number of haplotypes inherited by a fetus.}\label{fig:hmm_coverage}
 \end{figure}
 
 \subsection{Hidden Markov Model for CNV Inference}\label{ss:hmm}
 To combine the signals form individual SNP positions, we use a hidden Markov model with states corresponding to modelled phased inheritance patterns, Figure \ref{fig:hmm_main}, totalling to 20 states. States representing normal inheritance are central to the model assuming that two CNVs cannot be immediately subsequent. Between states of the same inheritance pattern, we allow for transitions reflecting recombinations, but mainly errors in phasing.
 
-For each state, the emissions are counts of individual alleles in reads mapped to particular SNP position. The probability of the observed emission is the probability of such allele counts in the expected allele distribution conditional on phased pattern as describe above in \ref{ss:allele_distrib}.
+For each state, an emission are the counts of individual alleles in reads mapped to that particular SNP position. The probability of the observed emission is the probability of such allele counts in the expected allele distribution conditional on phased pattern as describe above in \ref{ss:allele_distrib}.
 
-The default 
-
+\todo[inline]{explain the transitions and application of priors}
 
 \begin{figure}[h]
 %\missingfigure{The main HMM}
 \centering
 \subfigure[Overall HMM architecture]{
-	\includegraphics[height=0.3\textheight]{figures/main-HMM}
+	\includegraphics[height=0.2\textheight]{figures/main-HMM}
 	\quad
 }
 \hspace{20pt}
 \subfigure[States for normal inheritance]{
 	\begin{minipage}[b]{0.45\textwidth}
 		\centering
-		\includegraphics[height=0.3\textheight]{figures/NOR-HMM}
+		\includegraphics[height=0.2\textheight]{figures/NOR-HMM}
 		\vspace{8pt}
 	\end{minipage}	
 }
 
 \vspace{10pt}
 \subfigure[States for maternal duplication]{
-	\includegraphics[height=0.3\textheight]{figures/DUP-HMM}
-	\quad
+\begin{minipage}[b]{0.4\textwidth}
+	\includegraphics[height=0.2\textheight]{figures/DUP-HMM}
+	\end{minipage}	
 }
 \hspace{0pt}
 \subfigure[States for maternal deletion]{
 	\begin{minipage}[b]{0.4\textwidth}
 		\centering
-		\includegraphics[height=0.3\textheight]{figures/DEL-HMM}
+		\includegraphics[height=0.2\textheight]{figures/DEL-HMM}
 	\end{minipage}	
 }
 
 \caption{Hidden Markov model used for CNV inference. We do not allow two CNVs to be adjacent, thus the switching always has to go through normal inheritance state.}\label{fig:hmm_main}
 \end{figure}
-
-%The HMM as depicted in Figure \ref{fig:hmm} is in a more general form, when we allow for different transition probabilities, depending on the given SNP site. This is useful if we want to model for non-uniform distance between individual SNPs. However in this project we assume uniform distribution and thus the transition probabilities are independent of actual position.
-
-\todo[inline]{where to put description of data we use, phasing, etc? ..a new section "Materials"?}

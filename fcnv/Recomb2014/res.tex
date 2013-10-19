@@ -1,2 +1,22 @@
 \section{Results}
+In our experiments, we have used whole genome sequencing data of two mother-father-child trios I1 (Table \ref{tab:I1}), and G1, publish by \cite{kitzman2012}. We have simulated 360 CNVs in I1 plasma to test recall of our method, while G1 plasma sample served as a reference in DOC-based CNV estimation described in \ref{ss:coverage}. For each test case, we have picked a random position in chromosome 1, outside known centromere and telomeres region, to place the simulated CNV. Then we run our algorithm on a sequence window starting 20Mb before the simulated CNV and ending 20Mb after the CNV. If there was not enough base pairs for the beginning or end of the window, we extended the end or beginning, respectively, to get a window with 40Mb unaffected positions.
 
+To test precision of our model, we run 
+
+\begin{table}[t]
+\centering
+\begin{tabular}{l|l|c}
+Individual & Sample & DOC \\ \hline
+Mother (I1-M) & Plasma (5 ml, gestational age 18.5 weeks) & 78 \\
+	& Whole blood ($<1$ ml) & 32 \\
+Father (I1-P) & Saliva & 39 \\
+Child (I1-C) & Cord blood at delivery & 40
+\end{tabular}
+\vspace{3pt}
+\caption{Summary of mother-father-child trio I1 sequencing data, curtsey of \cite{kitzman2012}  }
+\label{tab:I1} 
+\end{table}
+
+\input simulation
+
+\cite{abyzov2011cnvnator}
