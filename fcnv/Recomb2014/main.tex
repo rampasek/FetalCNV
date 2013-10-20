@@ -12,6 +12,7 @@
 \usepackage{cite}
 \usepackage{relsize}
 \usepackage{todonotes}
+\usepackage{multirow}
 
 \newcommand{\vmu}{\mbox{\boldmath${\mu}$} }
 \newcommand{\vSigma}{\mathbf{\Sigma} }
@@ -43,23 +44,23 @@
 
 \mainmatter  % start of an individual contribution
 
-\title{Non-Invasive Fetal Genome Copy Number Variation Analysis}
+\title{Probabilistic Method for Detecting Copy Number Variation in a Fetal Genome using Maternal Plasma Sequencing}
 
-\author{Ladislav Ramp\'a\v{s}ek\inst{1,*}
+\author{Ladislav Ramp\'a\v{s}ek\inst{1}
 	\and Aryan Arbabi\inst{1}
-	\and Michael Brudno\inst{1,2,3,*}}
+	\and Michael Brudno\inst{1,2,3}}
 
-\urldef{\mailsa}\path|{rampasek, brudno}@cs.toronto.edu|   
+\urldef{\mailsa}\path|{rampasek, arbabi, brudno}@cs.toronto.edu|   
 \institute{Department of Computer Science, University of Toronto, Canada
 	\and Centre for Computational Medicine, Hospital for Sick Children, Toronto, Canada
 	\and Genetics and Genome Biology, Hospital for Sick Children, Toronto, Canada \\
-	\textsuperscript{*} To whom correspondence should be addressed: \mailsa\\}
+	\mailsa\\}
 
 \maketitle
 
 
 \begin{abstract}
-We developed a new method for non-invasive analysis of \textit{de novo} copy number variations in fetal genome. The motivation is to enable for identification of large regions in the fetal genome that were inherited from parental genomes in unusual number (more or less than normal) without necessity of direct samples from the fetus. We target our method to work with data obtained by sequencing of the DNA material present in maternal plasma. Such DNA material is a mixture of maternal and fetal genome. In this manuscript we limit ourselves to \emph{in silico} simulated CNV in real sequencing data. Our method consists of a statistical model for individual SNP positions in the genome, and of a hidden Markov model for inference of CNV events that span these sites.
+The last two years have seen the development of methodologies to identify genomic variation within a fetus through the non-invasive sequencing of maternal blood plasma. These methods are based on the observation that maternal plasma contains a fraction of DNA (10-40\%) originating from the fetus, and such methodologies have already been used for the detection of whole-chromosome events (aneuploidys), and to a more limited extent for smaller Copy Number Variants (CNVs). Here we present a probabilistic method for non-invasive analysis of \textit{de novo} CNVs in fetal genome based on maternal plasma sequencing.  Our method combines three types of information within a unified Hidden Markov Model: the imbalance of allelic ratios at SNP positions, the use of parental genotypes to phase nearby SNPs, and depth-of-coverage signal to better differentiate between various types of CNVs and improve precision.
 \keywords{non-invasive, prenatal, maternal plasma, CNV}
 \end{abstract}
 

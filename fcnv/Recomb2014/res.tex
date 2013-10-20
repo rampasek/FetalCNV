@@ -1,6 +1,8 @@
 \section{Results}
-In our experiments, we have used whole genome sequencing data of two mother-father-child trios I1 (Table \ref{tab:I1}), and G1, publish by \cite{kitzman2012}. In our experiments we have mainly used the first trio I1 with 13\% fetal admixture in obtained plasma. First, we have genotyped both the parents using Samtools and Bcftools. Subsequently we have phased the haplotypes using Beagle 4 \cite{browning2013} with reference haplotype panels from 1000 genome project.
 
+\subsection{Datasets and Processing}
+\label{data}
+In our experiments, we have used whole genome sequencing data of two mother-father-child trios I1 (Table \ref{tab:I1}), and G1, publish by \cite{kitzman2012}. In our experiments we have mainly used the first trio I1 with 13\% fetal admixture in obtained plasma. For maternal, paternal, and plasma datasets the reads were aligned to the hg19 genome using BWA. We genotyped both the parents using Samtools and Vcftools. To improve the precision of genotyping we only consider variants at positions previously identified as variable within the 1000 Genomes Project.  Subsequently we have phased the haplotypes using Beagle 4 \cite{browning2013} with reference haplotype panels from 1000 Genomes Project. 
 \begin{table}[t]
 \centering
 \begin{tabular}{l|l|c}
@@ -15,22 +17,49 @@ Child (I1-C) & Cord blood at delivery & 40
 \label{tab:I1} 
 \end{table}
 
-We have simulated 360 CNVs in I1 plasma to test recall of our method, while G1 plasma sample served as a reference in DOC-based CNV estimation described in \ref{ss:coverage}. For each test case, we have picked a random position in chromosome 1, outside known centromere and telomeres region, to place the simulated CNV. Then we run our algorithm on a sequence window starting 20Mb before the simulated CNV and ending 20Mb after the CNV. If there was not enough base pairs for the beginning or end of the window, we extended the end or beginning, respectively, to get a window with 40Mb unaffected positions. We describe our simulation methods in detail in the Section \ref{ss:simulation}. The results are show in Table \ref{tab:resff13}
+\subsection{Evaluation}
+We have simulated 360 CNVs in I1 plasma to test recall of our method, while G1 plasma sample served as a reference in DOC-based CNV estimation described in \ref{ss:coverage}. For each test case, we have picked a random position in chromosome 1, outside known centromere and telomeres region, to place the simulated CNV.  We then ran our algorithm on a sequence window starting 20Mb before the simulated CNV and ending 20Mb after the CNV.  We describe our simulation methods in detail in the Section \ref{ss:simulation}. The results are shown in Table \ref{tab:resRecall}. We identify a CNV as identified if it is overlapped by CNVs of the same type by at least 50\%, while precision is computed as the fraction of correct CNVs over all identified of the current length in all experiments. To evaluate the effect the admixture has on accuracy, we repeated this experiment not only with the original plasma dataset, but also one down-sampled to only contain 10\% admixture. 
 
-To test precision of our method, we run our model on the whole genome and compared our CNV calls with results of CNVnator \cite{abyzov2011cnvnator} run on pure maternal sample and child's sample obtained after the delivery.
-\todo[inline]{evaluation of our calls}
+The results indicate that our method can achieve nearly perfect recall and precision for variants > 3 megabases, and promising results down to CNVs of 400 kilobases.  Maternally inherited events are typically more difficult to identify than paternally inherited ones, and deletions more difficult to duplications, possibly due to complete dropout of fetal alleles due to reduced admixture. 
+
 
 \begin{table}[t]
 \centering
-\missingfigure{13\% results}
-\begin{tabular}{l|l|c}
+\begin{tabular}{c|c|c||c|c||c|c||c|c||c|c}
+\multirow{2}{*}{$r$}    &    \multirow{2}{*}{length}    &        &    \multicolumn{2}{ |c|| }{Paternal Del (20)}            &    \multicolumn{2}{ |c|| }{Paternal Dup (40)}            &    \multicolumn{2}{ |c|| }{Maternal Del (20)}            &    \multicolumn{2}{ |c }{Maternal Dup (40)}            \\    
+    &        &        &    ratios    &    combined    &    ratios    &    combined    &    ratios    &    combined    &    ratios    &    combined    \\    \hline
+\multirow{6}{*}{13\%}    &    50K-400K    &    recall    &    55.0\%    &    50.0\%    &    55.0\%    &    57.5\%    &    10.0\%    &    15.0\%    &    25.0\%    &    25.0\%    \\    
+    &        &    precision    &    73.3\%    &    18.5\%    &    24.7\%    &    79.3\%    &    66.7\%    &    100.0\%    &    2.3\%    &    3.7\%    \\    
+    &    400K-3M    &    recall    &    100.0\%    &    100.0\%    &    97.5\%    &    97.5\%    &    30.0\%    &    45.0\%    &    72.5\%    &    67.5\%    \\    
+    &        &    precision    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    85.7\%    &    100.0\%    &    23.4\%    &    100.0\%    \\    
+    &    $>$3M    &    recall    &    95.0\%    &    100.0\%    &    92.5\%    &    97.5\%    &    95.0\%    &    95.0\%    &    100.0\%    &    100.0\%    \\    
+    &        &    precision    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    \\    \hline
+\multirow{6}{*}{10\%}    &    50K-400K    &    recall    &    50.0\%    &    45.0\%    &    47.5\%    &    55.0\%    &    0.0\%    &    0.0\%    &    15.0\%    &    12.5\%    \\    
+    &        &    precision    &    71.4\%    &    20.0\%    &    22.9\%    &    81.5\%    &    NA    &    NA    &    2.2\%    &    2.0\%    \\    
+    &    400K-3M    &    recall    &    100.0\%    &    100.0\%    &    90.0\%    &    90.0\%    &    5.0\%    &    15.0\%    &    37.5\%    &    32.5\%    \\    
+    &        &    precision    &    100.0\%    &    100.0\%    &    94.7\%    &    100.0\%    &    100.0\%    &    75.0\%    &    10.0\%    &    86.7\%    \\    
+    &    $>$3M    &    recall    &    95.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    45.0\%    &    30.0\%    &    92.5\%    &    85.0\%    \\    
+    &        &    precision    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    97.4\%    &    97.1\%    \\   	
 \end{tabular}
-\caption{Summary of results for 13\% fetal admixture in plasma. }
-\label{tab:resff13} 
+\caption{Summary of recall on test set composed of 360 \emph{in silico} simulated CNVs in I1 maternal plasma samples with 13\% and 10\% fetal admixture ratio. The ratios column corresponds to the method that only uses allelic ratios, but not the coverage prior. In such cases the precision is reduced, while the recall is largely unaffected.  }
+\label{tab:resRecall} 
 \end{table}
 
-Lastly, we have repeated previously described experiments on maternal plasma with down-rated fetal admixture from $13\%$ to $10\%$ and $7\%$.
+To test precision of our method, we run our model on the whole plasma dataset (expected to contain no large de-novo variants) and observed the number of CNV calls for each size. These numbers are shown in table \ref{tab:resWGS}, with \textit{in silico} accuracy for each length shown for comparison. Notably, a large fraction of the larger false positive calls correspond to CNVs already present in parents (and hence inherited, rather than de novo). 
 
-\input simulation
+
+\begin{table}[t]
+\centering
+\begin{tabular}{c|c|c|c|c|c|c|c}
+	&		&	50-200K	&	200-400K	&	400-750K	&	750K-3M	&	3M-7.5M	&	10M+ \\ \hline
+\multirow{2}{*}{\emph{in silico} CNV recall}	&	Maternal orig.	&	3.3\%	&	40\%	&	50\%	&	70\%	&	96.7\%	&	100\%	\\
+	&	Paternal orig.	&	40\%	&	70\%	&	100\%	&	96.7\%	&	96.7\%	&	100\%	\\ \hline
+\multirow{2}{*}{WG calls}	&	combined model	&	51 (6, 3)	&	13 (2, 2)	&	5 (1, 0)	&	3 (1, 2)	&	0 (0, 0)	&	0 (0, 0)	\\
+\end{tabular}
+\caption{In silico recall and number of CNVs of various sizes generated in a genome-wide run. For each CNV size we also show (in parenthesis) the number overlapping  CNVnator \cite{abyzov2011cnvnator} calls on the maternal and paternal genomes, respectivelty.}
+\label{tab:resWGS} 
+\end{table}
+\vspace{1cm}
+
 
 
