@@ -9,15 +9,24 @@ For the purpose of CNV simulation we need to resolve the haplotypes of every ind
 \end{align*}
 where $0 < N_\f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read.
 	
-	We also simulated plasma data sets with decreased fetal DNA mixture ratio. This was done with an approach similar to simulation of a deletion. Each read of fetal origin in the plasma was removed with the probability of $r_{del}$, which is the ratio of fetal DNA reads which have to be removed in order to gain the desired fetal DNA mixture rate. So if $p_\f(seq)$ is the probability of that read sequence belonging to the fetus, the overall probability for removing each read in plasma is equal to:
-	 $$p_\f(seq) \cdot r_{del}$$
-	 If $r$ and $r'$ are respectively the original fetal DNA mixture rate and the intended mixture rate, and also $0 \leq N_\f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read, we will have the following equations to compute $r_{del}$ and $p_\f$:
+	We also simulated plasma data sets with decreased fetal DNA mixture ratio. This was done by using an approach similar to simulation of deletions. If $p_f(seq)$ is the probability of the read sequence $seq$ belonging to the fetus and $r_{del}$ is the ratio with which the fetal reads have to be removed, then each read sequence in plasma like $seq$ has to be removed with the probability:
+	$$r_{del} \cdot p_\f(seq) $$
+
+To estimate the probability $p_\f(seq)$, if $seq$ matches all SNPs in $N_f$ number of fetal haplotypes and $N_m$ number of maternal haplotypes, the following value is considered for it: 
 \begin{align*}
-r_{del} =& 1 - \frac{1-r}{r} \cdot \frac{r'}{1-r'}  \\
 p_\f(seq) =& 
   \begin{cases}
     \mathlarger{\frac{ N_\f \cdot r/2 }{ N_m \cdot (1-r)/2 + N_\f \cdot r/2}} & \text{iff } N_m+N_\f>0 \\
     r & \text{iff } N_m+N_\f=0
   \end{cases}
 \end{align*}
+	
+	
+	 For $r_{del}$, if it is desired to decrease the fetal DNA admixture ratio in plasma from the original rate $r$ to the rate $r'$, we will have:
+
+$$r_{del} = 1 - \frac{1-r}{r} \cdot \frac{r'}{1-r'}  $$
+
+
+
+	 
 
