@@ -4,15 +4,16 @@ For the purpose of CNV simulation we need to resolve the haplotypes of every ind
 	In order to simulate a duplication, of either maternal or paternal origin, we used the parental DNA sequencing data from the family trio data set. First, we filtered for reads mapping to the intended region of duplication that also match the target haplotype of the parent according to the parental phasing. In case of reads not uniquely mapping to either of the two parental haplotypes, i.e. the read mapped to a region without any heterozygous SNP locus, the read was selected randomly with probability $0.5$. Subsequently, the filtered reads were uniformly down-sampled according to fetal DNA mixture ratio and the original plasma DOC in this region to match the expected number of reads derived from a single fetal haplotype in a plasma sequencing. Resulting reads were then mixed together with original plasma reads to create a plasma sample containing the desired duplication in the fetal genome.
 	
 	To simulate a deletion, we first identified a fetal haplotype inherited from the parent of choice, which was to be deleted. We filtered the plasma sample removing reads coming from this target fetal haplotype. That is, each read mapped to the intended deletion region was removed with probability of belonging to the fetus and also being inherited from the intended parent. In order to find this probability we used the phasing to check which maternal and fetal haplotypes match all the SNPs in the read. \todo{unclear} If none of the four haplotypes matched the read, we removed the read with probability $r/2$ where $r$ is the fetal DNA admixture ratio. If the fetal target haplotype matched the read, it was removed with probability
-\begin{align*}
+\begin{align}
 \frac{ r/2 } { N_m \cdot (1-r)/2 + N_\f \cdot r/2}
-\end{align*}
+\end{align}
 where $0 < N_\f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read.
 	
-	We also simulated plasma data sets with decreased fetal DNA mixture ratio. This was done by using an approach similar to simulation of deletions. If $p_f(seq)$ is the probability of the read sequence $seq$ belonging to the fetus and $r_{del}$ is the ratio with which the fetal reads have to be removed, then each read sequence in plasma like $seq$ has to be removed with the probability:
-	$$r_{del} \cdot p_\f(seq) $$
-
-To estimate the probability $p_\f(seq)$, if $seq$ matches all SNPs in $N_f$ number of fetal haplotypes and $N_m$ number of maternal haplotypes, the following value is considered for it: 
+	We also simulated plasma data sets with decreased fetal DNA mixture ratio. In order to achieve a desired down-rated admixture ratio $r'$ in our plasma sample, we had to remove appropriate number of reads coming from the fetal DNA. First, we have computed the appropriate fraction of fetal-origin reads, w.r.t. original admixture ratio $r$, to be removed from the plasma as
+\begin{align}
+r_{del} = 1 - \frac{1-r}{r} \cdot \frac{r'}{1-r'}
+\end{align}
+Similarly to simulation of a deletion, we have then filtered the plasma reads for reads originating from the fetal genome. Since this cannot be decided without ambiguity, we estimated the corresponding probability $p_\f$:
 \begin{align*}
 p_\f(seq) =& 
   \begin{cases}
@@ -20,13 +21,7 @@ p_\f(seq) =&
     r & \text{iff } N_m+N_\f=0
   \end{cases}
 \end{align*}
-	
-	
-	 For $r_{del}$, if it is desired to decrease the fetal DNA admixture ratio in plasma from the original rate $r$ to the rate $r'$, we will have:
-
-$$r_{del} = 1 - \frac{1-r}{r} \cdot \frac{r'}{1-r'}  $$
-
-
-
-	 
-
+where $N_f$ and $N_m$, as above, are the number of fetal and maternal haplotypes that match SNP alleles of the read. Thus a read was then removed with probability equal to
+\begin{align}
+r_{del} \cdot p_\f(seq)
+\end{align}
