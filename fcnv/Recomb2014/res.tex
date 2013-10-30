@@ -2,7 +2,7 @@
 
 \subsection{Datasets and Processing}
 \label{data}
-In our experiments, we have used whole genome sequencing data of two mother-father-child trios I1 (Table \ref{tab:I1}), and G1, publish by \cite{kitzman2012}. In our experiments we have mainly used the first trio I1 with 13\% fetal admixture in obtained plasma. For maternal, paternal, and plasma datasets the reads were aligned to the hg19 genome using BWA. We genotyped both the parents using Samtools and Vcftools. To improve the precision of genotyping we only consider variants at positions previously identified as variable within the 1000 Genomes Project.  Subsequently we have phased the haplotypes using Beagle 4 \cite{browning2013} with reference haplotype panels from 1000 Genomes Project. 
+In our experiments, we have used whole genome sequencing data of two mother-father-child trios I1 (Table \ref{tab:I1}), and G1, published by \cite{kitzman2012}. In our experiments we have mainly used the first trio I1 with 13\% fetal admixture in obtained plasma. For maternal, paternal, and plasma datasets the reads were aligned to the hg19 genome using BWA. We genotyped both the parents using Samtools and Vcftools. To improve the precision of genotyping we only consider variants at positions previously identified as variable within the 1000 Genomes Project.  Subsequently we have phased the haplotypes using Beagle 4 \cite{browning2013} with reference haplotype panels from 1000 Genomes Project. 
 \begin{table}[t]
 \centering
 \begin{tabular}{l|l|c}
@@ -18,9 +18,9 @@ Child (I1-C) & Cord blood at delivery & 40
 \end{table}
 
 \subsection{Evaluation}
-We have simulated 360 CNVs in I1 plasma to test recall of our method, while G1 plasma sample served as a reference in DOC-based CNV estimation described in \ref{ss:coverage}. For each test case, we have picked a random position in chromosome 1, outside known centromere and telomeres region, to place the simulated CNV.  We then ran our algorithm on a sequence window starting 20Mb before the simulated CNV and ending 20Mb after the CNV.  We describe our simulation methods in detail in the Section \ref{ss:simulation}. The results are shown in Table \ref{tab:resRecall}. We identify a CNV as identified if it is overlapped by CNVs of the same type by at least 50\%, while precision is computed as the fraction of correct CNVs over all identified of the current length in all experiments. To evaluate the effect the admixture has on accuracy, we repeated this experiment not only with the original plasma dataset, but also one down-sampled to only contain 10\% admixture. 
+We have simulated 360 CNVs in I1 plasma to test recall of our method, while G1 plasma sample served as a reference in DOC-based CNV estimation described in \ref{ss:coverage}. For each test case, we have picked a random position in chromosome 1, outside known centromere and telomeres regions, to place the simulated CNV.  We then ran our algorithm on a sequence window starting 20Mb before the simulated CNV and ending 20Mb after the CNV.  We describe our simulation methods in detail in the Section \ref{ss:simulation}. The results are shown in Table \ref{tab:resRecall}. We identify a CNV as identified if it is overlapped by CNVs of the same type by at least 50\%, while precision is computed as the fraction of correct CNVs over all identified of the current length in all experiments. To evaluate the effect the admixture has on accuracy, we repeated this experiment not only with the original plasma dataset, but also once down-sampled to only contain 10\% admixture. 
 
-The results indicate that our method can achieve nearly perfect recall and precision for variants > 3 megabases, and promising results down to CNVs of 400 kilobases.  Maternally inherited events are typically more difficult to identify than paternally inherited ones, and deletions more difficult to duplications, possibly due to complete dropout of fetal alleles due to reduced admixture. 
+The results indicate that our method can achieve nearly perfect recall and precision for variants $>3$ megabases, and promising results down to CNVs of 400 kilobases.  Maternally inherited events are typically more difficult to identify than paternally inherited ones, and deletions more difficult to duplications, possibly due to complete dropout of fetal alleles due to reduced admixture. 
 
 
 \begin{table}[t]
@@ -41,6 +41,7 @@ The results indicate that our method can achieve nearly perfect recall and preci
     &    $>$3M    &    recall    &    95.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    45.0\%    &    30.0\%    &    92.5\%    &    85.0\%    \\    
     &        &    precision    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    100.0\%    &    97.4\%    &    97.1\%    \\   	
 \end{tabular}
+\vspace{3pt}
 \caption{Summary of recall on test set composed of 360 \emph{in silico} simulated CNVs in I1 maternal plasma samples with 13\% and 10\% fetal admixture ratio. The ratios column corresponds to the method that only uses allelic ratios, but not the coverage prior. In such cases the precision is reduced, while the recall is largely unaffected.  }
 \label{tab:resRecall} 
 \end{table}
@@ -54,9 +55,10 @@ To test precision of our method, we run our model on the whole plasma dataset (e
 	&		&	50-200K	&	200-400K	&	400-750K	&	750K-3M	&	3M-7.5M	&	10M+ \\ \hline
 \multirow{2}{*}{\emph{in silico} CNV recall}	&	Maternal orig.	&	3.3\%	&	40\%	&	50\%	&	70\%	&	96.7\%	&	100\%	\\
 	&	Paternal orig.	&	40\%	&	70\%	&	100\%	&	96.7\%	&	96.7\%	&	100\%	\\ \hline
-\multirow{2}{*}{WG calls}	&	combined model	&	51 (6, 3)	&	13 (2, 2)	&	5 (1, 0)	&	3 (1, 2)	&	0 (0, 0)	&	0 (0, 0)	\\
+WG calls	&	combined model	&	51 (6, 3)	&	13 (2, 2)	&	5 (1, 0)	&	3 (1, 2)	&	0 (0, 0)	&	0 (0, 0)	\\
 \end{tabular}
-\caption{In silico recall and number of CNVs of various sizes generated in a genome-wide run. For each CNV size we also show (in parenthesis) the number overlapping  CNVnator \cite{abyzov2011cnvnator} calls on the maternal and paternal genomes, respectivelty.}
+\vspace{3pt}
+\caption{In silico recall and number of CNVs of various sizes generated in a genome-wide run. For each CNV size we also show (in parenthesis) the number overlapping  CNVnator \cite{abyzov2011cnvnator} calls on the maternal and paternal genomes, respectively.}
 \label{tab:resWGS} 
 \end{table}
 \vspace{1cm}
