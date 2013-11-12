@@ -46,7 +46,7 @@ The results indicate that our method can achieve nearly perfect recall and preci
 \label{tab:resRecall} 
 \end{table}
 
-To test precision of our method, we run our model on the whole plasma dataset (expected to contain no large de-novo variants) and observed the number of CNV calls for each size. These numbers are shown in table \ref{tab:resWGS}, with \textit{in silico} accuracy for each length shown for comparison. Notably, a large fraction of the larger false positive calls correspond to CNVs already present in parents (and hence inherited, rather than de novo). 
+To test precision of our method, we run our model on the whole plasma dataset (expected to contain no large de-novo variants) and observed the number of CNV calls for each size. These numbers are shown in Table \ref{tab:resWGS}, with \textit{in silico} accuracy for each length shown for comparison. Notably, a large fraction of the larger false positive calls correspond to CNVs already present in parents (and hence inherited, rather than de novo). 
 
 
 \begin{table}[t]
@@ -58,7 +58,7 @@ To test precision of our method, we run our model on the whole plasma dataset (e
 WG calls	&	combined model	&	51 (6, 3)	&	13 (2, 2)	&	5 (1, 0)	&	3 (1, 2)	&	0 (0, 0)	&	0 (0, 0)	\\
 \end{tabular}
 \vspace{3pt}
-\caption{In silico recall and number of CNVs of various sizes generated in a genome-wide run. For each CNV size we also show (in parenthesis) the number overlapping  CNVnator \cite{abyzov2011cnvnator} calls on the maternal and paternal genomes, respectively.}
+\caption{In silico recall and number of CNVs of various sizes generated in a genome-wide run. For each CNV size we also show (in parenthesis) the number of calls that are from at least 50\% overlapped by CNVnator \cite{abyzov2011cnvnator} calls on the maternal and paternal genomes, respectively.}
 \label{tab:resWGS} 
 \end{table}
 \vspace{1cm}

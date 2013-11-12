@@ -5,9 +5,9 @@ To evaluate the accuracy of our CNV discovery algorithm we created simulated dat
 	
 	To simulate a deletion, we first identified a fetal haplotype inherited from the parent of choice, which was to be deleted. We filtered the plasma sample removing reads coming from this target fetal haplotype. That is, each read mapped to the intended deletion region was removed with probability of belonging to the fetus and also being inherited from the intended parent. In order to find this probability we used the phasing to check which maternal and fetal haplotypes match the SNPs in the read. If none of the four haplotypes matched the read, we removed the read with probability $r/2$ where $r$ is the fetal DNA admixture ratio. If the fetal target haplotype matched the read, it was removed with probability
 \begin{align}
-\frac{ r/2 } { N_m \cdot (1-r)/2 + N_\f \cdot r/2}
+\frac{ r/2 } { N_\m \cdot (1-r)/2 + N_\f \cdot r/2}
 \end{align}
-where $0 < N_\f \leq 2$ and $0 \leq N_m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read.
+where $0 < N_\f \leq 2$ and $0 \leq N_\m \leq 2$ are respectively the number of fetal and maternal haplotypes that matched the read.
 	
 	We also simulated plasma data sets with decreased fetal DNA mixture ratio. In order to achieve a desired down-rated admixture ratio $r'$ in our plasma sample, we had to remove appropriate number of reads coming from the fetal DNA. First, we have computed the appropriate fraction of fetal-origin reads, w.r.t. original admixture ratio $r$, to be removed from the plasma as
 \begin{align}
@@ -17,11 +17,11 @@ Similarly to simulation of a deletion, we have then filtered the plasma reads fo
 \begin{align*}
 p_\f(seq) =& 
   \begin{cases}
-    \mathlarger{\frac{ N_\f \cdot r/2 }{ N_m \cdot (1-r)/2 + N_\f \cdot r/2}} & \text{iff } N_m+N_\f>0 \\
-    r & \text{iff } N_m+N_\f=0
+    \mathlarger{\frac{ N_\f \cdot r/2 }{ N_\m \cdot (1-r)/2 + N_\f \cdot r/2}} & \text{iff } N_\m+N_\f>0 \\
+    r & \text{iff } N_\m+N_\f=0
   \end{cases}
 \end{align*}
-where $N_f$ and $N_m$, as above, are the number of fetal and maternal haplotypes that match SNP alleles of the read. Thus a read was then removed with probability equal to
+where $N_\f$ and $N_\m$, as above, are the number of fetal and maternal haplotypes that match SNP alleles of the read. Thus a read was then removed with probability equal to
 \begin{align}
 r_{del} \cdot p_\f(seq)
 \end{align}
