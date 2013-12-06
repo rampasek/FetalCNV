@@ -5,6 +5,7 @@ import sys
 import random
 import copy
 from datetime import datetime
+import matplotlib.pyplot as plt
 
 def isWithinIntervals(num, intervals):
     for interval in intervals:
@@ -102,6 +103,7 @@ def main():
     
     #print lociBG.items()[4], '\n', lociKT.items()[4]
     
+    segLengthsSet = []
     if filter_centromeres: centromere_regions = centromeres[processed_chr]
     #--------
     intersectSize1 = 0
@@ -136,6 +138,7 @@ def main():
                 if revSegLen > 0:
                     print "len+ %4d\tmiss: %3d\tdist: %4d" % (revSegLen, missingStreak, pos-prev_pos)
                     revSegCount += 1
+                    segLengthsSet += [revSegLen]
                     revSegMax = max(revSegMax, revSegLen)
                     revSegMin = min(revSegMin, revSegLen)
                     revSegLen = 0
@@ -144,6 +147,7 @@ def main():
                 if currentSegLen > 0:
                     print "len- %4d\tmiss: %3d\tdist: %4d" % (currentSegLen, missingStreak, pos-prev_pos)
                     segCount += 1
+                    segLengthsSet += [currentSegLen]
                     segMax = max(segMax, currentSegLen)
                     segMin = min(segMin, currentSegLen)
                     currentSegLen = 0
@@ -155,10 +159,12 @@ def main():
       
     if currentSegLen != 0:
         segCount += 1
+        segLengthsSet += [currentSegLen]
         segMax = max(segMax, currentSegLen)
         segMin = min(segMin, currentSegLen)
     if revSegLen != 0:
         revSegCount += 1
+        segLengthsSet += [revSegLen]
         revSegMax = max(revSegMax, revSegLen)
         revSegMin = min(revSegMin, revSegLen)
         
@@ -197,6 +203,13 @@ def main():
     print "avgRevSegLength:", (intersectMatchGT1-intersectMatchHT1)/float(max(revSegCount,1))
     print "revSegMin:", revSegMin
     print "revSegMax:", revSegMax
+    print ""
+    segLengthsSet.sort()
+    print "N50:", segLengthsSet[len(segLengthsSet)/2]
+    
+    plot = plt.hist(segLengthsSet, bins=50, color='blue')
+    plt.show()
+    plot.savefig('plot1.png')
     
 if __name__ == '__main__':
     #import doctest
