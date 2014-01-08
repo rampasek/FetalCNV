@@ -1,0 +1,89 @@
+/dupa-filer/laci/I1/chr1/ismb/wcvg/pure13
+*       Size:           100k+300k       500k+1000k      5000k+10000k    total 
+MDel    Recall:         1       1       1       1 
+MDel    Precision:      0%      0/1     NA      0/0     NA      0/0     0/1 
+
+MDup    Recall:         1       1       1       1 
+MDup    Precision:      0%      0/64    0%      0/8     NA      0/0     0/85    
+
+PDel    Recall:         1       1       1       22/22   
+PDel    Precision:      0%      0/6     0%      0/3     NA      0/0     22/41   
+
+PDup    Recall:         1       1       1       1 
+PDup    Precision:      0%      0/37    0%      0/2     NA      0/0     0/85    
+
+sum     Recall:         1       1       1       22/22   
+sum     Precision:      0%      0/108   0%      0/13    NA      0/0     22/212  
+
+MDel    Recall:         1       1       1       1       1       1       1       1 
+MDel    Precision:      0/0     0/1     0/0     0/0     0/0     0/0     0/0     0/1 
+
+MDup    Recall:         1       1       1       1       1       1       1       1 
+MDup    Precision:      0/13    0/45    0/19    0/6     0/2     0/0     0/0     0/85    
+
+PDel    Recall:         22/22   1       1       1       1       1       1       22/22   
+PDel    Precision:      22/32   0/5     0/1     0/3     0/0     0/0     0/0     22/41   
+
+PDup    Recall:         1       1       1       1       1       1       1       1 
+PDup    Precision:      0/46    0/31    0/6     0/0     0/2     0/0     0/0     0/85    
+
+sum     Recall:         22/22   1       1       1       1       1       1       22/22   
+sum     Precision:      22/91   0/82    0/26    0/9     0/4     0/0     0/0     22/212 
+
+/dupa-filer/laci/I1/chr1/ismb/wcvg
+[laci@supa23 wcvg]$ categorizeIntersect.py pure13.intersectF.txt
+0k      100k    300k    500k    1000k   5000k   10000k  
+69      7       2       1       2       0       0
+[laci@supa23 wcvg]$ categorizeIntersect.py pure13.intersectM.txt 
+0k      100k    300k    500k    1000k   5000k   10000k  
+69      8       3       1       1       0       0
+[laci@supa23 wcvg]$ categorizeIntersect.py pure13.intersectP.txt 
+0k      100k    300k    500k    1000k   5000k   10000k  
+69      4       2       0       2       0       0
+
+
+
+/dupa-filer/laci/I1/chr1/ismb/ronly/pure13
+*       Size:           100k+300k       500k+1000k      5000k+10000k    total 
+MDel    Recall:         1       1       1       1 
+MDel    Precision:      0%      0/1     NA      0/0     NA      0/0     0/1 
+
+MDup    Recall:         1       1       1       1 
+MDup    Precision:      0%      0/52    0%      0/15    NA      0/0     0/75    
+
+PDel    Recall:         1       1       1       22/22   
+PDel    Precision:      0%      0/5     0%      0/1     NA      0/0     22/38   
+
+PDup    Recall:         1       1       1       1 
+PDup    Precision:      0%      0/26    0%      0/3     NA      0/0     0/69    
+
+sum     Recall:         1       1       1       22/22   
+sum     Precision:      0%      0/84    0%      0/19    NA      0/0     22/183  
+
+MDel    Recall:         1       1       1       1       1       1       1       1 
+MDel    Precision:      0/0     0/1     0/0     0/0     0/0     0/0     0/0     0/1 
+
+MDup    Recall:         1       1       1       1       1       1       1       1 
+MDup    Precision:      0/8     0/33    0/19    0/11    0/4     0/0     0/0     0/75    
+
+PDel    Recall:         22/22   1       1       1       1       1       1       22/22   
+PDel    Precision:      22/32   0/4     0/1     0/1     0/0     0/0     0/0     22/38   
+
+PDup    Recall:         1       1       1       1       1       1       1       1 
+PDup    Precision:      0/40    0/22    0/4     0/1     0/2     0/0     0/0     0/69    
+
+sum     Recall:         22/22   1       1       1       1       1       1       22/22   
+sum     Precision:      22/80   0/60    0/24    0/13    0/6     0/0     0/0     22/183 
+
+/dupa-filer/laci/I1/chr1/ismb/ronly
+[laci@supa23 ronly]$ categorizeIntersect.py pure13.intersectF.txt
+0k      100k    300k    500k    1000k   5000k   10000k  
+58      5       1       0       2       0       0
+[laci@supa23 ronly]$ categorizeIntersect.py pure13.intersectM.txt 
+0k      100k    300k    500k    1000k   5000k   10000k  
+58      6       2       1       1       0       0
+[laci@supa23 ronly]$ categorizeIntersect.py pure13.intersectP.txt 
+0k      100k    300k    500k    1000k   5000k   10000k  
+58      2       1       1       2       0       0
+
+
