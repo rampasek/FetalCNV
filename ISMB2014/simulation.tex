@@ -14,13 +14,13 @@ where $0 < N_\f \leq 2$ and $0 \leq N_\m \leq 2$ are respectively the number of 
 r_{del} = 1 - \frac{1-r}{r} \cdot \frac{r'}{1-r'}
 \end{align}
 Similarly to simulation of a deletion, we have then filtered the plasma reads for reads originating from the fetal genome. Since this cannot be decided without ambiguity, we estimated the corresponding probability $p_\f$:
-\begin{align*}
+\begin{align}
 p_\f(seq) =& 
   \begin{cases}
     \mathlarger{\frac{ N_\f \cdot r/2 }{ N_\m \cdot (1-r)/2 + N_\f \cdot r/2}} & \text{iff } N_\m+N_\f>0 \\
     r & \text{iff } N_\m+N_\f=0
   \end{cases}
-\end{align*}
+\end{align}
 where $N_\f$ and $N_\m$, as above, are the number of fetal and maternal haplotypes that match SNP alleles of the read. Thus a read was then removed with probability equal to
 \begin{align}
 r_{del} \cdot p_\f(seq)

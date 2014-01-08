@@ -23,7 +23,7 @@ We have simulated 360 CNVs in I1 plasma to test recall of our method, while G1 p
 The results indicate that our method can achieve nearly perfect recall and precision for variants $>3$ megabases, and promising results down to CNVs of 400 kilobases.  Maternally inherited events are typically more difficult to identify than paternally inherited ones, and deletions more difficult to duplications, possibly due to complete dropout of fetal alleles due to reduced admixture. 
 
 
-\begin{table}[t]
+\begin{table*}[t]
 \centering
 \begin{tabular}{c|c|c||c|c||c|c||c|c||c|c}
 \multirow{2}{*}{$r$}    &    \multirow{2}{*}{length}    &        &    \multicolumn{2}{ |c|| }{Paternal Del (20)}            &    \multicolumn{2}{ |c|| }{Paternal Dup (40)}            &    \multicolumn{2}{ |c|| }{Maternal Del (20)}            &    \multicolumn{2}{ |c }{Maternal Dup (40)}            \\    
@@ -44,13 +44,13 @@ The results indicate that our method can achieve nearly perfect recall and preci
 \vspace{3pt}
 \caption{Summary of recall on test set composed of 360 \emph{in silico} simulated CNVs in I1 maternal plasma samples with 13\% and 10\% fetal admixture ratio. The ratios column corresponds to the method that only uses allelic ratios, but not the coverage prior. In such cases the precision is reduced, while the recall is largely unaffected.  }
 \label{tab:resRecall} 
-\end{table}
+\end{table*}
 
 To test precision of our method, we run our model on the whole plasma dataset (expected to contain no large de-novo variants) and observed the number of CNV calls for each size. These numbers are shown in Table \ref{tab:resWGS}, with \textit{in silico} accuracy for each length shown for comparison. Notably, a large fraction of the larger false positive calls correspond to CNVs already present in parents (and hence inherited, rather than de novo). 
 
 To implement our method we have used Python with PyPy interpreter. When run on chromosome 1 (the largest input size) our implementation required up to 18GB of RAM and took \ntilde 25 minutes of single thread CPU time to finish.
 
-\begin{table}[t]
+\begin{table*}[t]
 \centering
 \begin{tabular}{c|c|c|c|c|c|c|c}
 	&		&	50-200K	&	200-400K	&	400-750K	&	750K-3M	&	3M-7.5M	&	10M+ \\ \hline
@@ -61,7 +61,7 @@ WG calls	&	combined model	&	51 (6, 3)	&	13 (2, 2)	&	5 (1, 0)	&	3 (1, 2)	&	0 (0, 
 \vspace{3pt}
 \caption{In silico recall and number of CNVs of various sizes generated in a genome-wide run. For each CNV size we also show (in parenthesis) the number of calls that are from at least 50\% overlapped by CNVnator \cite{abyzov2011cnvnator} calls on the maternal and paternal genomes, respectively.}
 \label{tab:resWGS} 
-\end{table}
+\end{table*}
 \vspace{1cm}
 
 
