@@ -613,6 +613,8 @@ class FCNV(object):
         #fraction that is fetal but paternaly inherited
         for pHpatt in pattern[1]:
             nuc = Palleles[pHpatt]
+            # dist[nuc] += cmix / numFalleles
+            # use paternal ratio correction
             if numPinherited == 2 and pattern[1][0] != pattern[1][1]:
                 #if both haplotypes are inherited, use the paternal seq. ratio
                 dist[nuc] += (alphaP + Pcounts[pHpatt]) / float(2*alphaP + sumPcount) * (cmix*2./numFalleles)

@@ -72,6 +72,22 @@ class FCNV(object):
     num_neighbors = 200.
     tag_size = 200. # equal to 2 * read length  
     magic_scale_factor = win_size * 10
+    # learned line of correlation between sample and reference WRVs
+    wrv_coef_c0 = 0. # intercept
+    wrv_coef_c1 = 1. # slope
+    #----- I1 plasma vs G1 plasma WRV, IRLS
+    #wrv_coef_c0 = 0.1082 # intercept
+    #wrv_coef_c1 = 0.7834 # slope
+    #---------------
+    #----- I1 plasma vs I1 mother WRV, IRLS
+    #wrv_coef_c0 = 0.3719 # intercept
+    #wrv_coef_c1 = 0.2528 # slope
+    #---------------
+    #----- I1 plasma vs I1 mother WRV, pure LS
+    #wrv_coef_c0 = 0.1553 # intercept
+    #wrv_coef_c1 = 0.6927 # slope
+    #---------------
+    
     
     def __init__(self, positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum):
         """Initialize new FCNV object"""
@@ -85,7 +101,7 @@ class FCNV(object):
         self.prefix_count_ref = prefix_count_ref
         self.gc_sum = gc_sum
         
-        #precompute BRV related stats
+        #precompute WRV related stats
         self.plasma_wins = self.getGCWindows(self.win_size, gc_sum, prefix_sum_plasma, prefix_count_plasma)
         self.ref_wins = self.getGCWindows(self.win_size, gc_sum, prefix_sum_ref, prefix_count_ref)
         self.brv_diff_mean, self.brv_diff_var = self.computeBRVDiffEstimate( \
@@ -93,6 +109,12 @@ class FCNV(object):
             prefix_sum_plasma, prefix_count_plasma, self.plasma_wins, \
             prefix_sum_ref, prefix_count_ref, self.ref_wins )
         self.brv_diff_mean = 0.
+        
+        #compute list of reference and plasma WRV values for all bins
+        #self.computeWRVlist( \
+        #    self.win_size, gc_sum, \
+        #    prefix_sum_plasma, prefix_count_plasma, self.plasma_wins, \
+        #    prefix_sum_ref, prefix_count_ref, self.ref_wins )
         
         #run intern tests
         self.neg_inf = float('-inf')
@@ -153,8 +175,8 @@ class FCNV(object):
             if end >= len(prefix_sum): break
             
             while end > pos and prefix_sum[end]==0: end -= 1
-            if end - pos < win_size * (4./5.):
-                pos = end + 1
+            if end - pos < win_size * 0.9:
+                pos += 1
                 continue 
             
             arrivals = (prefix_sum[end]-prefix_sum[pos]) / (prefix_count[end]-prefix_count[pos]) * win_size / self.tag_size
@@ -164,6 +186,48 @@ class FCNV(object):
             
         windows.sort()
         return windows
+
+    def computeWRVlist(self, win_size, gc_sum, pl_sum, pl_count, pl_wins, ref_sum, ref_count, ref_wins):
+        """
+        Compute WRV values in the same bins of plasma and reference sequencing and output them to a file
+        """
+        wrv_out_file = open("wrv_out_file" + str(random.randint(1, 99999)) + ".txt", "w")
+        print wrv_out_file
+        diffs = []
+        pos = 0
+        while pos < len(pl_sum):
+            if pl_sum[pos]==0 or ref_sum[pos]==0:
+                pos += 1
+                continue
+            
+            end = pos + win_size
+            if end >= len(pl_sum): break
+            
+            while end > pos and (pl_sum[end]==0 or ref_sum[end]==0): end -= 1
+            if end - pos < win_size * 0.9:
+                pos += 1
+                continue 
+            
+            pl_arrivals = (pl_sum[end] - pl_sum[pos]) / (pl_count[end] - pl_count[pos]) * win_size / self.tag_size
+            pl_gc_ratio = (gc_sum[end] - gc_sum[pos]) / float(end-pos)
+            pl_close_arrivals, pl_var = self.getCloseGCArrivalsSum(pl_gc_ratio, pl_wins)
+            pl_brv = pl_arrivals / pl_close_arrivals
+            
+            try:
+                ref_arrivals = (ref_sum[end] - ref_sum[pos]) / (ref_count[end] - ref_count[pos]) * win_size / self.tag_size
+                ref_gc_ratio = (gc_sum[end] - gc_sum[pos]) / float(end-pos)
+                ref_close_arrivals, ref_var = self.getCloseGCArrivalsSum(ref_gc_ratio, ref_wins)
+                ref_brv = ref_arrivals / ref_close_arrivals
+            except ZeroDivisionError:
+                pos += 1
+                continue
+            
+            print >>wrv_out_file, pl_brv, ref_brv, pos, end, end-pos
+            
+            pos = end + 1
+            
+        wrv_out_file.close()
+        return
         
     def computeBRVDiffEstimate(self, win_size, gc_sum, pl_sum, pl_count, pl_wins, ref_sum, ref_count, ref_wins):
         """
@@ -172,30 +236,31 @@ class FCNV(object):
         diffs = []
         pos = 0
         while pos < len(pl_sum):
-            if pl_sum[pos]==0:
+            if pl_sum[pos]==0 or ref_sum[pos]==0:
                 pos += 1
                 continue
             
             end = pos + win_size
             if end >= len(pl_sum): break
             
-            while end > pos and pl_sum[end]==0: end -= 1
-            if end - pos < win_size * (4./5.):
-                pos = end + 1
+            while end > pos and (pl_sum[end]==0 or ref_sum[end]==0): end -= 1
+            if end - pos < win_size * 0.9:
+                pos += 1
                 continue 
             
             pl_arrivals = (pl_sum[end] - pl_sum[pos]) / (pl_count[end] - pl_count[pos]) * win_size / self.tag_size
             pl_gc_ratio = (gc_sum[end] - gc_sum[pos]) / float(end-pos)
-            pl_close_arrivals, pl_var = self.getCloseGCArrivalsSum(pl_gc_ratio, pl_arrivals, pl_wins)
+            pl_close_arrivals, pl_var = self.getCloseGCArrivalsSum(pl_gc_ratio, pl_wins)
             pl_brv = pl_arrivals / pl_close_arrivals
+            #pl_brv = self.wrv_coef_c0 + self.wrv_coef_c1*pl_brv
             
             try:
                 ref_arrivals = (ref_sum[end] - ref_sum[pos]) / (ref_count[end] - ref_count[pos]) * win_size / self.tag_size
                 ref_gc_ratio = (gc_sum[end] - gc_sum[pos]) / float(end-pos)
-                ref_close_arrivals, ref_var = self.getCloseGCArrivalsSum(ref_gc_ratio, ref_arrivals, ref_wins)
+                ref_close_arrivals, ref_var = self.getCloseGCArrivalsSum(ref_gc_ratio, ref_wins)
                 ref_brv = ref_arrivals / ref_close_arrivals
             except ZeroDivisionError:
-                pos = end + 1
+                pos += 1
                 continue
             
             diffs.append((pl_brv - ref_brv) * self.magic_scale_factor)
@@ -391,7 +456,7 @@ class FCNV(object):
         
         return px
     
-    def getCloseGCArrivalsSum(self, gc_ratio, arrivals, wins):
+    def getCloseGCArrivalsSum(self, gc_ratio, wins):
         """
         Computes sum of sequencing fragments in bins with closest GC ratio
         """
@@ -435,14 +500,18 @@ class FCNV(object):
         win_size = self.win_size
         begin_ind = max(0, pos_ind - 1)
         end_ind = min(pos_ind + 1, len(self.positions) - 1)
-        #leftmost = max(int((self.positions[pos_ind] + self.positions[begin_ind]) / 2.), self.positions[pos_ind] - 1000)
-        #rightmost = min(int((self.positions[pos_ind] + self.positions[end_ind]) / 2.), self.positions[pos_ind] + 1000)
-        leftmost = self.positions[pos_ind] - win_size/2
-        rightmost = self.positions[pos_ind] + win_size/2
+        
+        #mid_left = max(int((self.positions[pos_ind] + self.positions[begin_ind]) / 2.), self.positions[pos_ind] - win_size/2)
+        #mid_right = min(int((self.positions[pos_ind] + self.positions[end_ind]) / 2.), self.positions[pos_ind] + win_size/2)
+        mid_left = min(int((self.positions[pos_ind] + self.positions[begin_ind]) / 2.), self.positions[pos_ind] - win_size/10)
+        mid_right = max(int((self.positions[pos_ind] + self.positions[end_ind]) / 2.), self.positions[pos_ind] + win_size/10)
+        
+        #leftmost = self.positions[pos_ind] - win_size/2
+        #rightmost = self.positions[pos_ind] + win_size/2
         
         #compute stats for REFERENCE
-        b = leftmost
-        e = rightmost
+        b = mid_left   #leftmost
+        e = mid_right  #rightmost
         while b < 0 or self.prefix_sum_ref[b] == 0: b += 1
         while e >= len(self.prefix_sum_ref) or self.prefix_sum_ref[e] == 0: e -= 1
         ref_win_size = e - b
@@ -457,15 +526,15 @@ class FCNV(object):
         #get arrivals rate
         mu_arrivals = (mu_doc * win_size) / self.tag_size
         ref_arrivals = (ref_doc * win_size) / self.tag_size
-        ref_close_arrivals, ref_var = self.getCloseGCArrivalsSum(ref_gc_ratio, ref_arrivals, self.ref_wins)
+        ref_close_arrivals, ref_var = self.getCloseGCArrivalsSum(ref_gc_ratio, self.ref_wins)
         
         #compute bin ratio values
         mu_brv  = mu_arrivals / ref_close_arrivals
         ref_brv = ref_arrivals / ref_close_arrivals
         
         #compute stats for PLASMA
-        b = leftmost
-        e = rightmost
+        b = mid_left   #leftmost
+        e = mid_right  #rightmost
         while b < 0 or self.prefix_sum_plasma[b] == 0: b += 1
         while e >= len(self.prefix_sum_plasma) or self.prefix_sum_plasma[e] == 0: e -= 1
         pl_win_size = e - b
@@ -474,8 +543,9 @@ class FCNV(object):
         pl_doc /= float(self.prefix_count_plasma[e] - self.prefix_count_plasma[b])
         pl_arrivals = (pl_doc * win_size) / self.tag_size
         pl_gc_ratio = (self.gc_sum[e] - self.gc_sum[b]) / float(pl_win_size)
-        pl_close_arrivals, pl_var = self.getCloseGCArrivalsSum(pl_gc_ratio, pl_arrivals, self.plasma_wins)
+        pl_close_arrivals, pl_var = self.getCloseGCArrivalsSum(pl_gc_ratio, self.plasma_wins)
         pl_brv = pl_arrivals / pl_close_arrivals
+        pl_brv = self.wrv_coef_c0 + self.wrv_coef_c1*pl_brv
         
         
         #noise_prob = self.logGaussian([pl_brv], [mu_brv], [mu_brv*20])

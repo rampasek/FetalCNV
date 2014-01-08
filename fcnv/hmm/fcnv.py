@@ -7,6 +7,7 @@ import sys
 import fcnvHMM
 import cvrgHMM
 from datetime import datetime
+import os
 
 
 def readInput(in_file_name):
@@ -335,6 +336,19 @@ def main():
     ref_doc_file = open(args.ref[0], "r")
     seq_file = open(args.seq[0], "r")
     if args.ff > 0: mix = args.ff
+    
+    #print input info
+    print "------------------------------------------"
+    print "Running fCNV, input parameters:"
+    print "input:", in_file_name
+    print "target:", target_file_name
+    print "plasma:", plasma_doc_file
+    print "refDOC:", ref_doc_file
+    print "seq:", seq_file
+    print "--ff:", args.ff
+    print "--useCvrg:", args.useCvrg
+    print "------------------------------------------"
+    os.system("hostname")
     
     #read the pre-processed input
     snp_positions, samples, M, P, MSC, PSC = readInput(in_file_name)
