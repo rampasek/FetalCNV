@@ -9,25 +9,6 @@ M_AM_AP_B, M_AM_BP_B, M_BM_BP_B
 \end{align*}
 There are a total of 20 phased inheritance patterns ($\PP$): 6 each for maternal/paternal duplication, 2 each for maternal/paternal deletion, and 4 for normal inheritance). We refer to the number of alleles (copy count) inherited by the fetus as $|\PP|$. We use $r$ to refer to the percentage of cfDNA that is fetus-derived; this parameter is estimated from positions in the genome where the parents are homozygous for alternate alleles.
 
-\begin{figure*}
-%\missingfigure{The main HMM}
-\subfigure[]{ %\label{fig:scatter:a}
-\begin{minipage}[b]{0.49\textwidth}
-		\centering
-		\includegraphics[height=0.35\textheight]{figures/histo}
-		\end{minipage}	
-}
-\hspace{5pt}
-\subfigure[]{ %\label{fig:histo:b}
-	\begin{minipage}[b]{0.49\textwidth}
-		\centering
-	\includegraphics[height=0.35\textheight]{figures/IpGp}
-	\end{minipage}	
-}
-\label{fig:fpkm}
-\caption{(a) Distribution of fragments per kilobase of chromosome 1 per million fragments (FPKM) in 1 megabase segments for plasma sample (blue) and maternal sample (red) of the I1 trio. (b) Scatterplot demonstrating the Correlation of Window Ratio Values (WRV) between plasma samples of I1 and G1 trios. }
-\end{figure*}
-
 \subsection{SNP Allele Distribution}\label{ss:allele_distrib}
 For every SNP locus we observe a distribution of nucleotides in maternal plasma reads. In this section we focus on calculating the probability of the observation with respect to a phased inheritance pattern. Formally, we observe the counts of the 4  nucleotides $\{k_\A, k_\C, k_\G, k_\T\}$ and compute the probability of observing each of these from a particular phased inheritance pattern $\PP$ based on the  Poisson distribution, approximated by a Gaussian, i.e.
 \begin{align}
@@ -53,22 +34,53 @@ We thus obtain the expected probability distribution for each nucleotide observe
 As we describe lower, we use this probability distribution $\N\(\mu_x, \mu_x \)$ that is conditional on phased pattern $\PP$ as the emission distribution for each nucleotide in our HMM.
 
 \subsection{CNVs and Depth of Coverage}\label{ss:coverage}
-Variations in number of fragments sequenced per a region is a standard measure used for detection of mid to large sized CNVs (see \cite{medvedev2009} for a review), and has lately been used for CNV detection from maternal plasma \cite{srinivasan2013, chen2013} as well. However the relatively low admixture of fetal DNA in the maternal plasma together with cfDNA sequencing biases considerably limit potential of methods relying on coverage signal from a single sample. Furthermore, the high variability of the coverage derived from blood plasma (Figure \ref{fig:fpkm}A) makes it difficult to identify shorter CNVs. Thus methods \cite{srinivasan2013, chen2013} require multiple datasets to establish a baseline for CNV calling.
+\begin{figure}
+\caption{Distribution of fragments per kilobase of chromosome 1 per million fragments (FPKM) in 1 megabase segments for plasma sample (blue) and maternal sample (red) of the I1 trio.}
+\label{fig:fpkm}
+\centering
+\includegraphics[height=0.33\textheight]{figures/histo-crop}
+\end{figure}
 
-Simultaneously, the coverage forms an important \textbf{complimentary} signal to the allelic distributions described above: certain ratios have very similar probability under different phased patterns, e.g. a deletion of a maternally inherited allele may yield distributions similar to a paternally inherited duplication. Incorporating the coverage signal helps to discriminate such states. In our method, we use the coverage information as a noisy predictor to complement the signal we obtain from SNP loci. For a reference plasma sequencing coverage we use plasma sample of the G1 trio of \cite{kitzman2012} dataset, as the overall coverages observed in large bins between the two samples correlate well (see Figure \ref{fig:fpkm}B). Since coverage variation of cfDNA from plasma has much wider distribution than standard WGS, a sample from other plasma is more suitable than the same trio maternal sample for purpose of coverage distribution reference in our model. Availability of additional plasma datasets would enable us to further improve the accuracy of the reference bins.
+\begin{figure*}
+\caption{Scatterplots demonstrating the correlation of Window Ratio Values (WRV) between (a) plasma samples of I1 and G1 trios, and (b) between plasma and pure maternal sample of I1 trio. The shown WRVs were computed for windows of size 1kb. In (b), there is a visible grouping of windows with weak WRV correspondence --  an artifact of wider coverage distribution in plasma cfDNA sample compared to standard WGS maternal sample (Figure \ref{fig:fpkm}). This artifact causes (b) to have higher mean absolute error of the fit than in (a). }
+\label{fig:wrv}
+%\missingfigure{The main HMM}
+\subfigure[]{ %\label{fig:scatter:a}
+\begin{minipage}[b]{0.48\textwidth}
+	\centering
+	\includegraphics[width=0.98\textwidth]{figures/IpGp}
+	\end{minipage}	
+}
+\hspace*{10pt}
+\subfigure[]{ %\label{fig:histo:b}
+	\begin{minipage}[b]{0.48\textwidth}
+		\centering
+	\includegraphics[width=0.98\textwidth]{figures/IpIm}
+	\end{minipage}	
+}
+\end{figure*}
 
-First, for each SNP $i$ we compute \emph{window ratio value} $\WRV_i$ for a window $W_i$ of size 1kb centred to the $i$-th SNP. This measure is analogous to the \emph{bin ratio value} in \cite{srinivasan2013}, and we compute it as a ratio of number of fragments $N_{W_i}$ mapped to $W_i$ to sum of fragments mapped to 200 1kb windows with $\G\C$ content closest to $W_i$
+Variations in number of fragments sequenced per a region is a standard measure used for detection of mid to large sized CNVs (see \cite{medvedev2009} for a review), and has lately been used for CNV detection from maternal plasma \citep{srinivasan2013, chen2013} as well. However the relatively low admixture of fetal DNA in the maternal plasma together with cfDNA sequencing biases considerably limit potential of methods relying on coverage signal from a single sample. Furthermore, the high variability of the coverage derived from blood plasma (Figure \ref{fig:fpkm}) makes it difficult to identify shorter CNVs. Thus methods \cite{srinivasan2013, chen2013} require multiple datasets to establish a baseline for CNV calling.
+
+Simultaneously, the coverage forms an important \textbf{complimentary} signal to the allelic distributions described above: certain ratios have very similar probability under different phased patterns, e.g. a deletion of a maternally inherited allele may yield distributions similar to a paternally inherited duplication. Incorporating the coverage signal helps to discriminate such states. In our method, we use the coverage information as a noisy predictor to complement the signal we obtain from SNP loci. For a reference plasma sequencing coverage we use plasma sample of the G1 trio of \cite{kitzman2012} dataset, as the overall coverages observed in corresponding bins between the two samples correlate well (see Figure \ref{fig:wrv}A). Since coverage variation of cfDNA from plasma has much wider distribution than standard WGS, a sample from other plasma is more suitable than the same trio maternal sample (Figure \ref{fig:wrv}B) for purpose of coverage distribution reference in our model. Availability of additional plasma datasets would enable us to further improve the accuracy of the reference bins.
+
+As a measure of coverage in a genomic region we use \emph{window ratio value} (WRV) analogous to the \emph{bin ratio value} measure used by \cite{srinivasan2013}, which is essentially the number of fragments mapped to the region and normalized by the number of fragments mapped to other regions with similar $\G\C$ content.
+
+For the purpose of our model, we split the genome to the largest non-overlapping windows centred to SNP loci. For each SNP $i$ the corresponding $\WRV_i$ for the window $W_i$ centred to the $i$-th SNP position is then computed as a ratio of number of fragments $N_{W_i}$ mapped to $W_i$ to the sum of fragments mapped to 200 windows with $\G\C$ content closest to $W_i$
 \begin{align}
 \WRV_i &= \frac{ N_{W_i} }{ \mathlarger{\sum_{W \in neigh_{\G\C}^{200}(W_i)}} N_{W} }
 \end{align}
-Window ratio values are independent of $\G\C$ content and depth of sequencing, thus for a particular window they are directly comparable between different samples. We model the difference between $\WRV_i^S$ in the studied plasma sample and $\WRV_i^R$ in the reference plasma sample as a Gaussian noise with zero mean and empirically estimated variance $\sigma_{\text{noise}}$.
+In our implementation we precompute the number of fragments mapped to 1kb bins. Further to obtain $\WRV_i$, we first scale $N_{W_i}$ to correspond to expected number of fragments as if $|W_i| = 1$kb by multiplying $N_{W_i}$ by $|W_i|/1000$ (for clarity, not shown in our equations). This is a good approximation as the mean distance between two adjacent SNP loci is expected to be 1kb.
+
+Window ratio values are independent of $\G\C$ content and depth of sequencing of the sample, thus for a particular window they are directly comparable between different samples (Figure \ref{fig:wrv}). We model the difference between $\WRV_i^S$ in the studied plasma sample and $\WRV_i^R$ in the reference plasma sample as a Gaussian noise with zero mean and empirically estimated variance $\sigma_{\text{noise}}$.
 
 We then estimate the probability of the observed number of fragments $N_{W_i}$ in $W_i$ conditional on number of fetal haplotypes ($|\PP|$), which is either three for duplication, one for deletion, or two for normal inheritance. Therefore we compute two more $\WRV_i^R$s, each scaled to reflect one CNV type. For duplication, we would expect to see $(1+r/2)$ times more fragments while for deletion $(1-r/2)$ times less fragments, thus the scaled $\WRV_i^{R,|\PP|}$ is estimated as
 \begin{align}
 \WRV_i^{R,|\PP|} = \frac{ N_{W_i^R} \cdot \big(1+\(|\PP|-2\)\cdot r/2\big) }{ \mathlarger{\sum_{W \in neigh_{\G\C}^{200}(W_i^R)}} N_{W^R} }
+\label{eq:wrv_distrib}
 \end{align}
 
-Note that compared to previous methods we use significantly smaller windows: 1kb versus 100kb-1Mb used previously \cite{chen2013, srinivasan2013}. As mentioned earlier, our goal here is not to detect CNVs immediately, but to rather compute a probability distribution over the number of haplotypes the fetus has inherited, which are used as  priors in the more complex model. Due to the independence assumptions inherent in the HMM we want these priors, applied at each state, to be (approximately) independent, and hence we pick a window size so that windows of adjacent SNPs are unlikely to overlap. We compute the probability of $\WRV_i^S$  being generated from an event with fetal allele copy count $|\PP|$ as $\N(\WRV_i^{R,|\PP|}-\WRV_i^S; \mu=0, \sigma_{\text{noise}})$. We then normalize these to obtain priors for each phased pattern used in the HMM described in the next section. 
+Note that compared to previous methods we use significantly smaller windows: \ntilde1kb versus 100kb-1Mb used previously by \cite{chen2013, srinivasan2013}. As mentioned earlier, our goal here is not to detect CNVs immediately, but to rather compute a probability distribution over the number of haplotypes the fetus has inherited, which are used as  priors in the more complex model. Due to the independence assumptions inherent in the HMM we want these priors, applied at each state, to be (approximately) independent, and hence we pick the largest non-overlapping windows centred around SNPs. We compute the probability of $\WRV_i^S$  being generated from an event with fetal allele copy count $|\PP|$ as $\N(\WRV_i^{R,|\PP|}-\WRV_i^S; \mu=0, \sigma_{\text{noise}})$. We then normalize these to obtain priors for each phased pattern used in the HMM described in the next section. 
 
 \subsection{Hidden Markov Model for CNV Inference}\label{ss:hmm}
 To combine the signals form individual SNP positions, we use an HMM with 20 states corresponding to modelled phased inheritance patterns (Figure \ref{fig:hmm_main}). That means each sate represents a possible set of parental haplotypes inherited by the fetus. States representing normal inheritance are central to the model assuming that two CNVs cannot be immediately subsequent. Between states of the same inheritance pattern, we allow for transitions reflecting either errors in phasing or recombinations. For each state, the emissions are the counts of individual alleles in reads mapped to that particular SNP position. The probability of the observed emission is the probability of such allele counts in the expected allele distribution conditional on phased inheritance pattern as described above in \ref{ss:allele_distrib}.
@@ -78,6 +90,8 @@ To incorporate the coverage information, for each SNP position we multiply the t
 The transition probabilities within an event type (e.g. maternal duplication) were set as $0.01$, to reflect expected haplotype block lengths of several hundred SNPs. Further, the transition probability for starting a CNV was set to one in ten thousand SNP loci ($0.0001$) with length expected to span approximately one thousand SNPs (transition probability back to normal inheritance was set to $0.001$).
 
 \begin{figure*}[t]
+\caption{Hidden Markov model used for CNV inference. (a) High-level architecture of the HMM with 5 sets of states corresponding to 5 types of fetal inheritance. Note, we do not allow two CNVs to be adjacent, thus switching between two CNVs always has to go through normal inheritance state. Edges in (a) represent edges coming in/out of all states between two sets of states. (b-d) Correspond to the diagram of states of the HMM within the normal inheritance, maternal duplication, and maternal deletion states of (a). Paternal duplications/deletions are analogous to (c) and (d). Inner edges in (b-d) serve to model errors in phasing or recombination events.}
+\label{fig:hmm_main}
 %\missingfigure{The main HMM}
 \centering
 \subfigure[Overall HMM architecture]{\label{fig:hmm_main:a}
@@ -106,8 +120,6 @@ The transition probabilities within an event type (e.g. maternal duplication) we
 		\includegraphics[height=0.2\textheight]{figures/DEL-HMM}
 	\end{minipage}	
 }
-
-\caption{Hidden Markov model used for CNV inference. (a) High-level architecture of the HMM with 5 sets of states corresponding to 5 types of fetal inheritance. Note, we do not allow two CNVs to be adjacent, thus switching between two CNVs always has to go through normal inheritance state. Edges in (a) represent edges coming in/out of all states between two sets of states. (b-d) Correspond to the diagram of states of the HMM within the normal inheritance, maternal duplication, and maternal deletion states of (a). Paternal duplications/deletions are analogous to (c) and (d). Inner edges in (b-d) serve to model errors in phasing or recombination events.}\label{fig:hmm_main}
 \end{figure*}
 
 \input simulation
