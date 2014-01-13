@@ -20,10 +20,17 @@ def findIndex(sz):
 def main():
     parser = argparse.ArgumentParser(description='This script filters the given reads of a certain region of plasma so that it simulates a deletion in this region. It requires the read file, snips file, the rate of fetus DNA in the plasma and the target haplotype of fetus for deletion')
     parser.add_argument('summaryFile', type=str, nargs=1, help='the address to the summary file')
+    parser.add_argument('dgtFile', type=str, nargs=1, help='path to dataset ground truth file')
     args = parser.parse_args()
 
     summary_file=open(args.summaryFile[0], "r")
-   
+    
+    dgt_file=open(args.dgtFile[0], "r")
+    DGT={}
+    for line in dgt_file:
+        line = line.split(" ")
+        DGT[line[0]] = int(line[1])
+    
     nameMap={}
     
     stateToType=['MDel', '', 'PDel', '', 'PDup', '', 'MDup']
@@ -31,20 +38,33 @@ def main():
     rawHeader = ''
     for line in summary_file:
         if line.find(".txt")!=-1:
-            if len(rawHeader) > 0 and rawHeader not in nameMap.keys():
-                print '>>UNCATEGORIZED: ', rawHeader,
-                #nameMap[rawHeader]='PDel'
+            #if len(rawHeader) > 0 and rawHeader not in nameMap.keys():
+            #    print '>>UNCATEGORIZED: ', rawHeader,
+            #    #nameMap[rawHeader]='PDel'
             rawHeader=line
-        if line.find('Real State:')!=-1:
-            parts=line.split(' ')
-            if (rawHeader.find('cvrg')==-1 and int(parts[2])==2) or (rawHeader.find('cvrg')!=-1 and int(parts[2])==0):
+            fname = line.split(".")[0]
+            if fname not in DGT:
+                print '>>UNCATEGORIZED: ', rawHeader,
+                continue
+            if (DGT[fname]==2):
                 nameMap[rawHeader]='PDel'
-            if (rawHeader.find('cvrg')==-1 and int(parts[2])==0):
+            if (DGT[fname]==0):
                 nameMap[rawHeader]='MDel'
-            if (rawHeader.find('cvrg')==-1 and int(parts[2])==6) or (rawHeader.find('cvrg')!=-1 and int(parts[2])==2 and rawHeader.find('IM1')!=-1):
+            if (DGT[fname]==6):
                 nameMap[rawHeader]='MDup'
-            if (rawHeader.find('cvrg')==-1 and int(parts[2])==4) or (rawHeader.find('cvrg')!=-1 and int(parts[2])==2 and rawHeader.find('IP1')!=-1):
+            if (DGT[fname]==4):
                 nameMap[rawHeader]='PDup'
+                
+#        if line.find('Real State:')!=-1:
+#            parts=line.split(' ')
+#            if (rawHeader.find('cvrg')==-1 and int(parts[2])==2) or (rawHeader.find('cvrg')!=-1 and int(parts[2])==0):
+#                nameMap[rawHeader]='PDel'
+#            if (rawHeader.find('cvrg')==-1 and int(parts[2])==0):
+#                nameMap[rawHeader]='MDel'
+#            if (rawHeader.find('cvrg')==-1 and int(parts[2])==6) or (rawHeader.find('cvrg')!=-1 and int(parts[2])==2 and rawHeader.find('IM1')!=-1):
+#                nameMap[rawHeader]='MDup'
+#            if (rawHeader.find('cvrg')==-1 and int(parts[2])==4) or (rawHeader.find('cvrg')!=-1 and int(parts[2])==2 and rawHeader.find('IP1')!=-1):
+#                nameMap[rawHeader]='PDup'
     
     if len(rawHeader) > 0 and rawHeader not in nameMap.keys():
         print '>>UNCATEGORIZED: ', rawHeader,
@@ -76,8 +96,11 @@ def main():
                 falsePos['sum'][findIndex(sz)]+=1
         
         if (line.startswith('Recall')):
-            truePos[nameMap[rawHeader]][findIndex(simSZ)]+= int(line.split('\t')[1])
-            truePos['sum'][findIndex(simSZ)]+= int(line.split('\t')[1])
+            tmp_rc = int(line.split('\t')[1])
+            if line.split('\t')[2].startswith("(NAN)"):
+                tmp_rc = 0
+            truePos[nameMap[rawHeader]][findIndex(simSZ)]+= tmp_rc
+            truePos['sum'][findIndex(simSZ)]+= tmp_rc
         
         if (line.startswith('Recall')):
             total[nameMap[rawHeader]][findIndex(simSZ)]+=1
@@ -87,57 +110,58 @@ def main():
 #                print rawHeader
 
 
-#    print '*',
-#    print "\t",
-#    print 'Size:',
-#    print "\t",
-#    print "\t",
-#    for i in range(1, len(binSizes)-1, 2):
-#            print "{0}k+{1}k\t".format(binSizes[i]/k, binSizes[i+1]/k),
-#    print 'total',
+    print '*',
+    print "\t",
+    print 'Size:',
+    print "\t",
+    print "\t",
+    for i in range(1, len(binSizes)-1, 2):
+            print "{0}k+{1}k\t".format(binSizes[i]/k, binSizes[i+1]/k),
+    print 'total',
 
-#    #precision and recall:
-#    for key in sorted(total.keys()):
-#        print ''
-#        print key,
-#        print '\tRecall:',
-#        print "\t",
-#        for i in range(1, len(binSizes)-1, 2):
-#            if total[key][i]==0:
-#                print 1,
-#                print "\t",
-#            else: 
-#                print '%0.0f%%\t' % (float(truePos[key][i]+truePos[key][i+1])/(total[key][i]+total[key][i+1]) *100),
-#                print str(truePos[key][i]+truePos[key][i+1])+'/'+str(total[key][i]+total[key][i+1]),
-#                print "\t",
-#        #        print "Recall for ",
-#        #        print num,
-#        #        print ":: ",
-#        if sum(total[key])==0:
-#            print 1,
-#            print "\t",
-#        else:
-#            #print '%0.4f' % (float(sum(truePos[key]))/sum(total[key])),
-#            print str(sum(truePos[key]))+'/'+str(sum(total[key])),
-#            print "\t",
+    #precision and recall:
+    for key in sorted(total.keys()):
+        print ''
+        print key,
+        print '\tRecall:',
+        print "\t",
+        for i in range(1, len(binSizes)-1, 2):
+            if total[key][i]==0:
+                print 1,
+                print "\t",
+            else: 
+                print '%0.0f%%\t' % (float(truePos[key][i]+truePos[key][i+1])/(total[key][i]+total[key][i+1]) *100),
+                print str(truePos[key][i]+truePos[key][i+1])+'/'+str(total[key][i]+total[key][i+1]),
+                print "\t",
+        #        print "Recall for ",
+        #        print num,
+        #        print ":: ",
+        if sum(total[key])==0:
+            print 1,
+            print "\t",
+        else:
+            #print '%0.4f' % (float(sum(truePos[key]))/sum(total[key])),
+            print str(sum(truePos[key]))+'/'+str(sum(total[key])),
+            print "\t",
 
-#        print ''
-#        print key,
-#        print '\tPrecision:',
-#        print "\t",
-#        for i in range(1, len(binSizes)-1, 2):
-#            #print float(truePos[key][i]+truePos[key][i+1])/(truePos[key][i]+falsePos[key][i]+truePos[key][i+1]+falsePos[key][i+1]),
-#            if float(truePos[key][i]+falsePos[key][i]+truePos[key][i+1]+falsePos[key][i+1]) == 0:
-#                print "NA\t",
-#            else:
-#                print "%0.0f%%\t" % (float(truePos[key][i]+truePos[key][i+1])/(truePos[key][i]+falsePos[key][i]+truePos[key][i+1]+falsePos[key][i+1]) *100),
-#            
-#            print str(truePos[key][i]+truePos[key][i+1])+'/'+str(truePos[key][i]+falsePos[key][i]+truePos[key][i+1]+falsePos[key][i+1]),
-#            print "\t",
-#        print str(sum(truePos[key]))+'/'+str(sum(truePos[key])+sum(falsePos[key])),
-#        print "\t",
-#        print ''
+        print ''
+        print key,
+        print '\tPrecision:',
+        print "\t",
+        for i in range(1, len(binSizes)-1, 2):
+            #print float(truePos[key][i]+truePos[key][i+1])/(truePos[key][i]+falsePos[key][i]+truePos[key][i+1]+falsePos[key][i+1]),
+            if float(truePos[key][i]+falsePos[key][i]+truePos[key][i+1]+falsePos[key][i+1]) == 0:
+                print "NA\t",
+            else:
+                print "%0.0f%%\t" % (float(truePos[key][i]+truePos[key][i+1])/(truePos[key][i]+falsePos[key][i]+truePos[key][i+1]+falsePos[key][i+1]) *100),
+            
+            print str(truePos[key][i]+truePos[key][i+1])+'/'+str(truePos[key][i]+falsePos[key][i]+truePos[key][i+1]+falsePos[key][i+1]),
+            print "\t",
+        print str(sum(truePos[key]))+'/'+str(sum(truePos[key])+sum(falsePos[key])),
+        print "\t",
+        print ''
 
+    print "---------------------------"
     print '*',
     print "\t",
     print 'Size:',
