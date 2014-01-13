@@ -68,10 +68,9 @@ class FCNV(object):
     nucleotides = ['A', 'C', 'G', 'T']
     normal_scale_factor = 1.4826022185
     
-    win_size = 1000
-    num_neighbors = 200.
-    tag_size = 200. # equal to 2 * read length  
-    magic_scale_factor = win_size * 10
+    # win_size - is a parameter
+    num_neighbors = 40.
+    tag_size = 200. # equal to 2 * read length
     # learned line of correlation between sample and reference WRVs
     wrv_coef_c0 = 0. # intercept
     wrv_coef_c1 = 1. # slope
@@ -89,7 +88,7 @@ class FCNV(object):
     #---------------
     
     
-    def __init__(self, positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum):
+    def __init__(self, positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum, win_size):
         """Initialize new FCNV object"""
         super(FCNV, self).__init__()
         
@@ -100,6 +99,8 @@ class FCNV(object):
         self.prefix_sum_ref = prefix_sum_ref
         self.prefix_count_ref = prefix_count_ref
         self.gc_sum = gc_sum
+        self.win_size = win_size
+        self.magic_scale_factor = win_size * 10
         
         #precompute WRV related stats
         self.plasma_wins = self.getGCWindows(self.win_size, gc_sum, prefix_sum_plasma, prefix_count_plasma)
@@ -111,6 +112,7 @@ class FCNV(object):
         self.brv_diff_mean = 0.
         
         #compute list of reference and plasma WRV values for all bins
+        #print "CHR SIZE: ", len(prefix_sum_plasma), len(prefix_sum_ref)
         #self.computeWRVlist( \
         #    self.win_size, gc_sum, \
         #    prefix_sum_plasma, prefix_count_plasma, self.plasma_wins, \
@@ -322,8 +324,8 @@ class FCNV(object):
         for ip in self.inheritance_patterns:
             
             if ip == 2: #generate Normal states transitions
-                pstay = 0.999998
-                pgo = 0.000002 / (num_real_states - 1)
+                pstay = 0.98
+                pgo = 0.02 / (num_real_states - 1)
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -337,8 +339,8 @@ class FCNV(object):
                     trans[i][outState_id] = pgo
                     
             else: #generate CNV states transitions
-                pstay = 0.9998
-                pgo = 0.0002 / (num_real_states - 1)
+                pstay = 0.9
+                pgo = 0.1 #0.002 / (num_real_states - 1)
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
                     #states "inside the IP component"
@@ -348,7 +350,7 @@ class FCNV(object):
                         elif state1.inheritance_pattern + state2.inheritance_pattern != 4:
                             trans[i][j] = pgo
                         else:
-                            trans[i][j] = pgo / 100.
+                            trans[i][j] = 0. #pgo / 100.
                     #to the silent exit node    
                     outState_id = self.getExitState()[0]
                     trans[i][outState_id] = pgo

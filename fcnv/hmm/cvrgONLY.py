@@ -6,6 +6,7 @@ import numpypy as np
 import sys
 import cvrgHMMonly
 from datetime import datetime
+import os
 
 def computeEval(reference, prediction, sensitivity, num_patt):
     """Compute evaluation of referenced anotation versus predicted one.
@@ -271,12 +272,27 @@ def main():
     parser.add_argument('plasma', type=str, nargs=1, help='path to file with plasma sequencing DOC for all chromosomal positions')
     parser.add_argument('ref', type=str, nargs=1, help='path to file with reference plasma sequencing DOC for all chromosomal positions')
     parser.add_argument('seq', type=str, nargs=1, help='path to ref. genomic sequence in fasta format')
+    parser.add_argument('win_size', type=int, nargs=1, help='Window size to bin the sequence for WRVs')
+    parser.add_argument('--ff', type=float, help='fetal mixture ratio', default=-1.)
     args = parser.parse_args()
     
     target_file_name = args.target[0]
     plasma_doc_file = open(args.plasma[0], "r")
     ref_doc_file = open(args.ref[0], "r")
     seq_file = open(args.seq[0], "r")
+    win_size = int(args.win_size[0])
+    if args.ff > 0: mix = args.ff
+    
+    #print input info
+    print "------------------------------------------"
+    print "Running WRV-only fCNV, input parameters:"
+    print "target:", target_file_name
+    print "plasma:", plasma_doc_file
+    print "refDOC:", ref_doc_file
+    print "seq:", seq_file
+    print "win_size:", win_size
+    print "------------------------------------------"
+    os.system("hostname")
     
     #get genomic positions on the last lines of the pileup files to estimate the length of the chromosome
     with open(args.plasma[0], 'rb') as fh:
@@ -313,12 +329,25 @@ def main():
     seq_file.close()
     
     last = 0
+    first_pos_plasma = -1
     for line in plasma_doc_file:
         row = map(int, line.split(' '))
         prefix_sum_plasma[row[0]] = prefix_sum_plasma[last] + row[1]
         prefix_count_plasma[row[0]] = prefix_count_plasma[last] + 1
         last = row[0]
+        if first_pos_plasma == -1: first_pos_plasma = row[0]
     plasma_doc_file.close()
+    
+    #parse CNV position from the plasma pile-up file name
+    try:
+        #$input_dir/IM1-B-chr1-150000000-150500000-duplicate.1.txt
+        plasmaFN = args.plasma[0].split('/')[-1]
+        reg_begin = int(plasmaFN.split('-')[-3])
+        reg_end = int(plasmaFN.split('-')[-2])
+    except:
+        reg_begin = 0
+        reg_end = 0
+    print "Region: ", reg_begin, "-", reg_end
     
     last = 0
     for line in ref_doc_file:
@@ -330,24 +359,39 @@ def main():
     
     snp_positions = []
     ground_truth = []
+    win_positions = []
+    win_ground_truth = []
     target_file = open(target_file_name, 'r')
+    cnv_type = 3
     for line in target_file.readlines():
         line = line.rstrip("\n").split("\t")
         snp_positions.append(int(line[0]))
-        ground_truth.append(int(line[-1]))
+        gt = int(line[-1])
+        ground_truth.append(gt)
+        if gt != 3: cnv_type = gt
     target_file.close()
     
-    fcnv = cvrgHMMonly.FCNV(snp_positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum)
+    curr_pos = first_pos_plasma + win_size/2
+    while curr_pos + win_size/2 < last_pos_plasma:
+        win_positions.append(curr_pos)
+        gt = 3
+        if reg_begin <= curr_pos <= reg_end: gt = cnv_type
+        win_ground_truth.append(gt)
+        curr_pos += win_size
     
-    mix = 0.13 #proportion of fetal genome in plasma
+    fcnv = cvrgHMMonly.FCNV(win_positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum, win_size)
+    
+    #mix = 0.13 #proportion of fetal genome in plasma
     #mix = fcnv.estimateMixture(samples, M, P)
+    #print "Est. Mixture: ", mix
     
-    print "Est. Mixture: ", mix
+    if args.ff > 0: mix = args.ff
+    print "used:", mix
     
     #res_file = open(out_file_name, 'w')
     file_name_prefix = target_file_name.split('/')[-1].split('.')[0].replace(':', '-')
     print "------------------ w/o TRAINING -------------------"
-    test(fcnv, snp_positions, mix, ground_truth, file_name_prefix)
+    test(fcnv, win_positions, mix, win_ground_truth, file_name_prefix)
     #test(fcnv, snp_positions[:1000], mix, ground_truth[:1000], file_name_prefix)
     
     #fcnv.baumWelshForTransitions(samples, M, P, mixture)
