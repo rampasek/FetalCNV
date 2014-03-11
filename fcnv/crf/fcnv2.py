@@ -132,6 +132,7 @@ def computeStats(ok, wrong, pref, num_patt):
 
 def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_name_prefix):
     vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture) 
+    #vp = fcnv.maxPosteriorDecoding(samples, M, P, MSC, PSC, mixture)
     
     date = datetime.now().strftime('%m-%d-%H-%M')
     #fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')
@@ -218,59 +219,61 @@ def main():
     snp_positions, samples, M, P, MSC, PSC = readInput(in_file_name)
     
     #get genomic positions on the last lines of the pileup files to estimate the length of the chromosome
-    with open(args.plasma[0], 'rb') as fh:
-        fh.seek(-256, 2)
-        last_pos_plasma = int(fh.readlines()[-1].decode().split(' ')[0])
-        fh.close()
-#    with open(args.ref[0], 'rb') as fh:
-#        fh.seek(-256, 2)
-#        last_pos_ref = int(fh.readlines()[-1].decode().split(' ')[0])
-#        fh.close()
-    chr_length = last_pos_plasma + 4742
+    if args.useCvrg:
+        with open(args.plasma[0], 'rb') as fh:
+            fh.seek(-256, 2)
+            last_pos_plasma = int(fh.readlines()[-1].decode().split(' ')[0])
+            fh.close()
+#        with open(args.ref[0], 'rb') as fh:
+#            fh.seek(-256, 2)
+#            last_pos_ref = int(fh.readlines()[-1].decode().split(' ')[0])
+#            fh.close()
+        chr_length = last_pos_plasma + 4742
+        
+        gc_sum = [0] * chr_length
+        prefix_sum_plasma = [0] * chr_length
+        prefix_count_plasma = [0] * chr_length
+        prefix_sum_ref = [0] * chr_length
+        prefix_count_ref = [0] * chr_length
     
-    gc_sum = [0] * chr_length
-    prefix_sum_plasma = [0] * chr_length
-    prefix_count_plasma = [0] * chr_length
-    prefix_sum_ref = [0] * chr_length
-    prefix_count_ref = [0] * chr_length
-    
-    #get GC content prefix sums from the reference
-#    gen_pos = 0
-#    keep_reading = True
-#    while keep_reading:
-#        line = seq_file.readline().strip().upper()
-#        if len(line) == 0: break
-#        if line[0] == '>': continue
-#        for i in range(len(line)):
-#            gc_sum[gen_pos] = gc_sum[max(gen_pos - 1, 0)]
-#            if line[i] in 'GC': gc_sum[gen_pos] += 1
-#            gen_pos += 1
-#            if gen_pos >= chr_length:
-#                keep_reading = False
-#                break
-#    seq_file.close()
-#    
-#    last = 0
-#    while True: 
-#        line = plasma_doc_file.readline()
-#        if not line: break
-#        row = map(int, line.split(' '))
-#        if row[0] >= chr_length: break
-#        prefix_sum_plasma[row[0]] = prefix_sum_plasma[last] + row[1]
-#        prefix_count_plasma[row[0]] = prefix_count_plasma[last] + 1
-#        last = row[0]
-#    plasma_doc_file.close()
-#    
-#    last = 0
-#    while True: 
-#        line = ref_doc_file.readline()
-#        if not line: break
-#        row = map(int, line.split(' '))
-#        if row[0] >= chr_length: break
-#        prefix_sum_ref[row[0]] = prefix_sum_ref[last] + row[1]
-#        prefix_count_ref[row[0]] = prefix_count_ref[last] + 1
-#        last = row[0]
-#    ref_doc_file.close()
+        #get GC content prefix sums from the reference
+        gen_pos = 0
+        keep_reading = True
+        while keep_reading:
+            line = seq_file.readline().strip().upper()
+            if len(line) == 0: break
+            if line[0] == '>': continue
+            for i in range(len(line)):
+                gc_sum[gen_pos] = gc_sum[max(gen_pos - 1, 0)]
+                if line[i] in 'GC': gc_sum[gen_pos] += 1
+                gen_pos += 1
+                if gen_pos >= chr_length:
+                    keep_reading = False
+                    break
+        seq_file.close()
+        
+        last = 0
+        while True: 
+            line = plasma_doc_file.readline()
+            if not line: break
+            row = map(int, line.split(' '))
+            if row[0] >= chr_length: break
+            prefix_sum_plasma[row[0]] = prefix_sum_plasma[last] + row[1]
+            prefix_count_plasma[row[0]] = prefix_count_plasma[last] + 1
+            last = row[0]
+        plasma_doc_file.close()
+        
+        last = 0
+        while True: 
+            line = ref_doc_file.readline()
+            if not line: break
+            row = map(int, line.split(' '))
+            if row[0] >= chr_length: break
+            prefix_sum_ref[row[0]] = prefix_sum_ref[last] + row[1]
+            prefix_count_ref[row[0]] = prefix_count_ref[last] + 1
+            last = row[0]
+        ref_doc_file.close()
+    #ENDIF 
     
     #snp_positions = []
     ground_truth = []
