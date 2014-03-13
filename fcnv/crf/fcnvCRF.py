@@ -79,7 +79,7 @@ class FCNV(object):
     
     nucleotides = ['A', 'C', 'G', 'T']
     sigmaWeights = [1.]  #weight vector for node features
-    psiWeights = map(lambda x: x, [0.9799, 0.003, 0.0001, 0.9799, 0.001, 0.0001, 0.])    #weight vector for edge features
+    psiWeights = [0.9799, 0.003, 0.0001, 0.9799, 0.001, 0.0001]    #weight vector for edge features
     
     def __init__(self, positions, cnv_prior, use_prior):
         """Initialize new FCNV object"""
@@ -509,7 +509,7 @@ class FCNV(object):
         return result
     
     
-    def computeLLandGradient(self, samples, M, P, MSC, PSC, mixture):
+    def computeLLandGradient(self, labeling, samples, M, P, MSC, PSC, mixture):
         """
         Compute the parameters likelihood and corresponding gradient
         """
@@ -553,12 +553,50 @@ class FCNV(object):
                     edgeMarginals[pos][s1_id][s2_id] = math.exp(edgeMarginals[pos][s1_id][s2_id] - logSumm)
         
         
-        #compute the likelihood of current parameters (weight vectors)
+        ##compute the likelihood of current parameters (weight vectors)
+        #precompute recombination states -- states with the same label
+        recombStates = [ [] for x in self.inheritance_patterns]
+        for state_id, state in enumerate(self.states[:num_real_states]):
+            recombStates[self.inheritance_patterns.index(state.inheritance_pattern)].append(state_id)
+            
+        logLikelihood = 0.
+        for pos in range(len(labeling)):
+            #real positions are <1..n+1), pos 1 is the base case
+            
+            #pairwise factor value
+            if pos+1 < len(labeling):
+                logLikelihood += edgePotential[labeling[pos]][labeling[pos+1]]
+            
+            nodePotential = self.getNodePotential(pos, self.sigmaWeights, samples, M, P, MSC, PSC, mixture)
+            
+            #(i) compute new values for all phased patterns - "real" states of the HMM:
+            for state_id, state in enumerate(self.states[:num_real_states]):
+                #emission probability in the given state
+                #emis_p = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
+                emis_p = nodePotential[state_id]
+                
+                #porobability of this state is `emission * max{previous state * transition}`
+                max_prev = self.neg_inf
+                arg_max = -1
+                for prev_id in range(num_states):
+                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
+                    tmp = table[pos-1][prev_id] + transitions[prev_id][state_id]
+                    if tmp > max_prev:
+                        max_prev = tmp
+                        arg_max = prev_id
+                table[pos][state_id] = max_prev + emis_p
+                predecessor[pos][state_id] = arg_max
+        
+        
         
         #compute gradients w.r.t. indiviudal features
         
         #update the current weights
         
+    def getUnaryF0(self, pos, samples, M, P, MSC, PSC, mixture, state):
+        #emission probability in the given state
+        emis_logp = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
+        return emis_logp
         
     def getNodePotential(self, pos, sigmaWeights, samples, M, P, MSC, PSC, mixture):
         """
@@ -568,20 +606,82 @@ class FCNV(object):
         each possible label (state), by pooling all node features together
         given weights vector @sigmaWeights
         """
+        
+        featuresList = [self.getUnaryF0]
         num_real_states = self.getNumPP()
-        nodePot = [0] * num_real_states
+        nodePot = [self.neg_inf] * num_real_states
         for state_id, state in enumerate(self.states[:num_real_states]):
-            #emission probability in the given state
-            emis_logp = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
-            nodePot[state_id] = emis_logp
-        
-        self.logNormalize(nodePot)
-        
-        nodePot = map(lambda x: x + math.log(sigmaWeights[0]), nodePot)
-        #for state_id, state in enumerate(self.states[:num_real_states]):
-        #    nodePot[state_id] = sigmaWeights[0] * nodePot[state_id]
+            #sum log values of all unary features for this position and state/lable
+            for i, f in enumerate(featuresList):
+                featureValue = f(pos, samples, M, P, MSC, PSC, mixture, state)
+                featureValue += math.log(sigmaWeights[i])
+                nodePot[state_id] = self.logSum(featureValue, nodePot[state_id])
         
         return nodePot
+    
+    
+    def getBinaryF0(self, sid1, state1, sid2, state2):
+        #for Normal states: pairwise energy of staying in the state
+        if state1.inheritance_pattern == (1, 1):
+            if sid1 == sid2:
+                return 1
+        return 0
+        
+    def getBinaryF1(self, sid1, state1, sid2, state2):
+        #for Normal states: pairwise energy of recombination of the same IP
+        if state1.inheritance_pattern == (1, 1):
+            if sid1 != sid2 and state1.inheritance_pattern == state2.inheritance_pattern:
+                return 1     
+        return 0
+    
+    def getBinaryF2(self, sid1, state1, sid2, state2):
+        #for Normal states: pairwise energy of going to other real states -- to CNV nodes
+        if state1.inheritance_pattern == (1, 1):
+            if state1.inheritance_pattern != state2.inheritance_pattern and self.isReal(state2):
+                if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
+                    return 1
+        return 0
+        
+    def getBinaryF3(self, sid1, state1, sid2, state2):
+        #for CNV states: pairwise energy of staying in the state
+        if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
+            if sid1 == sid2:
+                return 1
+        return 0
+        
+    def getBinaryF4(self, sid1, state1, sid2, state2):
+        #for CNV states: pairwise energy of recombination of the same IP
+        if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
+            if sid1 != sid2 and state1.inheritance_pattern == state2.inheritance_pattern:
+                result = 1
+                if state1.inheritance_pattern == (2, 1):
+                    if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
+                        result = 0
+                elif state1.inheritance_pattern == (1, 2):
+                    if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
+                        result = 0
+                return result
+        return 0
+    
+    def getBinaryF5(self, sid1, state1, sid2, state2):
+        #for CNV states: pairwise energy of going to Normal states
+        if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
+            if state2.inheritance_pattern == (1, 1):
+                return 1
+        return 0
+    
+#    def getBinaryF6(self, sid1, state1, sid2, state2):
+#        #for CNV states: pairwise energy of going to too diffrent recombination
+#        if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
+#            if sid1 != sid2 and state1.inheritance_pattern == state2.inheritance_pattern:
+#                if state1.inheritance_pattern == (2, 1):
+#                    if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
+#                        return 1
+#                elif state1.inheritance_pattern == (1, 2):
+#                    if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
+#                        edgePot[i][j] = wEps
+#                        return 1
+#        return 0
         
     def getEdgePotential(self, psiWeights):
         """
@@ -593,80 +693,37 @@ class FCNV(object):
         num_real_states = self.getNumPP()
         num_states = self.getNumStates()
         
+        featuresList = [self.getBinaryF0, self.getBinaryF1, self.getBinaryF2, self.getBinaryF3, self.getBinaryF4, self.getBinaryF5]
         edgePot = [[0. for x in range(num_states)] for y in range(num_states)]
         
-        wStayNormal = psiWeights[0]
-        wRecombNormal = psiWeights[1]
-        wGoNormal = psiWeights[2]
-        wStayCNV = psiWeights[3]
-        wRecombCNV = psiWeights[4]
-        wGoCNV = psiWeights[5]
-        wEps = psiWeights[6]
-        
-        #first generate pairwise energy from the real states
-        for ip_id, ip in enumerate(self.inheritance_patterns):
+        for sid1, state1 in enumerate(self.states[:num_real_states]):
+            for sid2, state2 in enumerate(self.states[:num_real_states]):
+                #sum log values of all binary features for pair of states/lables
+                for i, f in enumerate(featuresList):
+                    featureValue = f(sid1, state1, sid2, state2)
+                    featureValue *= psiWeights[i]
+                    edgePot[sid1][sid2] += featureValue
             
-            if ip == (1, 1): #generate Normal states pairwise energy
-                for i, state1 in enumerate(self.states[:num_real_states]):
-                    if state1.inheritance_pattern != ip: continue
-                    #states "inside the IP component" -- recombinations
-                    for j, state2 in enumerate(self.states[:num_real_states]):
-                        if i == j:
-                            #stay in the state
-                            edgePot[i][i] = wStayNormal
-                        elif state2.inheritance_pattern == ip:
-                            #to recombination of the same IP
-                            edgePot[i][j] = wRecombNormal
-                        else: 
-                            #to other real states -- to CNV nodes
-                            if state2.inheritance_pattern != (0, 2) \
-                             and state2.inheritance_pattern != (2, 0):
-                                edgePot[i][j] = wGoNormal
-                    #to the exit state
-                    j = self.getExitState()[0]
-                    edgePot[i][j] = 1.
-                    
-            else: #generate CNV states pairwise energy
-                for i, state1 in enumerate(self.states[:num_real_states]):
-                    if state1.inheritance_pattern != ip: continue
-                    #states "inside the IP component" -- recombinations
-                    for j, state2 in enumerate(self.states[:num_real_states]):
-                        if i == j:
-                            #stay in the state
-                            edgePot[i][i] = wStayCNV
-                        elif state2.inheritance_pattern == ip:
-                            #to recombination of the same IP
-                            if state1.inheritance_pattern == (2, 1):
-                                if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
-                                    edgePot[i][j] = wEps
-                                    continue
-                            if state1.inheritance_pattern == (1, 2):
-                                if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
-                                    edgePot[i][j] = wEps
-                                    continue
-                            edgePot[i][j] = wRecombCNV
-                        elif state2.inheritance_pattern == (1, 1): 
-                            #to other admissible real states -- Normal nodes
-                            edgePot[i][j] = wGoCNV
-                    #to the exit state
-                    j = self.getExitState()[0]
-                    edgePot[i][j] = 1.
-                    
-        #now generate pairwise energy from the start node
-        for i, state1 in enumerate(self.states[num_real_states:]):
-            i += num_real_states
+            #constant to the exit state
+            sid2 = self.getExitState()[0]
+            edgePot[sid1][sid2] = 1.  
+        
+        #now generate constant pairwise energy from the start node
+        for sid1, state1 in enumerate(self.states[num_real_states:]):
+            sid1 += num_real_states
             #if it is the start node
             if state1.phased_pattern == "s":
-                for j, state2 in enumerate(self.states[:num_real_states]):
+                for sid2, state2 in enumerate(self.states[:num_real_states]):
                     if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
-                        edgePot[i][j] = 1.
+                        edgePot[sid1][sid2] = 1.
         
-        #take logarithm
+        
+        #done, take logarithm
         for i in range(num_states):
             for j in range(num_states):
                 if edgePot[i][j] < 10e-10: edgePot[i][j] = self.neg_inf
                 else: edgePot[i][j] = math.log(edgePot[i][j])
-        
+            
 #        for k in xrange(num_states):
 #            for l in xrange(num_states):
 #                print "%.4f" % (math.exp(edgePot[k][l])),
