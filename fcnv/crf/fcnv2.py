@@ -131,8 +131,9 @@ def computeStats(ok, wrong, pref, num_patt):
         print pref, t, ": ", o, w, ratio, '%'
 
 def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_name_prefix):
-    vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture) 
+    #vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture) 
     #vp = fcnv.maxPosteriorDecoding(samples, M, P, MSC, PSC, mixture)
+    fcnv.computeLLandGradient(samples, M, P, MSC, PSC, mixture) 
     
     date = datetime.now().strftime('%m-%d-%H-%M')
     #fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')

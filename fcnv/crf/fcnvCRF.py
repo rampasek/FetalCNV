@@ -79,7 +79,7 @@ class FCNV(object):
     
     nucleotides = ['A', 'C', 'G', 'T']
     sigmaWeights = [1.]  #weight vector for node features
-    psiWeights = map(lambda x: x, [0.9799, 0.003, 0.0001, 0.9799, 0.003, 0.0001, 0.])    #weight vector for edge features
+    psiWeights = map(lambda x: x, [0.9799, 0.003, 0.0001, 0.9799, 0.001, 0.0001, 0.])    #weight vector for edge features
     
     def __init__(self, positions, cnv_prior, use_prior):
         """Initialize new FCNV object"""
@@ -137,21 +137,6 @@ class FCNV(object):
         
         #generate silent states
         self.states.append( HMMState("s", "s") ) #start state
-        
-        normalIP = (1,1)
-        for ip in self.inheritance_patterns:
-            if ip == normalIP: continue
-            new_state = HMMState(ip, "out")
-            self.states.append(new_state)
-        
-        self.states.append( HMMState(normalIP, "in") )
-        self.states.append( HMMState(normalIP, "out") )
-        
-        for ip in self.inheritance_patterns:
-            if ip == normalIP: continue
-            new_state = HMMState(ip, "in")
-            self.states.append(new_state)
-        
         self.states.append( HMMState("t", "t") ) #end state
 
         #print the table
@@ -524,8 +509,57 @@ class FCNV(object):
         return result
     
     
-    
-    
+    def computeLLandGradient(self, samples, M, P, MSC, PSC, mixture):
+        """
+        Compute the parameters likelihood and corresponding gradient
+        """
+        
+        #get forward and backward DP tables and log of p(X) -- the Z function
+        fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
+        bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
+        
+        logZ = pX1 + sum(scale)
+        
+        if abs(pX1 - pX2) > 10e-8:
+            print "p(X) from forward and backward DP doesn't match", pX1, pX2
+            return
+        
+        num_real_states = self.getNumPP()
+        n = len(samples)
+        
+        #compute node marginals
+        nodeMarginals = [ [0.]*num_real_states for y in range(n+1)]
+        for pos in xrange(1, n+1):
+            #logSumm = self.neg_inf
+            for s_id in range(len(self.states[:num_real_states])):
+                pStateAtPos = math.exp(fwd[pos][s_id] + bck[pos][s_id] - pX1)
+                nodeMarginals[pos][s_id] = pStateAtPos
+                #logSumm = self.logSum(fwd[pos][s_id] + bck[pos][s_id] - pX1, logSumm)
+            #print logSumm, math.exp(logSumm)
+        
+        #compute egde marginals
+        edgePotential = self.getEdgePotential(self.psiWeights)
+        edgeMarginals = [ [[0.]*num_real_states for x in range(num_real_states)] for y in range(n+1)]
+        for pos in xrange(1, n):
+            nodePotential = self.getNodePotential(pos+1, self.sigmaWeights, samples, M, P, MSC, PSC, mixture)
+            logSumm = self.neg_inf
+            for s1_id in range(len(self.states[:num_real_states])):
+                for s2_id in range(len(self.states[:num_real_states])):
+                    pEdgeAtPos = fwd[pos][s1_id] + edgePotential[s1_id][s2_id] + nodePotential[s2_id] + bck[pos+1][s2_id]
+                    edgeMarginals[pos][s1_id][s2_id] = pEdgeAtPos
+                    logSumm = self.logSum(pEdgeAtPos, logSumm)
+            for s1_id in range(len(self.states[:num_real_states])):
+                for s2_id in range(len(self.states[:num_real_states])):
+                    edgeMarginals[pos][s1_id][s2_id] = math.exp(edgeMarginals[pos][s1_id][s2_id] - logSumm)
+        
+        
+        #compute the likelihood of current parameters (weight vectors)
+        
+        #compute gradients w.r.t. indiviudal features
+        
+        #update the current weights
+        
+        
     def getNodePotential(self, pos, sigmaWeights, samples, M, P, MSC, PSC, mixture):
         """
         Compute overall node potential for position @pos in the observation sequence
@@ -575,24 +609,33 @@ class FCNV(object):
             if ip == (1, 1): #generate Normal states pairwise energy
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
-                    #states "inside the IP component"
+                    #states "inside the IP component" -- recombinations
                     for j, state2 in enumerate(self.states[:num_real_states]):
-                        if i == j: #stay in the state
+                        if i == j:
+                            #stay in the state
                             edgePot[i][i] = wStayNormal
-                        elif state2.inheritance_pattern == ip: #to recombination of the same IP
+                        elif state2.inheritance_pattern == ip:
+                            #to recombination of the same IP
                             edgePot[i][j] = wRecombNormal
-                    #to the silent exit node    
-                    outState_id= self.getCorrespondingOutState(state1)[0]
-                    edgePot[i][outState_id] = wGoNormal
+                        else: 
+                            #to other real states -- to CNV nodes
+                            if state2.inheritance_pattern != (0, 2) \
+                             and state2.inheritance_pattern != (2, 0):
+                                edgePot[i][j] = wGoNormal
+                    #to the exit state
+                    j = self.getExitState()[0]
+                    edgePot[i][j] = 1.
                     
             else: #generate CNV states pairwise energy
                 for i, state1 in enumerate(self.states[:num_real_states]):
                     if state1.inheritance_pattern != ip: continue
-                    #states "inside the IP component"
+                    #states "inside the IP component" -- recombinations
                     for j, state2 in enumerate(self.states[:num_real_states]):
-                        if i == j: #stay in the state
+                        if i == j:
+                            #stay in the state
                             edgePot[i][i] = wStayCNV
-                        elif state2.inheritance_pattern == ip: #to recombination of the same IP
+                        elif state2.inheritance_pattern == ip:
+                            #to recombination of the same IP
                             if state1.inheritance_pattern == (2, 1):
                                 if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
                                     edgePot[i][j] = wEps
@@ -602,48 +645,32 @@ class FCNV(object):
                                     edgePot[i][j] = wEps
                                     continue
                             edgePot[i][j] = wRecombCNV
+                        elif state2.inheritance_pattern == (1, 1): 
+                            #to other admissible real states -- Normal nodes
+                            edgePot[i][j] = wGoCNV
+                    #to the exit state
+                    j = self.getExitState()[0]
+                    edgePot[i][j] = 1.
                     
-                    #to the silent exit node    
-                    outState_id = self.getCorrespondingOutState(state1)[0]
-                    edgePot[i][outState_id] = wGoCNV
-                    
-        #now generate pairwise energy from the silent states
-        inNormal_id = self.getCorrespondingInState( HMMState((1,1), ()) )[0]
-        constW = 0.2
+        #now generate pairwise energy from the start node
         for i, state1 in enumerate(self.states[num_real_states:]):
             i += num_real_states
             #if it is the start node
             if state1.phased_pattern == "s":
-                for j, state2 in enumerate(self.states[num_real_states:]):
-                    if state2.phased_pattern == "in":
-                        edgePot[i][num_real_states + j] = constW
-            
-            #if it is a silent exit node
-            elif state1.phased_pattern == "out":
-                j = self.getExitState()[0]
-                edgePot[i][j] = constW
-                        
-                if self.isNormal(state1):
-                    for j, state2 in enumerate(self.states[num_real_states:]):
-                        if state2.phased_pattern == "in" and \
-                         state2.inheritance_pattern != state1.inheritance_pattern \
-                         and state2.inheritance_pattern != (0,2) \
-                         and state2.inheritance_pattern != (2,0):
-                            edgePot[i][num_real_states + j] = constW
-                else:
-                    edgePot[i][inNormal_id] = constW
-                    
-            #if it is a silent starting node
-            elif state1.phased_pattern == "in":
                 for j, state2 in enumerate(self.states[:num_real_states]):
-                    if state2.inheritance_pattern == state1.inheritance_pattern:
-                        edgePot[i][j] = constW      
+                    if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
+                        edgePot[i][j] = 1.
         
         #take logarithm
         for i in range(num_states):
             for j in range(num_states):
                 if edgePot[i][j] < 10e-10: edgePot[i][j] = self.neg_inf
                 else: edgePot[i][j] = math.log(edgePot[i][j])
+        
+#        for k in xrange(num_states):
+#            for l in xrange(num_states):
+#                print "%.4f" % (math.exp(edgePot[k][l])),
+#            print " "
         
         return edgePot
             
@@ -965,7 +992,7 @@ class FCNV(object):
         """Posterior probability decoding.
         
         For each position returns a list of states ordered by their posterior
-        porobability. Returns list(list(tuple(probability, state)))
+        porobability. Returns list(list(tuple(probability, state))) and log of p(X)
         
         """
         n = len(samples)
@@ -974,7 +1001,8 @@ class FCNV(object):
         fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
         bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
         
-        #print pX1, pX2, sum(scale)
+        logZ = pX1 + sum(scale)
+        #print pX1, pX2, sum(scale), Z
         
         if abs(pX1-pX2) > 10e-8:
             print "p(X) from forward and backward DP doesn't match", pX1, pX2
@@ -1022,7 +1050,7 @@ class FCNV(object):
             table.append(tmp)
         
         print over90, numall, "that is:", over90/float(numall)
-        return table
+        return table, logZ
         
             
     def likelihoodDecoding(self, samples, M, P, MSC, PSC, mixture):
@@ -1088,5 +1116,103 @@ if __name__ == "__main__":
     import doctest
     #doctest.testmod()
     
+############# edges when using "silent states" 
+#def getEdgePotential(self, psiWeights):
+#        """
+#        Compute overall edge potential shared across all edges
+#        
+#        return 'num states' x 'num states' matrix representing the potential that
+#        pools all edge features together given weights vector @psiWeights
+#        """
+#        num_real_states = self.getNumPP()
+#        num_states = self.getNumStates()
+#        
+#        edgePot = [[0. for x in range(num_states)] for y in range(num_states)]
+#        
+#        wStayNormal = psiWeights[0]
+#        wRecombNormal = psiWeights[1]
+#        wGoNormal = psiWeights[2]
+#        wStayCNV = psiWeights[3]
+#        wRecombCNV = psiWeights[4]
+#        wGoCNV = psiWeights[5]
+#        wEps = psiWeights[6]
+#        
+#        #first generate pairwise energy from the real states
+#        for ip_id, ip in enumerate(self.inheritance_patterns):
+#            
+#            if ip == (1, 1): #generate Normal states pairwise energy
+#                for i, state1 in enumerate(self.states[:num_real_states]):
+#                    if state1.inheritance_pattern != ip: continue
+#                    #states "inside the IP component"
+#                    for j, state2 in enumerate(self.states[:num_real_states]):
+#                        if i == j: #stay in the state
+#                            edgePot[i][i] = wStayNormal
+#                        elif state2.inheritance_pattern == ip: #to recombination of the same IP
+#                            edgePot[i][j] = wRecombNormal
+#                    #to the silent exit node    
+#                    outState_id= self.getCorrespondingOutState(state1)[0]
+#                    edgePot[i][outState_id] = wGoNormal
+#                    
+#            else: #generate CNV states pairwise energy
+#                for i, state1 in enumerate(self.states[:num_real_states]):
+#                    if state1.inheritance_pattern != ip: continue
+#                    #states "inside the IP component"
+#                    for j, state2 in enumerate(self.states[:num_real_states]):
+#                        if i == j: #stay in the state
+#                            edgePot[i][i] = wStayCNV
+#                        elif state2.inheritance_pattern == ip: #to recombination of the same IP
+#                            if state1.inheritance_pattern == (2, 1):
+#                                if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
+#                                    edgePot[i][j] = wEps
+#                                    continue
+#                            if state1.inheritance_pattern == (1, 2):
+#                                if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
+#                                    edgePot[i][j] = wEps
+#                                    continue
+#                            edgePot[i][j] = wRecombCNV
+#                    
+#                    #to the silent exit node    
+#                    outState_id = self.getCorrespondingOutState(state1)[0]
+#                    edgePot[i][outState_id] = wGoCNV
+#                    
+#        #now generate pairwise energy from the silent states
+#        inNormal_id = self.getCorrespondingInState( HMMState((1,1), ()) )[0]
+#        constW = 0.2
+#        for i, state1 in enumerate(self.states[num_real_states:]):
+#            i += num_real_states
+#            #if it is the start node
+#            if state1.phased_pattern == "s":
+#                for j, state2 in enumerate(self.states[num_real_states:]):
+#                    if state2.phased_pattern == "in":
+#                        edgePot[i][num_real_states + j] = constW
+#            
+#            #if it is a silent exit node
+#            elif state1.phased_pattern == "out":
+#                j = self.getExitState()[0]
+#                edgePot[i][j] = constW
+#                        
+#                if self.isNormal(state1):
+#                    for j, state2 in enumerate(self.states[num_real_states:]):
+#                        if state2.phased_pattern == "in" and \
+#                         state2.inheritance_pattern != state1.inheritance_pattern \
+#                         and state2.inheritance_pattern != (0,2) \
+#                         and state2.inheritance_pattern != (2,0):
+#                            edgePot[i][num_real_states + j] = constW
+#                else:
+#                    edgePot[i][inNormal_id] = constW
+#                    
+#            #if it is a silent starting node
+#            elif state1.phased_pattern == "in":
+#                for j, state2 in enumerate(self.states[:num_real_states]):
+#                    if state2.inheritance_pattern == state1.inheritance_pattern:
+#                        edgePot[i][j] = constW      
+#        
+#        #take logarithm
+#        for i in range(num_states):
+#            for j in range(num_states):
+#                if edgePot[i][j] < 10e-10: edgePot[i][j] = self.neg_inf
+#                else: edgePot[i][j] = math.log(edgePot[i][j])
+#        
+#        return edgePot
     
     
