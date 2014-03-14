@@ -78,8 +78,6 @@ class FCNV(object):
     """Hidden Markov Model for fetal CNV calling"""
     
     nucleotides = ['A', 'C', 'G', 'T']
-    sigmaWeights = [1.]  #weight vector for node features
-    psiWeights = [0.9799, 0.003, 0.0001, 0.9799, 0.001, 0.0001]    #weight vector for edge features
     
     def __init__(self, positions, cnv_prior, use_prior):
         """Initialize new FCNV object"""
@@ -112,11 +110,25 @@ class FCNV(object):
             self.logTable2.append(math.log(1 + math.exp(-i)) )
         '''
         
+        #set hyper-parameters and default parameters
+         #weight vector for node features
+        self.unaryWeights = [1.]
+        self.unaryFeaturesList = [self.getUnaryF0]
+         #weight vector for edge features
+        self.binaryWeights = [0.9799, 0.003, 0.0001, 0.9799, 0.001, 0.0001]   
+        self.binaryFeaturesList = [self.getBinaryF0, self.getBinaryF1, self.getBinaryF2, self.getBinaryF3, self.getBinaryF4, self.getBinaryF5]
+         #training hyperparameters
+        self.sigmaSqr = 0.01
+        self.omega = 0.001
+        
+        
         #generate inheritance patterns
         self.inheritance_patterns = []
+        self.IPtoID = {}
         for mats in range(3):
             for pats in range(3):
                 if mats+pats in [0,4]: continue
+                self.IPtoID[(mats, pats)] = len(self.inheritance_patterns)
                 self.inheritance_patterns.append((mats, pats))
         
                
@@ -509,112 +521,122 @@ class FCNV(object):
         return result
     
     
-    def computeLLandGradient(self, labeling, samples, M, P, MSC, PSC, mixture):
+    def computeLLandGradient(self, highOrderLabels, samples, M, P, MSC, PSC, mixture):
         """
         Compute the parameters likelihood and corresponding gradient
         """
-        
-        #get forward and backward DP tables and log of p(X) -- the Z function
-        fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
-        bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
-        
-        logZ = pX1 + sum(scale)
-        
-        if abs(pX1 - pX2) > 10e-8:
-            print "p(X) from forward and backward DP doesn't match", pX1, pX2
-            return
-        
-        num_real_states = self.getNumPP()
-        n = len(samples)
-        
-        #compute node marginals
-        nodeMarginals = [ [0.]*num_real_states for y in range(n+1)]
-        for pos in xrange(1, n+1):
-            #logSumm = self.neg_inf
-            for s_id in range(len(self.states[:num_real_states])):
-                pStateAtPos = math.exp(fwd[pos][s_id] + bck[pos][s_id] - pX1)
-                nodeMarginals[pos][s_id] = pStateAtPos
-                #logSumm = self.logSum(fwd[pos][s_id] + bck[pos][s_id] - pX1, logSumm)
-            #print logSumm, math.exp(logSumm)
-        
-        #compute egde marginals
-        edgePotential = self.getEdgePotential(self.psiWeights)
-        edgeMarginals = [ [[0.]*num_real_states for x in range(num_real_states)] for y in range(n+1)]
-        for pos in xrange(1, n):
-            nodePotential = self.getNodePotential(pos+1, self.sigmaWeights, samples, M, P, MSC, PSC, mixture)
-            logSumm = self.neg_inf
-            for s1_id in range(len(self.states[:num_real_states])):
-                for s2_id in range(len(self.states[:num_real_states])):
-                    pEdgeAtPos = fwd[pos][s1_id] + edgePotential[s1_id][s2_id] + nodePotential[s2_id] + bck[pos+1][s2_id]
-                    edgeMarginals[pos][s1_id][s2_id] = pEdgeAtPos
-                    logSumm = self.logSum(pEdgeAtPos, logSumm)
-            for s1_id in range(len(self.states[:num_real_states])):
-                for s2_id in range(len(self.states[:num_real_states])):
-                    edgeMarginals[pos][s1_id][s2_id] = math.exp(edgeMarginals[pos][s1_id][s2_id] - logSumm)
-        
-        
-        ##compute the likelihood of current parameters (weight vectors)
-        #precompute recombination states -- states with the same label
-        recombStates = [ [] for x in self.inheritance_patterns]
-        for state_id, state in enumerate(self.states[:num_real_states]):
-            recombStates[self.inheritance_patterns.index(state.inheritance_pattern)].append(state_id)
+        for iterNum in range(3):
+            #get forward and backward DP tables and log of p(X) -- the Z function
+            fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
+            bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
             
-        logLikelihood = 0.
-        for pos in range(len(labeling)):
-            #real positions are <1..n+1), pos 1 is the base case
+            logZ = pX1 + sum(scale)
             
-            #pairwise factor value
-            if pos+1 < len(labeling):
-                logLikelihood += edgePotential[labeling[pos]][labeling[pos+1]]
+            if abs(pX1 - pX2) > 10e-8:
+                print "p(X) from forward and backward DP doesn't match", pX1, pX2
+                return
             
-            nodePotential = self.getNodePotential(pos, self.sigmaWeights, samples, M, P, MSC, PSC, mixture)
+            num_real_states = self.getNumPP()
+            n = len(samples)
             
-            #(i) compute new values for all phased patterns - "real" states of the HMM:
-            for state_id, state in enumerate(self.states[:num_real_states]):
-                #emission probability in the given state
-                #emis_p = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
-                emis_p = nodePotential[state_id]
+            #compute node marginals
+            nodeMarginals = [ [0.]*num_real_states for y in range(n+1)]
+            for pos in xrange(1, n+1):
+                #logSumm = self.neg_inf
+                for s_id in range(len(self.states[:num_real_states])):
+                    pStateAtPos = math.exp(fwd[pos][s_id] + bck[pos][s_id] - pX1)
+                    nodeMarginals[pos][s_id] = pStateAtPos
+                    #logSumm = self.logSum(fwd[pos][s_id] + bck[pos][s_id] - pX1, logSumm)
+                #print logSumm, math.exp(logSumm)
+            
+            #compute egde marginals
+            edgePotential = self.getEdgePotential(self.binaryWeights)
+            edgeMarginals = [ [[0.]*num_real_states for x in range(num_real_states)] for y in range(n+1)]
+            for pos in xrange(1, n):
+                nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+                logSumm = self.neg_inf
+                for s1_id in range(len(self.states[:num_real_states])):
+                    for s2_id in range(len(self.states[:num_real_states])):
+                        pEdgeAtPos = fwd[pos][s1_id] + edgePotential[s1_id][s2_id] + nodePotential[s2_id] + bck[pos+1][s2_id]
+                        edgeMarginals[pos][s1_id][s2_id] = pEdgeAtPos
+                        logSumm = self.logSum(pEdgeAtPos, logSumm)
+                for s1_id in range(len(self.states[:num_real_states])):
+                    for s2_id in range(len(self.states[:num_real_states])):
+                        edgeMarginals[pos][s1_id][s2_id] = math.exp(edgeMarginals[pos][s1_id][s2_id] - logSumm)
+        
+        
+            #compute the likelihood of current parameters (weight vectors)           
+            logLikelihood = 0.
+            labeling = self.restrictedViterbiPath(highOrderLabels, samples, M, P, MSC, PSC, mixture)
+            for pos in range(len(labeling)):
+                #pairwise factor value
+                if pos+1 < len(labeling):
+                    logLikelihood += edgePotential[labeling[pos]][labeling[pos+1]]
+                #real positions are <1..n+1)
+                nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+                logLikelihood += nodePotential[labeling[pos]]
                 
-                #porobability of this state is `emission * max{previous state * transition}`
-                max_prev = self.neg_inf
-                arg_max = -1
-                for prev_id in range(num_states):
-                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
-                    tmp = table[pos-1][prev_id] + transitions[prev_id][state_id]
-                    if tmp > max_prev:
-                        max_prev = tmp
-                        arg_max = prev_id
-                table[pos][state_id] = max_prev + emis_p
-                predecessor[pos][state_id] = arg_max
-        
-        
-        
-        #compute gradients w.r.t. indiviudal features
-        
-        #update the current weights
+                #if pos+1 < len(labeling): print edgePotential[labeling[pos]][labeling[pos+1]], edgeMarginals[pos+1][labeling[pos]][labeling[pos+1]]
+                #print nodePotential[labeling[pos]],  nodeMarginals[pos+1][labeling[pos]]
+                #print '-------------------'
+                
+            logLikelihood -= logZ
+            
+            wSqr = sum([ x*x  for x in self.unaryWeights + self.binaryWeights ])
+            logLikelihood -= wSqr/(2.*self.sigmaSqr) #regularizator
+            
+            print "loglikelihood at beginning of iter", iterNum, ":", logLikelihood
+            
+            #compute gradients w.r.t. indiviudal features and update the current weights
+             #unary features
+            for i, f in enumerate(self.unaryFeaturesList):
+                grad = 0.
+                for pos in range(len(labeling)):
+                    grad += math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labeling[pos]]))
+                    expect = 0.
+                    for s_id, s in enumerate(self.states[:num_real_states]):
+                        expect += nodeMarginals[pos+1][s_id] * f(pos+1, samples, M, P, MSC, PSC, mixture, s)
+                    grad -= expect
+                grad -= self.unaryWeights[i]/self.sigmaSqr #regularizator
+                self.unaryWeights[i] += self.omega * grad #update the current weights
+                print "unary", i, self.unaryWeights[i]
+                
+             #binary features
+            for i, f in enumerate(self.binaryFeaturesList):
+                grad = 0.
+                for pos in range(len(labeling)-1):
+                    grad += f(labeling[pos], self.states[labeling[pos]], labeling[pos+1], self.states[labeling[pos+1]])
+                    expect = 0.
+                    for s1_id, s1 in enumerate(self.states[:num_real_states]):
+                        for s2_id, s2 in enumerate(self.states[:num_real_states]):
+                            expect += edgeMarginals[pos+1][s1_id][s2_id] * f(s1_id, s1, s2_id, s2)
+                    grad -= expect
+                grad -= self.binaryWeights[i]/self.sigmaSqr #regularizator
+                self.binaryWeights[i] += self.omega * grad #update the current weights
+                print "binary", i, self.binaryWeights[i]
         
     def getUnaryF0(self, pos, samples, M, P, MSC, PSC, mixture, state):
         #emission probability in the given state
         emis_logp = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
         return emis_logp
         
-    def getNodePotential(self, pos, sigmaWeights, samples, M, P, MSC, PSC, mixture):
+    def getNodePotential(self, pos, unaryWeights, samples, M, P, MSC, PSC, mixture):
         """
         Compute overall node potential for position @pos in the observation sequence
         
         return an array of 'num states' length representing the potential for 
         each possible label (state), by pooling all node features together
-        given weights vector @sigmaWeights
+        given weights vector @unaryWeights
         """
         
-        featuresList = [self.getUnaryF0]
+        featuresList = self.unaryFeaturesList
         num_real_states = self.getNumPP()
         nodePot = [self.neg_inf] * num_real_states
         for state_id, state in enumerate(self.states[:num_real_states]):
             #sum log values of all unary features for this position and state/lable
             for i, f in enumerate(featuresList):
                 featureValue = f(pos, samples, M, P, MSC, PSC, mixture, state)
-                featureValue += math.log(sigmaWeights[i])
+                featureValue += math.log(unaryWeights[i])
                 nodePot[state_id] = self.logSum(featureValue, nodePot[state_id])
         
         return nodePot
@@ -683,17 +705,17 @@ class FCNV(object):
 #                        return 1
 #        return 0
         
-    def getEdgePotential(self, psiWeights):
+    def getEdgePotential(self, binaryWeights):
         """
         Compute overall edge potential shared across all edges
         
         return 'num states' x 'num states' matrix representing the potential that
-        pools all edge features together given weights vector @psiWeights
+        pools all edge features together given weights vector @binaryWeights
         """
         num_real_states = self.getNumPP()
         num_states = self.getNumStates()
         
-        featuresList = [self.getBinaryF0, self.getBinaryF1, self.getBinaryF2, self.getBinaryF3, self.getBinaryF4, self.getBinaryF5]
+        featuresList = self.binaryFeaturesList
         edgePot = [[0. for x in range(num_states)] for y in range(num_states)]
         
         for sid1, state1 in enumerate(self.states[:num_real_states]):
@@ -701,7 +723,7 @@ class FCNV(object):
                 #sum log values of all binary features for pair of states/lables
                 for i, f in enumerate(featuresList):
                     featureValue = f(sid1, state1, sid2, state2)
-                    featureValue *= psiWeights[i]
+                    featureValue *= binaryWeights[i]
                     edgePot[sid1][sid2] += featureValue
             
             #constant to the exit state
@@ -737,7 +759,7 @@ class FCNV(object):
         """
         num_states = self.getNumStates()
         num_real_states = self.getNumPP() 
-        transitions = self.getEdgePotential(self.psiWeights)
+        transitions = self.getEdgePotential(self.binaryWeights)
         self.avgCoverage = self.estimateCoverage(samples)
         
         n = len(samples)
@@ -767,7 +789,7 @@ class FCNV(object):
         for pos in xrange(1, n+1):
             #real positions are <1..n+1), pos 1 is the base case
             
-            nodePotential = self.getNodePotential(pos, self.sigmaWeights, samples, M, P, MSC, PSC, mixture)
+            nodePotential = self.getNodePotential(pos, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
             
             #(i) compute new values for all phased patterns - "real" states of the HMM:
             for state_id, state in enumerate(self.states[:num_real_states]):
@@ -822,12 +844,113 @@ class FCNV(object):
         state_path = [[] for i in xrange(n+1)]
         for i in xrange(1, n+1):
             state = self.states[ path[i] ]
-            path[i] = self.inheritance_patterns.index(state.inheritance_pattern)
+            path[i] = self.IPtoID[state.inheritance_pattern]
             state_path[i] = (state.inheritance_pattern, state.phased_pattern)
         
         print "Viterbi path probability: ", table[n][exit_id]    
         return path[1:], state_path[1:]
         
+    def restrictedViterbiPath(self, highOrderLabels, samples, M, P, MSC, PSC, mixture):
+        """
+        Viterbi decoding of the most probable path that has the given higher-order labeling.
+        (i.e. given unphased IP labels)
+        """
+        num_states = self.getNumStates()
+        num_real_states = self.getNumPP() 
+        transitions = self.getEdgePotential(self.binaryWeights)
+        self.avgCoverage = self.estimateCoverage(samples)
+        
+        n = len(samples)
+        predecessor = [[0 for i in range(num_states)] for j in xrange(n+1)] 
+        #DP table dim: seq length+1 x num_states
+        table = [[self.neg_inf for i in range(num_states)] for j in xrange(n+1)] 
+        
+        start_id, start_state = self.getStartState()
+        exit_id, exit_state = self.getExitState()
+        
+        
+        '''INITIALIZE'''
+        #multiply the CNV prior into transition probabilities
+        #self.adjustTransitionProbForPos(0, transitions)
+        
+        #the start state probability is 1 -> log(1)=0
+        table[0][start_id] = 0. 
+        #propagate over all silent states
+        for state_id, state in enumerate(self.states[num_real_states:]):
+            state_id += num_real_states
+            if transitions[start_id][state_id] == self.neg_inf: continue #just for speed-up
+            table[0][state_id] = table[0][start_id] + transitions[start_id][state_id]
+            predecessor[0][state_id] = -1
+         
+        '''DYNAMIC PROGRAMMING'''
+        #for all SNP positions do:
+        for pos in xrange(1, n+1):
+            #real positions are <1..n+1), pos 1 is the base case
+            
+            nodePotential = self.getNodePotential(pos, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+            
+            #(i) compute new values for all phased patterns - "real" states of the HMM:
+            for state_id, state in enumerate(self.states[:num_real_states]):
+                if self.IPtoID[state.inheritance_pattern] != highOrderLabels[pos-1]: continue
+                
+                #emission probability in the given state
+                #emis_p = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
+                emis_p = nodePotential[state_id]
+                
+                #porobability of this state is `emission * max{previous state * transition}`
+                max_prev = self.neg_inf
+                arg_max = -1
+                for prev_id in range(num_states):
+                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
+                    tmp = table[pos-1][prev_id] + transitions[prev_id][state_id]
+                    if tmp > max_prev:
+                        max_prev = tmp
+                        arg_max = prev_id
+                table[pos][state_id] = max_prev + emis_p
+                predecessor[pos][state_id] = arg_max
+            
+            #multiply the CNV prior into transition probabilities
+            #transitions = copy.deepcopy(self.transitions)
+            #self.adjustTransitionProbForPos(pos, transitions)
+            
+            #(ii, iii) transitions from 'real' states and silent states with lower id to silent states
+            #note: the states in self.states are already ordered such that a transistion from a silent 
+            #   state to another silent state always points to a state with heigher index
+            for state_id, state in enumerate(self.states[num_real_states:]):
+                state_id += num_real_states
+                #porobability of this state is `max{(actual real state or silent state with lower id) * transition}`
+                max_prev = self.neg_inf
+                arg_max = -1
+                for prev_id in range(state_id + 1):
+                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
+                    tmp = table[pos][prev_id] + transitions[prev_id][state_id]
+                    if tmp > max_prev:
+                        max_prev = tmp
+                        arg_max = prev_id
+                table[pos][state_id] = max_prev
+                predecessor[pos][state_id] = arg_max
+            
+            #normalize to sum to 1
+            self.logNormalize(table[pos])
+        
+        '''RESULT'''
+        path = [-1 for i in xrange(n+1)]
+        path[n] = exit_id 
+        while path[n] >= num_real_states: path[n] = predecessor[n][path[n]]
+        for i in reversed(xrange(n)):
+            path[i] = predecessor[i+1][path[i+1]]
+            while path[i] >= num_real_states: path[i] = predecessor[i][path[i]]
+        
+#        state_path = [[] for i in xrange(n+1)]
+#        for i in xrange(1, n+1):
+#            state = self.states[ path[i] ]
+#            path[i] = self.IPtoID[state.inheritance_pattern]
+#            state_path[i] = (state.inheritance_pattern, state.phased_pattern)
+#        
+#        print "Viterbi path probability: ", table[n][exit_id]    
+#        return path[1:], state_path[1:]
+
+        return path[1:]
     
     def computeForward(self, samples, M, P, MSC, PSC, mixture):
         '''
@@ -836,7 +959,7 @@ class FCNV(object):
         num_states = self.getNumStates()
         num_real_states = self.getNumPP()
         patterns = self.inheritance_patterns
-        transitions = self.getEdgePotential(self.psiWeights)
+        transitions = self.getEdgePotential(self.binaryWeights)
         self.avgCoverage = self.estimateCoverage(samples)
         
         n = len(samples)
@@ -866,7 +989,7 @@ class FCNV(object):
         for pos in xrange(1, n+1):
             #real positions are <1..n+1), pos 1 is the base case
             
-            nodePotential = self.getNodePotential(pos, self.sigmaWeights, samples, M, P, MSC, PSC, mixture)
+            nodePotential = self.getNodePotential(pos, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
             
             #(i) compute new values for all phased patterns - "real" states of the HMM:
             for state_id, state in enumerate(self.states[:num_real_states]):
@@ -918,7 +1041,7 @@ class FCNV(object):
         num_states = self.getNumStates()
         num_real_states = self.getNumPP()
         patterns = self.inheritance_patterns
-        transitions = self.getEdgePotential(self.psiWeights)
+        transitions = self.getEdgePotential(self.binaryWeights)
         self.avgCoverage = self.estimateCoverage(samples)
         
         n = len(samples)
@@ -964,7 +1087,7 @@ class FCNV(object):
             #emis_p = []
             #for state in self.states[:num_real_states]:
             #    emis_p.append(self.logLHGivenStateWCoverage(pos, samples[pos], M[pos], P[pos], MSC[pos], PSC[pos], mixture, state))
-            nodePotential = self.getNodePotential(pos+1, self.sigmaWeights, samples, M, P, MSC, PSC, mixture)
+            nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
             
             #(i) transitions from all states to 'real' states of the HMM:
             for state_id in range(num_states):
@@ -1040,7 +1163,7 @@ class FCNV(object):
                     arg_max = s
             #print max_posterior
             max_IP = self.states[ arg_max ].inheritance_pattern
-            path.append( self.inheritance_patterns.index(max_IP) )
+            path.append( self.IPtoID[max_IP] )
         
         return path
     
@@ -1174,25 +1297,25 @@ if __name__ == "__main__":
     #doctest.testmod()
     
 ############# edges when using "silent states" 
-#def getEdgePotential(self, psiWeights):
+#def getEdgePotential(self, binaryWeights):
 #        """
 #        Compute overall edge potential shared across all edges
 #        
 #        return 'num states' x 'num states' matrix representing the potential that
-#        pools all edge features together given weights vector @psiWeights
+#        pools all edge features together given weights vector @binaryWeights
 #        """
 #        num_real_states = self.getNumPP()
 #        num_states = self.getNumStates()
 #        
 #        edgePot = [[0. for x in range(num_states)] for y in range(num_states)]
 #        
-#        wStayNormal = psiWeights[0]
-#        wRecombNormal = psiWeights[1]
-#        wGoNormal = psiWeights[2]
-#        wStayCNV = psiWeights[3]
-#        wRecombCNV = psiWeights[4]
-#        wGoCNV = psiWeights[5]
-#        wEps = psiWeights[6]
+#        wStayNormal = binaryWeights[0]
+#        wRecombNormal = binaryWeights[1]
+#        wGoNormal = binaryWeights[2]
+#        wStayCNV = binaryWeights[3]
+#        wRecombCNV = binaryWeights[4]
+#        wGoCNV = binaryWeights[5]
+#        wEps = binaryWeights[6]
 #        
 #        #first generate pairwise energy from the real states
 #        for ip_id, ip in enumerate(self.inheritance_patterns):
