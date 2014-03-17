@@ -119,7 +119,7 @@ class FCNV(object):
         self.binaryFeaturesList = [self.getBinaryF0, self.getBinaryF1, self.getBinaryF2, self.getBinaryF3, self.getBinaryF4, self.getBinaryF5]
          #training hyperparameters
         self.sigmaSqr = 0.01
-        self.omega = 0.001
+        self.omega = 0.00005
         
         
         #generate inheritance patterns
@@ -525,7 +525,8 @@ class FCNV(object):
         """
         Compute the parameters likelihood and corresponding gradient
         """
-        for iterNum in range(3):
+        #labeling = self.restrictedViterbiPath(highOrderLabels, samples, M, P, MSC, PSC, mixture)
+        for iterNum in range(5):
             #get forward and backward DP tables and log of p(X) -- the Z function
             fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
             bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
@@ -568,6 +569,9 @@ class FCNV(object):
             #compute the likelihood of current parameters (weight vectors)           
             logLikelihood = 0.
             labeling = self.restrictedViterbiPath(highOrderLabels, samples, M, P, MSC, PSC, mixture)
+            #if iterNum == 1:
+            #    for i, x in enumerate(labeling):
+            #        print highOrderLabels[i], x, self.IPtoID[self.states[x].inheritance_pattern]
             for pos in range(len(labeling)):
                 #pairwise factor value
                 if pos+1 < len(labeling):
@@ -595,10 +599,11 @@ class FCNV(object):
                     grad += math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labeling[pos]]))
                     expect = 0.
                     for s_id, s in enumerate(self.states[:num_real_states]):
-                        expect += nodeMarginals[pos+1][s_id] * f(pos+1, samples, M, P, MSC, PSC, mixture, s)
+                        expect += nodeMarginals[pos+1][s_id] * math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, s))
                     grad -= expect
                 grad -= self.unaryWeights[i]/self.sigmaSqr #regularizator
                 self.unaryWeights[i] += self.omega * grad #update the current weights
+                self.unaryWeights[i] = max(self.unaryWeights[i], 0.0001)
                 print "unary", i, self.unaryWeights[i]
                 
              #binary features
@@ -613,6 +618,7 @@ class FCNV(object):
                     grad -= expect
                 grad -= self.binaryWeights[i]/self.sigmaSqr #regularizator
                 self.binaryWeights[i] += self.omega * grad #update the current weights
+                self.binaryWeights[i] = max(self.binaryWeights[i], 0.0001)
                 print "binary", i, self.binaryWeights[i]
         
     def getUnaryF0(self, pos, samples, M, P, MSC, PSC, mixture, state):

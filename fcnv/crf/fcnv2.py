@@ -134,6 +134,7 @@ def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, fi
     #vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture) 
     #vp = fcnv.maxPosteriorDecoding(samples, M, P, MSC, PSC, mixture)
     fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mixture) 
+    return 0
     
     date = datetime.now().strftime('%m-%d-%H-%M')
     #fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')
