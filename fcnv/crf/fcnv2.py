@@ -43,6 +43,51 @@ def readInput(in_file_name):
     in_file.close()
     return positions, samples, M, P, MC, PC
 
+def readParams(param_file):
+    """Read the CRF model parameters from file
+    
+    arguments:
+    param_file -- file handler opened for read
+    returns dictionary with parameters    
+    """
+    crfParams = {}
+    if not param_file:
+        print "readParams: Error, file handler not valid"
+        return crfParams
+    
+    for line in param_file.readlines():
+        line = line.rstrip('\n').split('=')
+        if len(line) != 2: continue
+        line[0] = line[0].strip().rstrip()
+        
+        if line[0] == 'unaryWeights':
+            unaryWeights = map(float, line[1].split())
+            crfParams['unaryWeights'] = unaryWeights
+            
+        elif line[0] == 'binaryWeights':
+            binaryWeights = map(float, line[1].split())
+            crfParams['binaryWeights'] = binaryWeights
+            
+        elif line[0] == 'epsWeight':
+            epsWeight = float(line[1])
+            crfParams['epsWeight'] = epsWeight
+            
+        elif line[0] == 'sigmaSqr':
+            sigmaSqr = float(line[1])
+            crfParams['sigmaSqr'] = sigmaSqr
+            
+        elif line[0] == 'omega':
+            omega = float(line[1])
+            crfParams['omega'] = omega
+            
+        else:
+            print "Unknown parameter keyword", line[0], line[1]
+    
+    if len(crfParams) != 5:
+        print "readParams: Not enough parameters!!"
+    return crfParams
+
+
 def computeEval(reference, prediction, sensitivity, num_patt):
     """Compute evaluation of referenced anotation versus predicted one.
     
@@ -131,10 +176,8 @@ def computeStats(ok, wrong, pref, num_patt):
         print pref, t, ": ", o, w, ratio, '%'
 
 def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_name_prefix):
-    #vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture) 
+    vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture) 
     #vp = fcnv.maxPosteriorDecoding(samples, M, P, MSC, PSC, mixture)
-    fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mixture) 
-    return 0
     
     date = datetime.now().strftime('%m-%d-%H-%M')
     #fout = file(file_name_prefix + ".prediction" + date + ".txt", 'w')
@@ -193,8 +236,10 @@ def main():
     parser.add_argument('plasma', type=str, nargs=1, help='path to file with plasma sequencing DOC for all chromosomal positions')
     parser.add_argument('ref', type=str, nargs=1, help='path to file with reference plasma sequencing DOC for all chromosomal positions')
     parser.add_argument('seq', type=str, nargs=1, help='path to ref. genomic sequence in fasta format')
+    parser.add_argument('param', type=str, nargs=1, help='path to file with method parameters')
     parser.add_argument('--ff', type=float, help='fetal mixture ratio', default=-1.)
     parser.add_argument('--useCvrg', help='use coverage flag', action="store_true")
+    parser.add_argument('--trainGrad', type=str, help='train by maxll gradient and output new params to given file', default="")
     args = parser.parse_args()
     
     in_file_name = args.input[0]
@@ -202,7 +247,12 @@ def main():
     plasma_doc_file = open(args.plasma[0], "r")
     ref_doc_file = open(args.ref[0], "r")
     seq_file = open(args.seq[0], "r")
+    param_file = open(args.param[0], "r")
     if args.ff > 0: mix = args.ff
+    runGradTraining = False
+    if args.trainGrad != "":
+         runGradTraining = True
+         res_param_file_name = args.trainGrad
     
     #print input info
     print "------------------------------------------"
@@ -212,13 +262,22 @@ def main():
     print "plasma:", plasma_doc_file
     print "refDOC:", ref_doc_file
     print "seq:", seq_file
+    print "param:", param_file
     print "--ff:", args.ff
     print "--useCvrg:", args.useCvrg
+    print "--trainGrad:", args.trainGrad
     print "------------------------------------------"
     os.system("hostname")
     
     #read the pre-processed input
     snp_positions, samples, M, P, MSC, PSC = readInput(in_file_name)
+    
+    #fetch the method parameters from file
+    crfParams = readParams(param_file)
+    print "============ CRF PARAMETERS =============="
+    for p in sorted(crfParams):
+        print p, "=", crfParams[p]
+    print "=========================================="
     
     #get genomic positions on the last lines of the pileup files to estimate the length of the chromosome
     if args.useCvrg:
@@ -288,7 +347,7 @@ def main():
         ground_truth.append(int(line[-1]))
     target_file.close()
     
-    fcnv = fcnvCRF.FCNV(None, None, False)
+    fcnv = fcnvCRF.FCNV(crfParams, None, None, False)
     mix, mix_median, ct = fcnv.estimateMixture(samples, M, P)
     print "Est. Mixture: ", mix, mix_median, '(', ct ,')',
     #mix = 0.13 #proportion of fetal genome in plasma
@@ -309,7 +368,7 @@ def main():
 #        del cvrg, cvrg_posterior
     
     del fcnv
-    fcnv = fcnvCRF.FCNV(snp_positions, cnv_prior, args.useCvrg)
+    fcnv = fcnvCRF.FCNV(crfParams, snp_positions, cnv_prior, args.useCvrg)
     
     ground_truth = []
     target_file = open(target_file_name, 'r')
@@ -317,6 +376,26 @@ def main():
         line = line.rstrip("\n").split("\t")
         ground_truth.append(int(line[-1]))
     target_file.close()
+    
+    
+    #run gradient training
+    if runGradTraining:
+        #run the training iterations
+        for iterNum in range(2):
+        #    print "iterNum: ", iterNum
+            ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix) 
+        #print ll, params
+        
+        #save the trained parameters to the file
+        res_param_file = open(res_param_file_name, "w")    
+        for p in sorted(params):
+            if isinstance(params[p], list):
+                print >>res_param_file, p, "=", " ".join(map(str, params[p]))
+            else:
+                print >>res_param_file, p, "=", params[p]
+        res_param_file.close()
+        
+        return 0
     
     #res_file = open(out_file_name, 'w')
     file_name_prefix = target_file_name.split('/')[-1].split('.')[0].replace(':', '-')

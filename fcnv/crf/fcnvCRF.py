@@ -79,7 +79,7 @@ class FCNV(object):
     
     nucleotides = ['A', 'C', 'G', 'T']
     
-    def __init__(self, positions, cnv_prior, use_prior):
+    def __init__(self, crfParams, positions, cnv_prior, use_prior):
         """Initialize new FCNV object"""
         super(FCNV, self).__init__()
         
@@ -110,17 +110,22 @@ class FCNV(object):
             self.logTable2.append(math.log(1 + math.exp(-i)) )
         '''
         
-        #set hyper-parameters and default parameters
-         #weight vector for node features
-        self.unaryWeights = [1.]
-        self.unaryFeaturesList = [self.getUnaryF0]
-         #weight vector for edge features
-        self.binaryWeights = [0.9799, 0.003, 0.0001, 0.9799, 0.001, 0.0001]   
-        self.binaryFeaturesList = [self.getBinaryF0, self.getBinaryF1, self.getBinaryF2, self.getBinaryF3, self.getBinaryF4, self.getBinaryF5]
-         #training hyperparameters
-        self.sigmaSqr = 0.01
-        self.omega = 0.00005
+#        #hard-set hyper-parameters and default parameters
+#         #weight vector for node features
+#        self.unaryWeights = [1.]
+#        self.unaryFeaturesList = [self.getUnaryF0]
+#         #weight vector for edge features
+#        #self.binaryWeights = [0.9799, 0.003, 0.0001, 0.9799, 0.001, 0.0001]
+#        self.binaryWeights = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+#        self.binaryFeaturesList = [self.getBinaryF0, self.getBinaryF1, self.getBinaryF2, self.getBinaryF3, self.getBinaryF4, self.getBinaryF5]
+#         #minimal epsilon weight for a feature
+#        self.epsWeight = 0.0001
+#         #training hyperparameters
+#        self.sigmaSqr = 0.01
+#        self.omega = 0.00005
         
+        #set hyper-parameters and CRF parameters
+        self.setCRFparams(crfParams)
         
         #generate inheritance patterns
         self.inheritance_patterns = []
@@ -157,6 +162,32 @@ class FCNV(object):
         #    for l in xrange(num_states):
         #        print "%.4f" % (math.exp(self.transitions[k][l])),
         #    print " "
+    
+    def setCRFparams(self, crfParams):
+        """Set the given CRF parameters to global variables
+        """
+         #weight vector for node features
+        self.unaryWeights = crfParams['unaryWeights']
+        self.unaryFeaturesList = [self.getUnaryF0]
+         #weight vector for edge features
+        self.binaryWeights = crfParams['binaryWeights']
+        self.binaryFeaturesList = [self.getBinaryF0, self.getBinaryF1, self.getBinaryF2, self.getBinaryF3, self.getBinaryF4, self.getBinaryF5]
+         #minimal epsilon weight for a feature
+        self.epsWeight = crfParams['epsWeight']
+         #training hyperparameters
+        self.sigmaSqr = crfParams['sigmaSqr']
+        self.omega = crfParams['omega']
+        
+    def encodeCRFparams(self):
+        """Return dictionary with currently used CRF parameters
+        """
+        crfParams = {}
+        crfParams['unaryWeights'] = self.unaryWeights
+        crfParams['binaryWeights'] = self.binaryWeights
+        crfParams['epsWeight'] = self.epsWeight
+        crfParams['sigmaSqr'] = self.sigmaSqr
+        crfParams['omega'] = self.omega
+        return crfParams
             
     @memoized     
     def getNumIP(self):
@@ -523,103 +554,107 @@ class FCNV(object):
     
     def computeLLandGradient(self, highOrderLabels, samples, M, P, MSC, PSC, mixture):
         """
-        Compute the parameters likelihood and corresponding gradient
+        Compute the parameters likelihood, corresponding gradient, and update the weights
         """
-        #labeling = self.restrictedViterbiPath(highOrderLabels, samples, M, P, MSC, PSC, mixture)
-        for iterNum in range(5):
-            #get forward and backward DP tables and log of p(X) -- the Z function
-            fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
-            bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
-            
-            logZ = pX1 + sum(scale)
-            
-            if abs(pX1 - pX2) > 10e-8:
-                print "p(X) from forward and backward DP doesn't match", pX1, pX2
-                return
-            
-            num_real_states = self.getNumPP()
-            n = len(samples)
-            
-            #compute node marginals
-            nodeMarginals = [ [0.]*num_real_states for y in range(n+1)]
-            for pos in xrange(1, n+1):
-                #logSumm = self.neg_inf
-                for s_id in range(len(self.states[:num_real_states])):
-                    pStateAtPos = math.exp(fwd[pos][s_id] + bck[pos][s_id] - pX1)
-                    nodeMarginals[pos][s_id] = pStateAtPos
-                    #logSumm = self.logSum(fwd[pos][s_id] + bck[pos][s_id] - pX1, logSumm)
-                #print logSumm, math.exp(logSumm)
-            
-            #compute egde marginals
-            edgePotential = self.getEdgePotential(self.binaryWeights)
-            edgeMarginals = [ [[0.]*num_real_states for x in range(num_real_states)] for y in range(n+1)]
-            for pos in xrange(1, n):
-                nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
-                logSumm = self.neg_inf
-                for s1_id in range(len(self.states[:num_real_states])):
-                    for s2_id in range(len(self.states[:num_real_states])):
-                        pEdgeAtPos = fwd[pos][s1_id] + edgePotential[s1_id][s2_id] + nodePotential[s2_id] + bck[pos+1][s2_id]
-                        edgeMarginals[pos][s1_id][s2_id] = pEdgeAtPos
-                        logSumm = self.logSum(pEdgeAtPos, logSumm)
-                for s1_id in range(len(self.states[:num_real_states])):
-                    for s2_id in range(len(self.states[:num_real_states])):
-                        edgeMarginals[pos][s1_id][s2_id] = math.exp(edgeMarginals[pos][s1_id][s2_id] - logSumm)
+        #get forward and backward DP tables and log of p(X) -- the Z function
+        fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
+        bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
         
+        logZ = pX1 + sum(scale)
         
-            #compute the likelihood of current parameters (weight vectors)           
-            logLikelihood = 0.
-            labeling = self.restrictedViterbiPath(highOrderLabels, samples, M, P, MSC, PSC, mixture)
-            #if iterNum == 1:
-            #    for i, x in enumerate(labeling):
-            #        print highOrderLabels[i], x, self.IPtoID[self.states[x].inheritance_pattern]
+        if abs(pX1 - pX2) > 10e-8:
+            print "p(X) from forward and backward DP doesn't match", pX1, pX2
+            return
+        
+        num_real_states = self.getNumPP()
+        n = len(samples)
+        
+        #compute node marginals
+        nodeMarginals = [ [0.]*num_real_states for y in range(n+1)]
+        #logNodeMarginals = [ [self.neg_inf]*num_real_states for y in range(n+1)]
+        for pos in xrange(1, n+1):
+            #logSumm = self.neg_inf
+            for s_id in range(len(self.states[:num_real_states])):
+                logpStateAtPos = fwd[pos][s_id] + bck[pos][s_id] - pX1
+                nodeMarginals[pos][s_id] = math.exp(logpStateAtPos)
+                #logNodeMarginals[pos][s_id] = logpStateAtPos
+                #logSumm = self.logSum(fwd[pos][s_id] + bck[pos][s_id] - pX1, logSumm)
+            #print logSumm, math.exp(logSumm)
+        
+        #compute egde marginals
+        edgePotential = self.getEdgePotential(self.binaryWeights)
+        edgeMarginals = [ [[0.]*num_real_states for x in range(num_real_states)] for y in range(n+1)]
+        for pos in xrange(1, n):
+            nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+            logSumm = self.neg_inf
+            for s1_id in range(len(self.states[:num_real_states])):
+                for s2_id in range(len(self.states[:num_real_states])):
+                    pEdgeAtPos = fwd[pos][s1_id] + edgePotential[s1_id][s2_id] + nodePotential[s2_id] + bck[pos+1][s2_id]
+                    edgeMarginals[pos][s1_id][s2_id] = pEdgeAtPos
+                    logSumm = self.logSum(pEdgeAtPos, logSumm)
+            for s1_id in range(len(self.states[:num_real_states])):
+                for s2_id in range(len(self.states[:num_real_states])):
+                    edgeMarginals[pos][s1_id][s2_id] = math.exp(edgeMarginals[pos][s1_id][s2_id] - logSumm)
+    
+    
+        #compute the likelihood of current parameters (weight vectors)           
+        logLikelihood = 0.
+        labeling = self.restrictedViterbiPath(highOrderLabels, samples, M, P, MSC, PSC, mixture)
+        #for i, x in enumerate(labeling):
+        #    print highOrderLabels[i], x, self.IPtoID[self.states[x].inheritance_pattern]
+        for pos in range(len(labeling)):
+            #pairwise factor value
+            if pos+1 < len(labeling):
+                logLikelihood += edgePotential[labeling[pos]][labeling[pos+1]]
+            #real positions are <1..n+1)
+            nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+            logLikelihood += nodePotential[labeling[pos]]
+            
+            #if pos+1 < len(labeling): print edgePotential[labeling[pos]][labeling[pos+1]], edgeMarginals[pos+1][labeling[pos]][labeling[pos+1]]
+            #print nodePotential[labeling[pos]],  nodeMarginals[pos+1][labeling[pos]]
+            #print '-------------------'
+            
+        logLikelihood -= logZ
+        
+        wSqr = sum([ x*x  for x in self.unaryWeights + self.binaryWeights ])
+        logLikelihood -= wSqr/(2.*self.sigmaSqr) #regularizator
+        
+        print "loglikelihood before param adjustment:", logLikelihood
+        
+        #compute gradients w.r.t. indiviudal features and update the current weights
+         #unary features
+        for i, f in enumerate(self.unaryFeaturesList):
+            grad = 0.
             for pos in range(len(labeling)):
-                #pairwise factor value
-                if pos+1 < len(labeling):
-                    logLikelihood += edgePotential[labeling[pos]][labeling[pos+1]]
-                #real positions are <1..n+1)
-                nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
-                logLikelihood += nodePotential[labeling[pos]]
-                
-                #if pos+1 < len(labeling): print edgePotential[labeling[pos]][labeling[pos+1]], edgeMarginals[pos+1][labeling[pos]][labeling[pos+1]]
-                #print nodePotential[labeling[pos]],  nodeMarginals[pos+1][labeling[pos]]
-                #print '-------------------'
-                
-            logLikelihood -= logZ
+                grad += math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labeling[pos]]))
+                expect = 0.  #self.neg_inf
+                for s_id, s in enumerate(self.states[:num_real_states]):
+                    expect += nodeMarginals[pos+1][s_id] * math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, s))
+                    #expect = self.logSum(expect, logNodeMarginals[pos+1][s_id] + f(pos+1, samples, M, P, MSC, PSC, mixture, s))
+                grad -= expect
+            grad -= self.unaryWeights[i]/self.sigmaSqr #regularizator
+            #update the current weights
+            self.unaryWeights[i] += self.omega * grad
+            self.unaryWeights[i] = max(self.unaryWeights[i], self.epsWeight)
+            print "unary", i, self.unaryWeights[i]
             
-            wSqr = sum([ x*x  for x in self.unaryWeights + self.binaryWeights ])
-            logLikelihood -= wSqr/(2.*self.sigmaSqr) #regularizator
-            
-            print "loglikelihood at beginning of iter", iterNum, ":", logLikelihood
-            
-            #compute gradients w.r.t. indiviudal features and update the current weights
-             #unary features
-            for i, f in enumerate(self.unaryFeaturesList):
-                grad = 0.
-                for pos in range(len(labeling)):
-                    grad += math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labeling[pos]]))
-                    expect = 0.
-                    for s_id, s in enumerate(self.states[:num_real_states]):
-                        expect += nodeMarginals[pos+1][s_id] * math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, s))
-                    grad -= expect
-                grad -= self.unaryWeights[i]/self.sigmaSqr #regularizator
-                self.unaryWeights[i] += self.omega * grad #update the current weights
-                self.unaryWeights[i] = max(self.unaryWeights[i], 0.0001)
-                print "unary", i, self.unaryWeights[i]
+         #binary features
+        for i, f in enumerate(self.binaryFeaturesList):
+            grad = 0.
+            for pos in range(len(labeling)-1):
+                grad += f(labeling[pos], self.states[labeling[pos]], labeling[pos+1], self.states[labeling[pos+1]])
+                expect = 0.
+                for s1_id, s1 in enumerate(self.states[:num_real_states]):
+                    for s2_id, s2 in enumerate(self.states[:num_real_states]):
+                        expect += edgeMarginals[pos+1][s1_id][s2_id] * f(s1_id, s1, s2_id, s2)
+                grad -= expect
+            grad -= self.binaryWeights[i]/self.sigmaSqr #regularizator
+            #update the current weights
+            self.binaryWeights[i] += self.omega * grad
+            self.binaryWeights[i] = max(self.binaryWeights[i], self.epsWeight)
+            print "binary", i, self.binaryWeights[i]
                 
-             #binary features
-            for i, f in enumerate(self.binaryFeaturesList):
-                grad = 0.
-                for pos in range(len(labeling)-1):
-                    grad += f(labeling[pos], self.states[labeling[pos]], labeling[pos+1], self.states[labeling[pos+1]])
-                    expect = 0.
-                    for s1_id, s1 in enumerate(self.states[:num_real_states]):
-                        for s2_id, s2 in enumerate(self.states[:num_real_states]):
-                            expect += edgeMarginals[pos+1][s1_id][s2_id] * f(s1_id, s1, s2_id, s2)
-                    grad -= expect
-                grad -= self.binaryWeights[i]/self.sigmaSqr #regularizator
-                self.binaryWeights[i] += self.omega * grad #update the current weights
-                self.binaryWeights[i] = max(self.binaryWeights[i], 0.0001)
-                print "binary", i, self.binaryWeights[i]
+        return logLikelihood, self.encodeCRFparams()
         
     def getUnaryF0(self, pos, samples, M, P, MSC, PSC, mixture, state):
         #emission probability in the given state
