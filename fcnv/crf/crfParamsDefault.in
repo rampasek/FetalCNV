@@ -1,0 +1,5 @@
+unaryWeights = 1.
+binaryWeights = 0.9799 0.003 0.0001 0.9799 0.001 0.0001
+epsWeight = 0.0001
+sigmaSqr = 0.01
+omega = 0.00005
