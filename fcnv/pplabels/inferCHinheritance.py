@@ -5,7 +5,7 @@ import sys
 import random
 import copy
 from datetime import datetime
-import pplabelsHMM
+import chInheritanceHMM
 
 def parseBeagleVCF(infile, ch):
     loci = dict()
@@ -107,7 +107,7 @@ def main():
     #    print ch_haps[i], mp_haps[i]
     
     
-    hmm = pplabelsHMM.FCNV(keysCH)
+    hmm = chInheritanceHMM.FCNV(keysCH)
     vp, vp_states = hmm.viterbiPath(ch_haps, mp_haps)
     
     #snp positions and their haloptype annotation
