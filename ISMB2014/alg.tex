@@ -9,7 +9,10 @@ M_AM_AP_B, ~~M_AM_BP_B, ~~M_BM_BP_B
 There are a total of 20 phased inheritance patterns ($\PP$): 6 each for maternal/paternal duplication, 2 each for maternal/paternal deletion, and 4 for normal inheritance). We refer to the number of alleles (copy count) inherited by the fetus as $|\PP|$. We use $r$ to refer to the percentage of cfDNA that is fetus-derived; this parameter is estimated from positions in the genome where the parents are homozygous for alternate alleles.
 
 \subsection{SNP Allele Distribution}\label{ss:allele_distrib}
-For every SNP locus we observe a distribution of nucleotides in maternal plasma reads. In this section we focus on calculating the probability of the observation with respect to a phased inheritance pattern. Formally, we observe the counts of the 4  nucleotides $\{k_\A, k_\C, k_\G, k_\T\}$ and compute the probability of observing each of these from a particular phased inheritance pattern $\PP$ based on the  Poisson distribution, approximated by a Gaussian, i.e.
+For every SNP locus we observe a distribution of nucleotides in maternal plasma reads. In this section we focus on calculating the probability of the observation with respect to a phased inheritance pattern. Formally, we observe the counts of the 4 nucleotides $\{k_\A, k_\C, k_\G, k_\T\}$ and compute the probability of observing each of these from a particular phased inheritance pattern $\PP$. 
+Ideally, these counts should follow multinomial distribution with the parameter vector $(p_\A, p_\C, p_\G, p_\T)$. However we have found that modelling them as independent Gaussians with variance equal to the mean (as an approximation of the Poisson), makes the inference of the inheritance pattern more robust to noise.
+
+More formally,
 \begin{align}
 Pr[k_x ~|~  M_A, M_B; P_A, P_B; r; \PP] \sim \N\(\mu_x, \mu_x\)
 \end{align}
@@ -17,6 +20,7 @@ To compute the expected support $\mu_x$ for $x\in\{\A,\C,\G,\T\}$, we first adju
 \begin{align}
 r' =&  \frac{ |\PP| \cdot r/2 }{|\PP| \cdot r/2 ~+~ (1-r) }
 \end{align}
+
 Then for each nucleotide $x$ we compute the probability $p_x$ of observing a read supporting $x$. Such a read might have originated from multiple haplotypes, including two maternal haplotypes and $|\PP|$ fetal haplotypes. We can individually evaluate this probability for each haplotype and subsequently sum them to obtain $p_x$:
 \begin{align}
 p_x &= \sum_{i \in \{A,B\} } [M_i \text{ equals } x] \cdot m_i (1-r') \\ %& \text{//maternal haplotypes with $x$ variant}\\
@@ -26,7 +30,9 @@ For reads putatively coming from maternal portion of the cfDNA sample, we correc
 \begin{align}
 m_i &= \frac{\alpha + \# \text{reads supporting }M_i\text{ in maternal sample}}{2\alpha + \sum_{j \in \{A,B\} }\# \text{reads supporting }M_j\text{ in maternal sample}}
 \end{align}
-We thus obtain the expected probability distribution for each nucleotide observed at this SNP locus.  To get the expected number of reads supporting particular variant at this SNP locus, we have to multiply $p_x$ by the number of reads mapped,
+We thus obtain the expected probability distribution for each nucleotide observed at this SNP locus. 
+
+In order to obtain the expected number of reads $\mu_x$ supporting particular variant at this SNP locus, we have to multiply $p_x$ by the number of reads mapped,
 \begin{align}
 \mu_x &= p_x \cdot \#\text{mapped reads}
 \end{align}

@@ -42,6 +42,9 @@ The results indicate that our method can achieve nearly perfect recall and preci
 To evaluate power of individual signals utilized by our unified model, we also tested models that take into consideration only either the allelic ratios or coverage information. The allelic ratios only model is as described above in Section \ref{ss:hmm} but without multiplying of copy number prior in the transition probabilities. Obtained results are shown together with the results of the unified model in Table \ref{tab:resRecall}. 
 
 For predicting fetal CNVs based solely on coverage information we split the sample to bins of uniform size and computed WRVs for each, following the work of \cite{srinivasan2013}. We then ran a simple HMM with 3 states corresponding to normal inheritance, duplication, and deletion, respectively. The WRVs in bins were interpreted as emissions and the emission distributions were computed as described in Section \ref{ss:coverage}, Equation \ref{eq:wrv_distrib}. We tested the HMM with bin sizes of 100kb and 300kb, and the results are summarized in Table \ref{tab:resWRV}. Using larger bins limit resolution of the method, e.g. in case of 300kb bins the obtained recall on ${<400}$kb CNVs is (close to) zero. On the other hand for large CNVs ${>3}$Mb using 300kb bin size mostly improves upon 100kb bins in terms of both recall and precision.
+
+Note, that a direct comparison to the methods by \cite{chen2013, srinivasan2013} is not possible, as they are tailored to low coverage plasma sequencing data and require a large number of control plasma samples to evaluate significance of observed coverage variation in the studied plasma sample for CNV calling. 
+
 %Note that models based solely on coverage information are more sensitive towards deletions than duplications. This is due to stronger coverage signal imposed by a deletion, causing half of the fetal portion to be missing, compared to duplication 
 
 \begin{table*}
