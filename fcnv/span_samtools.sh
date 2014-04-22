@@ -17,7 +17,7 @@ for num in 1 2 3
 do
     reads_file_var=reads$num
     reads_file=${!reads_file_var}
-    #echo "samtools mpileup -f $ref -uDSI -Q10 -q10 -l $pos $reads_file | bcftools view -g - > $prefix.$num.vcf"
+    echo "samtools mpileup -f $ref -uDSI -Q10 -q10 -l $pos $reads_file | bcftools view -g - > $prefix.$num.vcf"
     samtools mpileup -f $tmp_prefix.ref.fa -uDSI -Q10 -q10 -l $pos $reads_file | bcftools view -g - > $tmp_prefix.$num.vcf &
 done
 
@@ -28,9 +28,13 @@ do
     echo "pileup plasma: $chr:$wbegin-$wend $pile_prefix.$num.txt"
     reads_file_var=reads$num
     reads_file=${!reads_file_var}
-    samtools mpileup -Q10 -q10 -r $chr:$wbegin-$wend $reads_file | awk '{print $2,$4}' > $pile_prefix.$num.txt & #$tmp_prefix.$num.txt
-    #echo "samtools mpileup -Q10 -q10 -l $wbegin $reads_file | awk "'{print $2,$4}'" > $pile_prefix.$num.txt"
-    #samtools mpileup -Q10 -q10 -l $wbegin $reads_file | awk '{print $2,$4}' > $pile_prefix.$num.txt & #$tmp_prefix.$num.txt
+    
+    #for simulated CNV case
+    #samtools mpileup -Q10 -q10 -r $chr:$wbegin-$wend $reads_file | awk '{print $2,$4}' > $pile_prefix.$num.txt & #$tmp_prefix.$num.txt
+    
+    #for pure sample
+    echo "samtools mpileup -Q10 -q10 -l $wbegin $reads_file | awk "'{print $2,$4}'" > $pile_prefix.$num.txt"
+    samtools mpileup -Q10 -q10 -l $wbegin $reads_file | awk '{print $2,$4}' > $pile_prefix.$num.txt & #$tmp_prefix.$num.txt
 done
 wait
 
