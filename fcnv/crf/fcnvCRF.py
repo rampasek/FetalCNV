@@ -656,7 +656,110 @@ class FCNV(object):
             print "binary", i, self.binaryWeights[i]
                 
         return logLikelihood, self.encodeCRFparams()
+
         
+
+    def computeLLandMaxMarginUpdate(self, labels, samples, M, P, MSC, PSC, mixture, C):
+        """
+        Compute the parameters likelihood, max margin update, and update the weights
+        """
+        n = len(samples)
+        
+        edgePotential = self.getEdgePotential(self.binaryWeights)
+                
+        # SCORE OF THE TRUE LABELS
+        groundtruth_score = 0.
+
+        for pos in range(len(labels)):
+            
+            #pairwise factor value
+            if pos+1 < len(labels):
+                groundtruth_score += edgePotential[labels[pos]][labels[pos+1]]
+
+            #real positions are <1..n+1)
+            nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+            groundtruth_score += nodePotential[labels[pos]]
+
+        
+        # MAKE A PREDICTION AND SCORE IT
+        predicted_labels, _ = viterbiPath(samples, M, P, MSC, PSC, mixture)
+        prediction_score = 0.
+
+        for pos in range(len(predicted_labels)):
+            
+            #pairwise factor value
+            if pos+1 < len(predicted_labels):
+                prediction_score += edgePotential[predicted_labels[pos]][predicted_labels[pos+1]]
+            
+            #real positions are <1..n+1)
+            nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+            prediction_score += nodePotential[predicted_labels[pos]]
+        
+        
+        # COMPUTE FEATURES
+        
+        groundtruthUnaryFeatures = self.getUnaryFeatures(labels, samples, M, P, MSC, PSC, mixture) 
+        groundtruthBinaryFeatures = self.getBinaryFeatures(labels, samples, M, P, MSC, PSC, mixture) 
+        predictionUnaryFeatures = self.getUnaryFeatures(predicted_labels, samples, M, P, MSC, PSC, mixture) 
+        predictionBinaryFeatures = self.getBinaryFeatures(predicted_labels, samples, M, P, MSC, PSC, mixture)
+
+        # COMPUTE SQUARED DISTANCE
+        squared_feature_distance = 0
+        for i in range(len(predictionUnaryFeatures)):
+            squared_feature_distance += (groundtruthUnaryFeatures[i] - predictionUnaryFeatures[i]) ** 2
+        for i in range(len(predictionBinaryFeatures)):
+            squared_feature_distance += (groundtruthBinaryFeatures[i] - predictionBinaryFeatures[i]) ** 2
+
+        # COMPUTE LOSS
+        loss = 0.
+        
+        # COMPUTE TAU
+        tau = min(C, (prediction_score - groundtruth_score + loss)/squared_feature_distance)
+        
+        for i, f in enumerate(self.unaryFeaturesList):
+            update = tau * (groundtruthUnaryFeatures[i] - predictionUnaryFeatures[i])
+            self.unaryWeights[i] += update
+            self.unaryWeights[i] = max(self.unaryWeights[i], self.epsWeight)
+            
+        for i, f in enumerate(self.binaryFeaturesList):
+            update = tau * (groundtruthBinaryFeatures[i] - predictionBinaryFeatures[i])
+            self.binaryWeights[i] += update
+            self.binaryWeights[i] = max(self.binaryWeights[i], self.epsWeight)
+
+
+        # GET NORMALIZATION CONSTANT FOR LL COMPUTATION
+        fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
+        bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
+        logZ = pX1 + sum(scale)
+        
+        if abs(pX1 - pX2) > 10e-8:
+            print "p(X) from forward and backward DP doesn't match", pX1, pX2
+            return
+        logLikelihood = groundtruth_score - logZ
+
+        return logLikelihood, self.encodeCRFparams()
+    
+    def getUnaryFeatures(labels, samples, M, P, MSC, PSC, mixture):
+        
+        unaryFeatures = []
+        for i, f in enumerate(self.unaryFeaturesList):
+            feature = 0.
+            for pos in range(len(labels)):
+                feature += math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labels[pos]]))
+            unaryFeatures.append(feature)
+            
+        return unaryFeatures
+
+    def getBinaryFeatures(labels, samples, M, P, MSC, PSC, mixture):
+
+        binaryFeatures = []
+        for i, f in enumerate(self.binaryFeaturesList):
+            feature = 0.
+            for pos in range(len(labels)-1):
+                feature += f(labels[pos], self.states[labels[pos]], labels[pos+1], self.states[labels[pos+1]])
+            binaryFeatures.append(feature)
+        return binaryFeatures
+    
     def getUnaryF0(self, pos, samples, M, P, MSC, PSC, mixture, state):
         #emission probability in the given state
         emis_logp = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
