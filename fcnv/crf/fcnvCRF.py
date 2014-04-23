@@ -668,33 +668,22 @@ class FCNV(object):
         edgePotential = self.getEdgePotential(self.binaryWeights)
                 
         # SCORE OF THE TRUE LABELS
+        predicted_labels, _ = viterbiPath(samples, M, P, MSC, PSC, mixture)
         groundtruth_score = 0.
-
+        prediction_score = 0.
+        
         for pos in range(len(labels)):
             
             #pairwise factor value
             if pos+1 < len(labels):
                 groundtruth_score += edgePotential[labels[pos]][labels[pos+1]]
-
+                prediction_score += edgePotential[predicted_labels[pos]][predicted_labels[pos+1]]
+                
             #real positions are <1..n+1)
             nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
             groundtruth_score += nodePotential[labels[pos]]
-
-        
-        # MAKE A PREDICTION AND SCORE IT
-        predicted_labels, _ = viterbiPath(samples, M, P, MSC, PSC, mixture)
-        prediction_score = 0.
-
-        for pos in range(len(predicted_labels)):
-            
-            #pairwise factor value
-            if pos+1 < len(predicted_labels):
-                prediction_score += edgePotential[predicted_labels[pos]][predicted_labels[pos+1]]
-            
-            #real positions are <1..n+1)
-            nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
             prediction_score += nodePotential[predicted_labels[pos]]
-        
+                    
         
         # COMPUTE FEATURES
         
