@@ -552,7 +552,7 @@ class FCNV(object):
         return result
     
     
-    def computeLLandGradient(self, highOrderLabels, samples, M, P, MSC, PSC, mixture):
+    def computeLLandGradient(self, labels, samples, M, P, MSC, PSC, mixture):
         """
         Compute the parameters likelihood, corresponding gradient, and update the weights
         """
@@ -599,20 +599,18 @@ class FCNV(object):
     
         #compute the likelihood of current parameters (weight vectors)           
         logLikelihood = 0.
-        #labeling = self.restrictedViterbiPath(highOrderLabels, samples, M, P, MSC, PSC, mixture)
-        labeling = highOrderLabels
-        #for i, x in enumerate(labeling):
-        #    print highOrderLabels[i], x, self.IPtoID[self.states[x].inheritance_pattern]
-        for pos in range(len(labeling)):
+        #for i, x in enumerate(labels):
+        #    print labels[i], x, self.IPtoID[self.states[x].inheritance_pattern]
+        for pos in range(len(labels)):
             #pairwise factor value
-            if pos+1 < len(labeling):
-                logLikelihood += edgePotential[labeling[pos]][labeling[pos+1]]
+            if pos+1 < len(labels):
+                logLikelihood += edgePotential[labels[pos]][labels[pos+1]]
             #real positions are <1..n+1)
             nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
-            logLikelihood += nodePotential[labeling[pos]]
+            logLikelihood += nodePotential[labels[pos]]
             
-            #if pos+1 < len(labeling): print edgePotential[labeling[pos]][labeling[pos+1]], edgeMarginals[pos+1][labeling[pos]][labeling[pos+1]]
-            #print nodePotential[labeling[pos]],  nodeMarginals[pos+1][labeling[pos]]
+            #if pos+1 < len(labels): print edgePotential[labels[pos]][labels[pos+1]], edgeMarginals[pos+1][labels[pos]][labels[pos+1]]
+            #print nodePotential[labels[pos]],  nodeMarginals[pos+1][labels[pos]]
             #print '-------------------'
             
         logLikelihood -= logZ
@@ -626,8 +624,8 @@ class FCNV(object):
          #unary features
         for i, f in enumerate(self.unaryFeaturesList):
             grad = 0.
-            for pos in range(len(labeling)):
-                grad += math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labeling[pos]]))
+            for pos in range(len(labels)):
+                grad += math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labels[pos]]))
                 expect = 0.  #self.neg_inf
                 for s_id, s in enumerate(self.states[:num_real_states]):
                     expect += nodeMarginals[pos+1][s_id] * math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, s))
@@ -642,8 +640,8 @@ class FCNV(object):
          #binary features
         for i, f in enumerate(self.binaryFeaturesList):
             grad = 0.
-            for pos in range(len(labeling)-1):
-                grad += f(labeling[pos], self.states[labeling[pos]], labeling[pos+1], self.states[labeling[pos+1]])
+            for pos in range(len(labels)-1):
+                grad += f(labels[pos], self.states[labels[pos]], labels[pos+1], self.states[labels[pos+1]])
                 expect = 0.
                 for s1_id, s1 in enumerate(self.states[:num_real_states]):
                     for s2_id, s2 in enumerate(self.states[:num_real_states]):
@@ -743,10 +741,10 @@ class FCNV(object):
         
         unaryFeatures = []
         for i, f in enumerate(self.unaryFeaturesList):
-            feature = 0.
+            feature = self.neg_inf
             for pos in range(len(labels)):
-                feature += math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labels[pos]]))
-            unaryFeatures.append(feature)
+                feature = self.logSum(feature, f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labels[pos]]))
+            unaryFeatures.append(math.exp(feature))
             
         return unaryFeatures
 
