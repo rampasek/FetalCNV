@@ -599,7 +599,8 @@ class FCNV(object):
     
         #compute the likelihood of current parameters (weight vectors)           
         logLikelihood = 0.
-        labeling = self.restrictedViterbiPath(highOrderLabels, samples, M, P, MSC, PSC, mixture)
+        #labeling = self.restrictedViterbiPath(highOrderLabels, samples, M, P, MSC, PSC, mixture)
+        labeling = highOrderLabels
         #for i, x in enumerate(labeling):
         #    print highOrderLabels[i], x, self.IPtoID[self.states[x].inheritance_pattern]
         for pos in range(len(labeling)):
