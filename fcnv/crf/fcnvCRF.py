@@ -656,7 +656,91 @@ class FCNV(object):
         return logLikelihood, self.encodeCRFparams()
 
         
+        
+    def getConfusionMatrix(labels, predicted_labels):
+        
+        num_states = self.getNumStates()        
+        confusionMatrix = [[0. for x in range(num_states)] for y in range(num_states)]
+        
+        for i in xrange(len(labels)):
+            confusionMatrix[labels[i]][predicted_labels[i]] += 1
+        
+        return confusionMatrix
+        
+    def matthewsCorrelationCoefficient(self, labels, predicted_labels):
+        """
+        Compute the Matthews Correlation Coefficient from the Confusion Matrix of
+        labels and predicted_labels. Returns a float.
+        """
+        
+        num_states = self.getNumStates()
+        confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
+        
+        cov = 0.
+        varx = 0.
+        vary = 0.
+        
+        for k in xrange(num_states):
+            varxfact1 = 0.0
+            varxfact2 = 0.0
+            varyfact1 = 0.0
+            varyfact2 = 0.0
+            
+            for l in xrange(num_states):                
+                varxfact1 += confusionMatrix[l][k]
+                varyfact1 += confusionMatrix[k][l]
+                
+                for m in xrange(num_states):
+                    cov += confusionMatrix[k][k] * confusionMatrix[m][l] - confusionMatrix[l][k]*confusionMatrix[k][m]
+                    
+                    if l != k:
+                        varxfact2 += confusionMatrix[m][l]
 
+                    if l != k:
+                        varxfact2 += confusionMatrix[l][m]
+                    
+            varx += varxfact1*varxfact2
+            vary += varyfact1*varyfact2
+            
+        return cov/(math.sqrt(varx)*math.sqrt(vary))
+
+    def confusionEntropy(self, labels, predicted_labels):
+        """
+        Compute the Matthews Correlation Coefficient from the Confusion Matrix of
+        labels and predicted_labels. Returns a float.
+        """
+        
+        
+        confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
+        
+        CEN = 0.
+        num_states = self.getNumStates()
+        
+        for j in xrange(num_states):
+            pj = 0.0
+            pj_normalization = 0.0
+
+            pjk_j
+            pjk_j
+            
+            for k in xrange(num_states):
+                pj += confusionMatrix[j][k] + confusionMatrix[k][j]
+                pj_normalization += confusionMatrix[k][l]
+                
+            e = 0.
+            
+            for k in xrange(num_states):
+                pkj_j = confusionMatrix[k][j]/pj
+                pjk_j = confusionMatrix[j][k]/pj if i != j else 0
+                
+                if k != j:
+                    e += - pjk_j * math.log(pjk_j, 2*num_states - 2) - pkj_j * math.log(pkj_j, 2*num_states - 2)
+                
+            pj = 0.5*pj/pj_normalization
+            CEN += pj*e
+            
+        return CEN
+        
     def computeLLandMaxMarginUpdate(self, labels, samples, M, P, MSC, PSC, mixture, C):
         """
         Compute the parameters likelihood, max margin update, and update the weights
@@ -670,7 +754,7 @@ class FCNV(object):
         groundtruth_score = 0.
         prediction_score = 0.
         
-        for pos in range(len(labels)):
+        for pos in xrange(len(labels)):
             
             #pairwise factor value
             if pos+1 < len(labels):
@@ -692,13 +776,13 @@ class FCNV(object):
 
         # COMPUTE SQUARED DISTANCE
         squared_feature_distance = 0
-        for i in range(len(predictionUnaryFeatures)):
+        for i in xrange(len(predictionUnaryFeatures)):
             squared_feature_distance += (groundtruthUnaryFeatures[i] - predictionUnaryFeatures[i]) ** 2
-        for i in range(len(predictionBinaryFeatures)):
+        for i in xrange(len(predictionBinaryFeatures)):
             squared_feature_distance += (groundtruthBinaryFeatures[i] - predictionBinaryFeatures[i]) ** 2
 
         # COMPUTE LOSS
-        loss = 0.
+        loss = self.matthewsCorrelationCoefficient(labels, predicted_labels)
         
         # COMPUTE TAU
         tau = min(C, (prediction_score - groundtruth_score + loss)/squared_feature_distance)
@@ -731,7 +815,7 @@ class FCNV(object):
         unaryFeatures = []
         for i, f in enumerate(self.unaryFeaturesList):
             feature = self.neg_inf
-            for pos in range(len(labels)):
+            for pos in xrange(len(labels)):
                 feature = self.logSum(feature, f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labels[pos]]))
             unaryFeatures.append(math.exp(feature))
             
@@ -742,7 +826,7 @@ class FCNV(object):
         binaryFeatures = []
         for i, f in enumerate(self.binaryFeaturesList):
             feature = 0.
-            for pos in range(len(labels)-1):
+            for pos in xrange(len(labels)-1):
                 feature += f(labels[pos], self.states[labels[pos]], labels[pos+1], self.states[labels[pos+1]])
             binaryFeatures.append(feature)
         return binaryFeatures
