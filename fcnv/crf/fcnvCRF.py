@@ -783,15 +783,16 @@ class FCNV(object):
             
             #pairwise factor value
             if pos+1 < len(labels):
-                groundtruth_score += edgePotential[labels[pos]][labels[pos+1]]
-                prediction_score += edgePotential[predicted_labels[pos]][predicted_labels[pos+1]]
+                groundtruth_score = self.logSum(groundtruth_score, edgePotential[labels[pos]][labels[pos+1]])
+                prediction_score = self.logSum(prediction_score, edgePotential[predicted_labels[pos]][predicted_labels[pos+1]])
                 
             #real positions are <1..n+1)
-            nodePotential = math.exp(self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture))
-            groundtruth_score += nodePotential[labels[pos]]
-            prediction_score += nodePotential[predicted_labels[pos]]
+            nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+            groundtruth_score = self.logSum(groundtruth_score, nodePotential[labels[pos]])
+            prediction_score = self.logSum(prediction_score, nodePotential[predicted_labels[pos]])
                     
-        
+        groundtruth_score = math.exp(groundtruth_score)
+        prediction_score = math.exp(prediction_score)
         # COMPUTE FEATURES
         
         groundtruthUnaryFeatures = self.getUnaryFeatures(labels, samples, M, P, MSC, PSC, mixture) 
