@@ -2,7 +2,7 @@
 
 import math
 import argparse
-import numpypy as np
+#import numpypy as np
 import sys
 import fcnvCRF
 from datetime import datetime
@@ -381,10 +381,11 @@ def main():
     #run gradient training
     if runGradTraining:
         #run the training iterations
-        for iterNum in range(2):
+        for iterNum in range(1):
         #    print "iterNum: ", iterNum
-            ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix) 
-        #print ll, params
+            #ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix) 
+            ll, params = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, 1.)
+        print ll, params
         
         #save the trained parameters to the file
         res_param_file = open(res_param_file_name, "w")    

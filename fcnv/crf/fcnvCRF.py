@@ -657,9 +657,11 @@ class FCNV(object):
 
         
         
-    def getConfusionMatrix(labels, predicted_labels):
-        
-        num_states = self.getNumStates()        
+    def getConfusionMatrix(self, labels, predicted_labels):
+        """
+        Compute multiclass confusion matrix
+        """
+        num_states = self.getNumPP()        
         confusionMatrix = [[0. for x in range(num_states)] for y in range(num_states)]
         
         for i in xrange(len(labels)):
@@ -673,8 +675,24 @@ class FCNV(object):
         labels and predicted_labels. Returns a float.
         """
         
-        num_states = self.getNumStates()
+#        print "MCC:"
+#        print len(labels), len(predicted_labels)
+#        ok_pred = 0
+#        for i in range(len(labels)):
+#            print i, '\t', labels[i], predicted_labels[i]
+#            if labels[i] == predicted_labels[i]: ok_pred +=1
+#        print "MCC END"
+#        print "ok pred: ", ok_pred
+        
+        num_states = self.getNumPP()
         confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
+        
+        print "Confusion Matrix:"
+        for x in range(len(confusionMatrix)):
+            for y in range(len(confusionMatrix[x])):
+                print int(confusionMatrix[x][y]),
+            print ''
+        
         
         cov = 0.
         varx = 0.
@@ -695,14 +713,18 @@ class FCNV(object):
                     
                     if l != k:
                         varxfact2 += confusionMatrix[m][l]
-
-                    if l != k:
-                        varxfact2 += confusionMatrix[l][m]
+                        varyfact2 += confusionMatrix[l][m]
                     
             varx += varxfact1*varxfact2
             vary += varyfact1*varyfact2
             
-        return cov/(math.sqrt(varx)*math.sqrt(vary))
+        try:
+            mcc = cov/(math.sqrt(varx)*math.sqrt(vary))
+        except Exception as e:
+            print "Error in MCC computation:", e, cov, varx, vary
+            mcc = 0.0
+            
+        return mcc
 
     def confusionEntropy(self, labels, predicted_labels):
         """
@@ -714,14 +736,14 @@ class FCNV(object):
         confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
         
         CEN = 0.
-        num_states = self.getNumStates()
+        num_states = self.getNumPP()
         
         for j in xrange(num_states):
             pj = 0.0
             pj_normalization = 0.0
 
-            pjk_j
-            pjk_j
+            pjk_j = 0.0
+            pjk_j = 0.0
             
             for k in xrange(num_states):
                 pj += confusionMatrix[j][k] + confusionMatrix[k][j]
@@ -753,7 +775,7 @@ class FCNV(object):
         edgePotential = self.getEdgePotential(self.binaryWeights)
                 
         # SCORE OF THE TRUE LABELS
-        predicted_labels, _ = viterbiPath(samples, M, P, MSC, PSC, mixture)
+        predicted_labels, _ = self.viterbiPath(samples, M, P, MSC, PSC, mixture)
         groundtruth_score = 0.
         prediction_score = 0.
         
@@ -813,7 +835,7 @@ class FCNV(object):
 
         return logLikelihood, self.encodeCRFparams()
     
-    def getUnaryFeatures(labels, samples, M, P, MSC, PSC, mixture):
+    def getUnaryFeatures(self, labels, samples, M, P, MSC, PSC, mixture):
         
         unaryFeatures = []
         for i, f in enumerate(self.unaryFeaturesList):
@@ -824,7 +846,7 @@ class FCNV(object):
             
         return unaryFeatures
 
-    def getBinaryFeatures(labels, samples, M, P, MSC, PSC, mixture):
+    def getBinaryFeatures(self, labels, samples, M, P, MSC, PSC, mixture):
 
         binaryFeatures = []
         for i, f in enumerate(self.binaryFeaturesList):
