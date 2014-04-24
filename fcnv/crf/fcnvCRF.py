@@ -776,8 +776,8 @@ class FCNV(object):
                 
         # SCORE OF THE TRUE LABELS
         predicted_labels, _ = self.viterbiPath(samples, M, P, MSC, PSC, mixture)
-        groundtruth_score = 0.
-        prediction_score = 0.
+        groundtruth_score = self.neg_inf
+        prediction_score = self.neg_inf
         
         for pos in xrange(len(labels)):
             
@@ -815,9 +815,10 @@ class FCNV(object):
         print "prediction_score: {0}".format(prediction_score)
         print "groundtruth_score: {0}".format(groundtruth_score)
         print "squared_feature_distance: {0}".format(squared_feature_distance)
-        print "tau: {0}".format(tau)
         
         tau = min(C, (prediction_score - groundtruth_score + loss)/squared_feature_distance)
+        
+        print "tau: {0}".format(tau)
         
         for i, f in enumerate(self.unaryFeaturesList):
             update = tau * (groundtruthUnaryFeatures[i] - predictionUnaryFeatures[i])

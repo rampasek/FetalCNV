@@ -1,5 +1,7 @@
 #!/usr/bin/pypy
 
+#time pypy fcnv2.py IM1-A-chr1-29032136-30032136-duplicate.alleles_doc.txt IM1-A-chr1-29032136-30032136-duplicate.pplabels.txt /dev/null /dev/null /dev/null crfParams.in --trainGrad crfParams.outMM  > logfcnv2.log 2>&1 &
+
 import math
 import argparse
 #import numpypy as np
@@ -381,11 +383,12 @@ def main():
     #run gradient training
     if runGradTraining:
         #run the training iterations
-        for iterNum in range(1):
+        for iterNum in range(5):
         #    print "iterNum: ", iterNum
             #ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix) 
-            ll, params = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, 1.)
-        print ll, params
+            ll, params = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, float("inf"))
+            print ll, params
+            print "------------------------------------------------------------------"
         
         #save the trained parameters to the file
         res_param_file = open(res_param_file_name, "w")    
