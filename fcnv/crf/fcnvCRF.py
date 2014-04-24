@@ -787,7 +787,7 @@ class FCNV(object):
                 prediction_score += edgePotential[predicted_labels[pos]][predicted_labels[pos+1]]
                 
             #real positions are <1..n+1)
-            nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+            nodePotential = math.exp(self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture))
             groundtruth_score += nodePotential[labels[pos]]
             prediction_score += nodePotential[predicted_labels[pos]]
                     
@@ -810,6 +810,12 @@ class FCNV(object):
         loss = self.matthewsCorrelationCoefficient(labels, predicted_labels)
         
         # COMPUTE TAU
+        print "loss: {0}".format(loss)
+        print "prediction_score: {0}".format(prediction_score)
+        print "groundtruth_score: {0}".format(groundtruth_score)
+        print "squared_feature_distance: {0}".format(squared_feature_distance)
+        print "tau: {0}".format(tau)
+        
         tau = min(C, (prediction_score - groundtruth_score + loss)/squared_feature_distance)
         
         for i, f in enumerate(self.unaryFeaturesList):
