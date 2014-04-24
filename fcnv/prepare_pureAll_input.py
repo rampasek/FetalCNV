@@ -165,12 +165,14 @@ def main():
     for R in [PLR, MR]:
         tmp_vcf_name = tmp_vcf_prefix + "." + str(R) + ".vcf"
         vcf_file = open(tmp_vcf_name, 'r')
+        num_snps = 0
         while True:
             line = vcf_file.readline()
             if not line: break
             if len(line) > 0 and line[0] == '#': continue
             line = line.rstrip('\n').split('\t')
-            
+            num_snps += 1
+
             ac = {'A':0, 'C':0, 'G':0, 'T':0}
             pos = int(line[1])
             if pos in loci:
@@ -181,7 +183,7 @@ def main():
                 alt = line[4][0]
                 alleles = ((ref, alt), ('N', 'N'), (ref, alt))
                 loci[pos] = alleles
-            if ref != line[3]: print "SOMETHING IS WRONG WITH TEMP VCF POSITIONS" 
+            if ref != line[3][0]: print "SOMETHING IS WRONG WITH TEMP VCF POSITIONS", pos, ":", ref, line[3], "/", alt, line[4] 
             for x in line[7].split(';'):
                 if len(x) > 3 and x[0:3]=='DP4':
                     counts = map(int, x[4:].split(','))
@@ -189,7 +191,8 @@ def main():
                     if counts[2] + counts[3] != 0:
                         ac[alt] = counts[2] + counts[3]
             posInfo[R][pos] = ac
-            
+        
+        print "snps in", tmp_vcf_name, ":", num_snps
         if len(loci) != len(posInfo[R]): print "DIFFERENT NUMBER OF POSITIONS IN TEMP VCF " + str(R) 
         vcf_file.close()    
         os.remove(tmp_vcf_name)
@@ -234,6 +237,7 @@ def main():
         for i, r in [(M, MR)]: #, (P, PR)]:
             a1 = alleles[i][0]
             a2 = alleles[i][1]
+            if a2 == '.': a2 = a1
             count_a1 = 0
             count_a2 = 0
             try:
@@ -249,7 +253,7 @@ def main():
                 break
                 #print i, pos, a2, posInfo[r][pos], alleles[i]
 
-            if count_a2 == 0 or a2 == '.':
+            if count_a2 == 0:
                 a2 = a1
                 count_a2 = count_a1
             if count_a1 == 0:
@@ -262,7 +266,9 @@ def main():
             
             out_str += '\t{0}\t{1}\t{2}\t{3}'.format(a1, a2, count_a1, count_a2)
             out_str += '\t{0}\t{1}\t{2}\t{3}'.format('N', 'N', 0, 0) #paternal dummy part (as a place holder)
-        if error: continue
+        if error: 
+            print "error @", pos, ":" , a1, a2
+            continue
         
         print >>out_files[ALDOC], out_str
         
@@ -273,6 +279,8 @@ def main():
 
     out_files[ALDOC].close()
     out_files[GT].close()     
+    
+    print "Positions: ", len(loci)
     print "Low overall coverage positions ignored:", skipped_low_doc
     print "Forced to ignore due to missing in plasma:", forced_to_ignore
     print "Ignored positions in centromere regions:", skipped_in_centromere   
