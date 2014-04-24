@@ -731,10 +731,13 @@ class FCNV(object):
             
             for k in xrange(num_states):
                 pkj_j = confusionMatrix[k][j]/pj
-                pjk_j = confusionMatrix[j][k]/pj if i != j else 0
+                pjk_j = confusionMatrix[j][k]/pj
                 
                 if k != j:
-                    e += - pjk_j * math.log(pjk_j, 2*num_states - 2) - pkj_j * math.log(pkj_j, 2*num_states - 2)
+                    if pjk_j > 0.0:
+                        e += - pjk_j * math.log(pjk_j, 2*num_states - 2) 
+                    if pkj_j > 0.0:
+                        e += - pkj_j * math.log(pkj_j, 2*num_states - 2)
                 
             pj = 0.5*pj/pj_normalization
             CEN += pj*e
