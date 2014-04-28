@@ -406,9 +406,13 @@ def main():
         for iterNum in range(1):
         #    print "iterNum: ", iterNum
             #ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix) 
-            
+
             #ll, params = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, float("inf"))
             #print ll, params
+            
+            prell, params, postll = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, float("inf"), compute_prelikelihood=True, compute_postlikelihood=True)
+            print prell, postll, params
+
             print "------------------------------------------------------------------"
         
         #save the trained parameters to the file

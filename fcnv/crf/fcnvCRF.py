@@ -885,7 +885,8 @@ class FCNV(object):
         
         return parameterStats
         
-    def computeLLandMaxMarginUpdate(self, labels, samples, M, P, MSC, PSC, mixture, C):
+    def computeLLandMaxMarginUpdate(self, labels, samples, M, P, MSC, PSC, mixture, C, compute_prelikelihood=False, compute_postlikelihood=False):
+
         """
         Compute the parameters likelihood, max margin update, and update the weights
         """
@@ -912,8 +913,21 @@ class FCNV(object):
                     
         groundtruth_score = math.exp(groundtruth_score)
         prediction_score = math.exp(prediction_score)
-        # COMPUTE FEATURES
+
+        if compute_prelikelihood:
+            # GET NORMALIZATION CONSTANT FOR LL COMPUTATION
+            fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
+            bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
+            logZ = pX1 + sum(scale)
         
+            if abs(pX1 - pX2) > 10e-8:
+                print "p(X) from forward and backward DP doesn't match", pX1, pX2
+                return
+            preLogLikelihood = groundtruth_score - logZ
+        else:
+            preLogLikelihood = None
+            
+        # COMPUTE FEATURES
         groundtruthUnaryFeatures = self.getUnaryFeatures(labels, samples, M, P, MSC, PSC, mixture) 
         groundtruthBinaryFeatures = self.getBinaryFeatures(labels, samples, M, P, MSC, PSC, mixture) 
         predictionUnaryFeatures = self.getUnaryFeatures(predicted_labels, samples, M, P, MSC, PSC, mixture) 
@@ -949,18 +963,36 @@ class FCNV(object):
             self.binaryWeights[i] += update
             self.binaryWeights[i] = max(self.binaryWeights[i], self.epsWeight)
 
-
-        # GET NORMALIZATION CONSTANT FOR LL COMPUTATION
-        fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
-        bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
-        logZ = pX1 + sum(scale)
+        if compute_postlikelihood:
+            
+            edgePotential = self.getEdgePotential(self.binaryWeights)
+                
+            groundtruth_score = 0.
         
-        if abs(pX1 - pX2) > 10e-8:
-            print "p(X) from forward and backward DP doesn't match", pX1, pX2
-            return
-        logLikelihood = groundtruth_score - logZ
+            for pos in xrange(len(labels)):
+            
+                #pairwise factor value
+                if pos+1 < len(labels):
+                    groundtruth_score = self.logSum(groundtruth_score, edgePotential[labels[pos]][labels[pos+1]])
+                
+                #real positions are <1..n+1)
+                nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+                groundtruth_score = self.logSum(groundtruth_score, nodePotential[labels[pos]])
 
-        return logLikelihood, self.encodeCRFparams()
+            # GET NORMALIZATION CONSTANT FOR LL COMPUTATION
+            fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
+            bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
+            logZ = pX1 + sum(scale)
+        
+            if abs(pX1 - pX2) > 10e-8:
+                print "p(X) from forward and backward DP doesn't match", pX1, pX2
+                return
+                
+            postLogLikelihood = groundtruth_score - logZ
+        else:
+            postLogLikelihood = None
+
+        return preLogLikelihood, self.encodeCRFparams(), postLogLikelihood
     
     def getUnaryFeatures(self, labels, samples, M, P, MSC, PSC, mixture):
         
