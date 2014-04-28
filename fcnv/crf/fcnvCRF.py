@@ -471,6 +471,90 @@ class FCNV(object):
         
         return px
     
+    def logDirMulti(self, rho, xs, ps):
+        '''
+        '''
+        
+        def gammaln(n):
+            """Compute logarithm of Euler's gamma function for discrete values."""
+            if n < 1:
+                return float('inf')
+            if n < 3:
+                return 0.0
+            c = [76.18009172947146, -86.50532032941677, \
+                 24.01409824083091, -1.231739572450155, \
+                 0.001208650973866179, -0.5395239384953 * 0.00001]
+            x, y = float(n), float(n)
+            tm = x + 5.5
+            tm -= (x + 0.5) * math.log(tm)
+            se = 1.0000000000000190015
+            for j in range(6):
+                y += 1.0
+                se += c[j] / y
+            return -tm + math.log(2.5066282746310005 * se / x)
+        
+        def logFactorial(x):
+            """Calculate ln(x!).
+                
+            Arguments:
+            x -- list(floats)
+            returns list(floats)
+                
+            """
+            if isinstance(x, tuple):
+                res = []
+                for val in x:
+                    res.append(gammaln(val+1))
+                return tuple(res)
+            else: 
+                return gammaln(x+1)
+        
+        res = 0.
+        for i in range(len(xs)):
+            for r in range(1, xs[i]+1):
+                res += math.log( ps[i]*(1.-rho) + (r-1.)*rho)
+        for r in range(1, sum(xs)+1):
+            res -= math.log( (1.-rho) + (r-1.)*rho )
+            
+        res += logFactorial(sum(xs)) - sum(logFactorial(xs))
+        return res
+    
+    def getPdiff(self, pos_ind, nuc_counts, maternal_alleles, paternal_alleles,\
+           maternal_sq_counts, paternal_sq_counts, mix, state_id, parameterStats):
+        
+        num_real_states = self.getNumPP()
+        
+        posDiffs = dict()        
+        state = self.states[state_id]
+        
+        #for state_id, state in enumerate(self.states[:num_real_states]):
+        ps = self.allelesDistributionExtended(maternal_alleles, maternal_sq_counts, paternal_alleles, paternal_sq_counts, state.phased_pattern, mix)
+        seen = [0] * 4
+        for x in maternal_alleles + paternal_alleles:
+            seen[self.nucleotides.index(x)] = 1
+        als = [i for i in range(4) if seen[i] == 1]
+        
+        #print nuc_counts, '|', als, '|', seen
+        if len(als) > 2:
+            print "WARNING: trialelic pos"
+            #continue
+        
+        N = float(sum(nuc_counts))
+        empiricalP = 0.0
+        maxP = 0.0
+        for i in range(len(als)):
+            if maxP < ps[als[i]]:
+                maxP = ps[als[i]]
+                empiricalP = nuc_counts[als[i]] / N
+        #print nuc_counts, state.phased_pattern, maxP, empiricalP
+        
+        posDiffs[maxP] = empiricalP
+            
+        for expP, empP in posDiffs.iteritems():
+            if expP not in parameterStats:
+                parameterStats[expP] = list()
+            parameterStats[expP].append(empP)
+    
     def logLHGivenStateWCoverage(self, pos_ind, nuc_counts, maternal_alleles, paternal_alleles,\
            maternal_sq_counts, paternal_sq_counts, mix, state):
         
@@ -501,6 +585,24 @@ class FCNV(object):
         
         ratios_prob = self.logGaussian(nuc_counts, mus, cov_diagonal)
         result = ratios_prob
+
+#        #use Beta-Binomial distrib
+#        seen = [0] * 4
+#        for x in maternal_alleles + paternal_alleles:
+#            seen[self.nucleotides.index(x)] = 1
+#        als = [i for i in range(4) if seen[i] == 1]
+#        
+#        #print nuc_counts, '|', als, '|', seen
+#        if len(als) != 2: return -3
+#        
+#        N = sum(nuc_counts)
+#        eps = 0.01
+#        a = [0.] * 2
+#        for i in range(2):
+#            a[i] = 6 * ps[als[i]] + eps
+#        rho = 1. / (1. + sum(a))
+#        nc = [nuc_counts[als[i]] for i in range(2)]
+#        result = self.logDirMulti(rho, tuple(nc), tuple(a))
 
         #print sum(nuc_counts), ratios_prob
         if result < -15: result = -15
@@ -765,6 +867,23 @@ class FCNV(object):
             CEN += pj*e
             
         return CEN
+        
+    def computePvariance(self, labels, samples, M, P, MSC, PSC, mixture, parameterStats):
+        n = len(samples)
+        
+        # compute stats of the main distrib. parameter        
+        for pos in xrange(1, n+1):
+            #real positions are <1..n+1), pos 1 is the base case    
+            self.getPdiff(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, labels[pos-1], parameterStats)
+        
+#        for expP in self.parameterStats.keys():
+#            empAvg = sum(self.parameterStats[expP]) / float(len(self.parameterStats[expP]))
+#            empVar = sum([ (x-empAvg)**2 for x in self.parameterStats[expP]]) / float(len(self.parameterStats[expP]))
+#            expVat = sum([ (x-expP)**2 for x in self.parameterStats[expP]]) / float(len(self.parameterStats[expP]))
+#            #print expP, ':  ', empAvg, empVar, math.sqrt(empVar), " against exp.:", expVat, math.sqrt(expVat)
+#            #print self.parameterStats[expP]
+        
+        return parameterStats
         
     def computeLLandMaxMarginUpdate(self, labels, samples, M, P, MSC, PSC, mixture, C):
         """
