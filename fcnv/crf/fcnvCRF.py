@@ -720,6 +720,7 @@ class FCNV(object):
             
         try:
             mcc = cov/(math.sqrt(varx)*math.sqrt(vary))
+            print "mcc: ", mcc
         except Exception as e:
             print "Error in MCC computation:", e, cov, varx, vary
             mcc = 0.0
@@ -765,47 +766,56 @@ class FCNV(object):
             CEN += pj*e
             
         return CEN
+    
+    def getScore(self, samples, M, P, MSC, PSC, mixture, *labelslists):
         
-    def computeLLandMaxMarginUpdate(self, labels, samples, M, P, MSC, PSC, mixture, C, compute_prelikelihood=False, compute_postlikelihood=False):
+        edgePotential = self.getEdgePotential(self.binaryWeights)
+        
+        scores = [self.neg_inf]*len(labelslists)
+        length = len(labelslists[0])
+        for pos in xrange(length):
+            # print labels[pos], predicted_labels[pos]
+            #pairwise factor value
+            if pos+1 < length:
+                for i in range(len(scores)):
+                    scores[i] = self.logSum(scores[i], edgePotential[labelslists[i][pos]][labelslists[i][pos+1]])
+                
+            #real positions are <1..n+1)
+            nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+            scores[i] = self.logSum(scores[i], nodePotential[labelslists[i][pos]])
+        
+        for i in range(len(scores)):
+            scores[i] = math.exp(scores[i])
+            
+        return scores
+    
+    def computeLLandMaxMarginUpdate(self, labels, samples, M, P, MSC, PSC, mixture, C, compute_postloss=False):
         """
         Compute the parameters likelihood, max margin update, and update the weights
         """
         n = len(samples)
         
-        edgePotential = self.getEdgePotential(self.binaryWeights)
                 
         # SCORE OF THE TRUE LABELS
         predicted_labels, _ = self.viterbiPath(samples, M, P, MSC, PSC, mixture)
-        groundtruth_score = self.neg_inf
-        prediction_score = self.neg_inf
-        
-        for pos in xrange(len(labels)):
-            
-            #pairwise factor value
-            if pos+1 < len(labels):
-                groundtruth_score = self.logSum(groundtruth_score, edgePotential[labels[pos]][labels[pos+1]])
-                prediction_score = self.logSum(prediction_score, edgePotential[predicted_labels[pos]][predicted_labels[pos+1]])
-                
-            #real positions are <1..n+1)
-            nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
-            groundtruth_score = self.logSum(groundtruth_score, nodePotential[labels[pos]])
-            prediction_score = self.logSum(prediction_score, nodePotential[predicted_labels[pos]])
-                    
-        groundtruth_score = math.exp(groundtruth_score)
-        prediction_score = math.exp(prediction_score)
-
-        if compute_prelikelihood:
-            # GET NORMALIZATION CONSTANT FOR LL COMPUTATION
-            fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
-            bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
-            logZ = pX1 + sum(scale)
-        
-            if abs(pX1 - pX2) > 10e-8:
-                print "p(X) from forward and backward DP doesn't match", pX1, pX2
-                return
-            preLogLikelihood = groundtruth_score - logZ
-        else:
-            preLogLikelihood = None
+        groundtruth_score, prediction_score = self.getScore(samples, M, P, MSC, PSC, mixture, labels, predicted_labels)
+        # groundtruth_score = self.neg_inf
+        # prediction_score = self.neg_inf
+        # 
+        # for pos in xrange(len(labels)):
+        #     # print labels[pos], predicted_labels[pos]
+        #     #pairwise factor value
+        #     if pos+1 < len(labels):
+        #         groundtruth_score = self.logSum(groundtruth_score, edgePotential[labels[pos]][labels[pos+1]])
+        #         prediction_score = self.logSum(prediction_score, edgePotential[predicted_labels[pos]][predicted_labels[pos+1]])
+        #         
+        #     #real positions are <1..n+1)
+        #     nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
+        #     groundtruth_score = self.logSum(groundtruth_score, nodePotential[labels[pos]])
+        #     prediction_score = self.logSum(prediction_score, nodePotential[predicted_labels[pos]])
+        #             
+        # groundtruth_score = math.exp(groundtruth_score)
+        # prediction_score = math.exp(prediction_score)
             
         # COMPUTE FEATURES
         groundtruthUnaryFeatures = self.getUnaryFeatures(labels, samples, M, P, MSC, PSC, mixture) 
@@ -821,17 +831,17 @@ class FCNV(object):
             squared_feature_distance += (groundtruthBinaryFeatures[i] - predictionBinaryFeatures[i]) ** 2
 
         # COMPUTE LOSS
-        loss = self.matthewsCorrelationCoefficient(labels, predicted_labels)
+        loss = 1 - self.matthewsCorrelationCoefficient(labels, predicted_labels)
         
-        # COMPUTE TAU
-        print "loss: {0}".format(loss)
-        print "prediction_score: {0}".format(prediction_score)
-        print "groundtruth_score: {0}".format(groundtruth_score)
-        print "squared_feature_distance: {0}".format(squared_feature_distance)
+        # # COMPUTE TAU
+        # print "loss: {0}".format(loss)
+        # print "prediction_score: {0}".format(prediction_score)
+        # print "groundtruth_score: {0}".format(groundtruth_score)
+        # print "squared_feature_distance: {0}".format(squared_feature_distance)
         
         tau = min(C, (prediction_score - groundtruth_score + loss)/squared_feature_distance)
         
-        print "tau: {0}".format(tau)
+        # print "tau: {0}".format(tau)
         
         for i, f in enumerate(self.unaryFeaturesList):
             update = tau * (groundtruthUnaryFeatures[i] - predictionUnaryFeatures[i])
@@ -842,37 +852,15 @@ class FCNV(object):
             update = tau * (groundtruthBinaryFeatures[i] - predictionBinaryFeatures[i])
             self.binaryWeights[i] += update
             self.binaryWeights[i] = max(self.binaryWeights[i], self.epsWeight)
-
-        if compute_postlikelihood:
             
-            edgePotential = self.getEdgePotential(self.binaryWeights)
-                
-            groundtruth_score = 0.
-        
-            for pos in xrange(len(labels)):
-            
-                #pairwise factor value
-                if pos+1 < len(labels):
-                    groundtruth_score = self.logSum(groundtruth_score, edgePotential[labels[pos]][labels[pos+1]])
-                
-                #real positions are <1..n+1)
-                nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
-                groundtruth_score = self.logSum(groundtruth_score, nodePotential[labels[pos]])
-
-            # GET NORMALIZATION CONSTANT FOR LL COMPUTATION
-            fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
-            bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
-            logZ = pX1 + sum(scale)
-        
-            if abs(pX1 - pX2) > 10e-8:
-                print "p(X) from forward and backward DP doesn't match", pX1, pX2
-                return
-                
-            postLogLikelihood = groundtruth_score - logZ
+        if compute_postloss:
+            predicted_labels, _ = self.viterbiPath(samples, M, P, MSC, PSC, mixture)
+            postloss = 1 - self.matthewsCorrelationCoefficient(labels, predicted_labels)
+            postgroundtruth_score, postprediction_score = self.getScore(samples, M, P, MSC, PSC, mixture, labels, predicted_labels)
         else:
-            postLogLikelihood = None
-
-        return preLogLikelihood, self.encodeCRFparams(), postLogLikelihood
+            postloss, postgroundtruth_score, postprediction_score = None, None, None
+            
+        return groundtruth_score, prediction_score, loss, self.encodeCRFparams(), postgroundtruth_score, postprediction_score, postloss
     
     def getUnaryFeatures(self, labels, samples, M, P, MSC, PSC, mixture):
         
