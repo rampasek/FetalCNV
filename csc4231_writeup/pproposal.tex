@@ -1,0 +1,95 @@
+\documentclass[11pt]{article}
+\usepackage{fullpage}
+%\topmargin=-0.5cm
+%\textheight=1.05\textheight
+%\usepackage{a4wide}
+
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[none]{hyphenat}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{enumitem}
+
+% nice tilde
+\newcommand{\ntilde}{\raise.17ex\hbox{$\scriptstyle\mathtt{\sim}$}}
+\newcommand{\cnv}{\mathbf{y}}
+\newcommand{\snp}{\mathbf{x}}
+
+%\usepackage{ifpdf}
+%\ifpdf
+%\usepackage{thumbpdf}
+%\pdfcompresslevel=9
+%\RequirePackage[colorlinks,hyperindex,plainpages=false]{hyperref}
+%\def\pdfBorderAttrs{/Border [0 0 0] } % No border arround Links
+%\else
+%\RequirePackage[plainpages=true]{hyperref}
+%\usepackage{color}
+%\fi
+
+\usepackage{natbib}
+%\usepackage{xltxtra}
+%\setmainfont[Mapping=tex-text]{Ubuntu}
+%\usepackage[all]{hypcap}
+
+\title{CSC2431 project proposal:\\Application of conditional random fields for non-invasive fetal CNV detection from maternal plasma}
+\date{March 3, 2014}
+\author{Ladislav Rampasek \and Chris J. Maddison}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+The past 6 years have seen the development of methodologies to identify genomic variation within a fetus through the sequencing of maternal blood plasma. These novel non-invasive methods are based on the observation that maternal plasma contains a fraction of DNA (typically 5-15\%) originating from the fetus \citep{lo1997presence}. The key advantage of non-invasive methods is that they pose no associated risk to the pregnancy. In contrast, invasive methods like chorionic villus sampling or amniocentesis (sampling of amniotic fluid from around the developing fetus) have estimated procedure-related fetal loss rate of 0.6\% to 1\%, \cite{douglas2007amnio}. Non-invasive methods have already been used, mainly for the detection of whole-chromosome events like trisomy of chromosome 21 (Down syndrome) \citep{chiu2008noninvasive, fan2008noninvasive}, and to a more limited extent for smaller (typically several megabases long) Copy Number Variants (CNVs) \citep{chen2013, srinivasan2013, rampasek2014fcnv}. Methods utilizing genome-wide detection of sub-chromosomal CNVs are highly desired, to enable prenatal screening for diseases like DiGeorge syndrome (\ntilde3Mb deletion), Prader-Willi syndrome (\ntilde4Mb deletion), and other, associated with a mid to large sized CNV. In addition to CNV detection, a successful proof-of-concept for non-invasive genome-wide fetal genotyping has been published \citep{kitzman2012}. This is the only work (to our best knowledge), in the field of maternal plasma analysis for fetal variation detection, with available data set.
+
+In this project we will work on a new method for non-invasive fetal CNV detection given paternal genomes and deep sequencing of maternal plasma cell free DNA (cfDNA). We will build on \citep{rampasek2014fcnv}, seeking to addresses several of its current modelling drawbacks. Foremost, we will employ a discriminative model like a Conditional Random Field to focus on the classification goal and to better incorporate multiple dependant data features. We plan to investigate multiple ways of such CRF application, analysing the advantages and limitations of such models compared to Hidden Markov Model used in \citep{rampasek2014fcnv}. We will use the \textit{in silico} simulated CNV data set by \citep{rampasek2014fcnv} based on sequencing samples of \citep{kitzman2012}.
+
+In the following sections, we give a brief description of the methods published so far, provide motivation for employing CRF rather than HMM for the CNV detection task, and outline the project goals.
+
+\section{Existing methods}
+To our best knowledge there are currently three methods for whole-genome detection of sub-chromosomal copy number variants in fetal genome from maternal plasma cfDNA sequencing.
+
+\subsection{Methods utilizing depth-of-coverage signal}
+Two methods published last year \citep{chen2013, srinivasan2013}, that try to address the aforementioned problem, utilize only low-coverage high-throughput sequencing of cfDNA from maternal plasma. Such sequencing is cheap (in order of few hundred USD per patient) what makes them well suited for practice in this regard.
+
+While the exact methods used in both of these approaches differ, the essential idea remains the same. They map the reads to the reference genome, divide the genome into bins, and identify the CNVs by comparing the number of reads mapped to each bin with values obtained in control samples. The key idea in these methods is that deletions/duplications will result in more/fewer fetal reads within a window, and this difference can be identified using statistical methods.
+
+In \cite{srinivasan2013} authors use depth-of-coverage computed in 1Mb windows across the genome to identify CNVs that are typically at least 1Mb long, though they do report discovery of a 300kb CNV. 9 of the 22 discovered CNVs in 11 patients were concordant with karyotyping results, with most discrepancies being short ($<$1Mb) CNVs.
+
+In \cite{chen2013} authors use the same WG sequencing samples as are currently used for trisomy detection. Average DOC of such samples is less than one. Thus they use even larger 10Mb windows, again considering only the number of fragments mapped and are able to successfully identify variants 9-29Mb with only one false positive among 6 true positives in 1311 patients.
+
+The limiting factor of these methods is the relatively large minimal CNV length  necessary for successful detection. However \cite{srinivasan2013} claims resolution down to 1Mb or even less, the paper provide only very limited justification, as only 3 from 16 calls of size $<$2Mb were true positives.
+
+\subsection{Methods incorporating multiple signals}
+In recent work \citep{rampasek2014fcnv} (currently in publication process) we introduced a probabilistic method for whole-genome non-invasive analysis of \textit{de novo} CNVs in fetal genome based on maternal plasma sequencing with largely increased sensitivity compared to methods published before. The method combines three types of information within a unified Hidden Markov Model: the imbalance of allelic ratios at SNP positions; the use of parental genotypes to phase nearby SNPs; and depth of coverage to better differentiate between various types of CNVs and to improve precision. Simulation results, based on \emph{in silico} introduction of novel CNVs into plasma samples with 13\% fetal DNA concentration, demonstrate a sensitivity of 90\% for CNVs $>$400 kilobases (with 13 calls in an unaffected genome), and 40\% for 50-400kb CNVs (with 108 calls in an unaffected genome).
+
+\section{CRF vs HMM}
+The HMM in \citep{rampasek2014fcnv} is a generative model whose discriminative model pair is a linear-chain conditional random field (CRF). This is a natural model to compare against the HMM and, as we discuss in this section, is possibly a more appropriate model for the task. Because using CRFs may require training for feature weights we consider what improvements can be gained and problems may be introduced by training a discriminative model.
+
+The HMM defines a joint model $p(\cnv) p(\snp | \cnv)$ of the CNV inheritance pattern $\cnv$ and SNP allelic ratios $\snp$. Yet the task is to predict the CNVs of the fetal genome after having observed allelic ratios at distinct SNP positions of the sequenced maternal plasma cfDNA. This is done by computing the most likely path in the conditional distribution $p(\cnv | \snp)$ that the HMM implicitly defines. This suggests directly modelling $p(\cnv | \snp)$ without wasting model capacity on the marginal of the allelic ratios, $p(\snp)$. The hypothesis space of conditional distributions of HMMs corresponds exactly to a family of conditional Markov random fields with special pairwise potentials known as linear-chain CRFs \citep{sutton2012}. In other words, any conditional distribution $p(\cnv | \snp)$ of an HMM can be converted into a linear-chain CRF with the same distributions. This also means that there exist inference algorithms for the linear-chain CRFs that are exact in poly time, and since the model is fully observed the likelihood function is convex and maximum likelihood training will converge to the global optimum.
+
+The primary advantage of discriminative models is that they avoid paying any cost for complex structure in the input. Although the conditional distribution of HMMs and a particular class of linear-chain CRFs define the same hypothesis space, the HMM training is biased towards models that spend capacity on modelling the marginal of the SNP allelic ratios $p(\snp)$. More general linear-chain CRFs are more expressive and can include rich, dependent features of the inputs without requiring more complex inference algorithms or inducing intractability. 
+
+There are some possible disadvantages of linear-chain CRFs for CNV data. First, and perhaps most important, it is not clear how to proceed with training in the absence of real data sets. Second, if only small datasets were available it is possible that the HMM training procedure results in better conditional distributions. This is because the marginal over the SNPs $p(\snp)$ can have a smoothing effect on the resulting conditional distribution. In general discriminative models are more prone to overfitting. Yet, discriminative models are a natural direction for further research and the presence of \textit{in silico} CNV simulation methods developed in \citep{rampasek2014fcnv} make training linear-chain CRFs a promising direction for CNV prediction. Linear-chain CRFs enjoy widespread success in NLP for tasks like named-entity recognition, shallow parsing, semantic role finding, and word alignment in machine translation \citep{sutton2012}. Many of these tasks share structure with the CNV prediction task.  Indeed, semi-Markov CRFs have been used in computational biology for tasks like gene prediction \citep{bernal2007} and RNA structural alignment \citep{Sato01012005}.
+
+\section{Project goals}
+More concretely, the goals of this project are:
+
+\begin{enumerate}
+
+\item Test CRF models by trying different features (including DOC and allelic ratios) and exploring training procedures in the simulated training set regime. Training may include initializing the CRF with the converted HMM conditional distribution features and weights and fine-tuning with the discriminative objective. Training algorithms worth exploring are maximum likelihood training with L-BFGS or an online large-margin procedure as in \cite{bernal2007}.
+
+\item (optional) Model parental CNV as called by CNVnator on the respective WG sequencing samples. Explicitly pre-computing and utilizing information about these potentially inherited CNVs is likely to reduce the false positive rate.
+
+\item (optional, more challenging) Investigate how to extend the method to eliminate the need for explicit knowledge of paternal genotype. This is an important issue for potential clinical use, not only for the implied cost reduction, but mainly because paternal genotype might be difficult or impossible to obtain in practice.
+
+\end{enumerate}
+While goals (2) and (3) are important for clinical practise, we plan to focus our efforts mainly on the machine learning aspects as described in (1).
+
+
+\bibliographystyle{unsrt}
+\bibliography{ref}
+ 
+\end{document}
