@@ -908,7 +908,7 @@ class FCNV(object):
         
         return parameterStats
         
-    def computeLLandMaxMarginUpdate(self, labels, samples, M, P, MSC, PSC, mixture, C, compute_prelikelihood=False, compute_postlikelihood=False):
+    def computeLLandMaxMarginUpdate(self, labels, samples, M, P, MSC, PSC, mixture, C, compute_postloss=True):
         """
         Compute the parameters likelihood, max margin update, and update the weights
         """
