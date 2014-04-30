@@ -886,14 +886,11 @@ class FCNV(object):
             nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
             scores[i] = self.logSum(scores[i], nodePotential[labelslists[i][pos]])
         
-<<<<<<< HEAD
         for i in range(len(scores)):
             scores[i] = math.exp(scores[i])
             
         return scores
-    
-    def computeLLandMaxMarginUpdate(self, labels, samples, M, P, MSC, PSC, mixture, C, compute_postloss=False):
-=======
+
     def computePvariance(self, labels, samples, M, P, MSC, PSC, mixture, parameterStats):
         n = len(samples)
         
@@ -912,8 +909,6 @@ class FCNV(object):
         return parameterStats
         
     def computeLLandMaxMarginUpdate(self, labels, samples, M, P, MSC, PSC, mixture, C, compute_prelikelihood=False, compute_postlikelihood=False):
-
->>>>>>> eaec950c8ec5289bc156c5918bb0268adf1a4b15
         """
         Compute the parameters likelihood, max margin update, and update the weights
         """
