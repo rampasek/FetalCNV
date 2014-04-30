@@ -1,0 +1,43 @@
+\section{Results}
+
+\subsection{Project goals}
+More concretely, the goals of this project are:
+
+\begin{enumerate}
+
+\item Test CRF models by trying different features (including DOC and allelic ratios) and exploring training procedures in the simulated training set regime. Training may include initializing the CRF with the converted HMM conditional distribution features and weights and fine-tuning with the discriminative objective. Training algorithms worth exploring are maximum likelihood training with L-BFGS or an online large-margin procedure as in \cite{bernal2007}.
+
+\item (optional) Model parental CNV as called by CNVnator on the respective WG sequencing samples. Explicitly pre-computing and utilizing information about these potentially inherited CNVs is likely to reduce the false positive rate.
+
+\item (optional, more challenging) Investigate how to extend the method to eliminate the need for explicit knowledge of paternal genotype. This is an important issue for potential clinical use, not only for the implied cost reduction, but mainly because paternal genotype might be difficult or impossible to obtain in practice.
+
+\end{enumerate}
+While goals (2) and (3) are important for clinical practise, we plan to focus our efforts mainly on the machine learning aspects as described in (1).
+
+
+%%%%%%%%%%%%%%%%%% FIGURE TEMPLATES %%%%%%%%%%%%%%%%%
+%%%%%%%%% SINGLE FIGURE %%%%%%%%
+%\begin{figure}
+%\caption{caption fdfd}
+%\label{fig:}
+%\centering
+%\includegraphics[height=0.33\textheight]{figures/}
+%\end{figure}
+%
+%%%%%$%%%% MULTIFIGURE %%%%%%%%%
+%\begin{figure*}
+%\caption{caption fdfd}
+%\label{fig:}
+%\subfigure[subfig title A]{ 
+%\begin{minipage}[b]{0.48\textwidth}
+%	\centering
+%	\includegraphics[width=0.98\textwidth]{figures/}
+%	\end{minipage}	
+%}
+%\subfigure[subfig title B]{
+%	\begin{minipage}[b]{0.48\textwidth}
+%		\centering
+%	\includegraphics[width=0.98\textwidth]{figures/}
+%	\end{minipage}	
+%}
+%\end{figure*}

@@ -1,0 +1,67 @@
+\pdfoutput=1
+\documentclass{bioinfo}
+\copyrightyear{2014}
+\pubyear{2014}
+
+\usepackage{natbib}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{subfigure}
+\usepackage{listings}
+\usepackage{url}
+\usepackage{relsize}
+\usepackage{multirow}
+
+% nice tilde
+\newcommand{\ntilde}{\raise.17ex\hbox{$\scriptstyle\mathtt{\sim}$}}
+
+\newcommand{\cnv}{\mathbf{y}}
+\newcommand{\snp}{\mathbf{x}}
+
+
+\def\inst#1{${}^{#1}$}
+
+\begin{document}
+
+\title[Application of conditional random fields for non-invasive fetal CNV detection from maternal plasma]{Application of conditional random fields for non-invasive fetal CNV detection from maternal plasma}
+\author[Maddison and Rampasek]{
+	Chris J. Maddison\inst{1}, and
+	Ladislav Rampasek\inst{1}
+	}
+
+\address{
+\inst{1}
+    Department of Computer Science, University of Toronto, Toronto M5S 2E4, Canada
+}
+
+\history{}
+\editor{}
+
+
+\maketitle
+
+\begin{abstract}
+\section{Motivation:}
+
+\section{Results:}
+
+\section{Availability:}
+http://github.com/rampasek/FetalCNV
+
+\section{Contact:}
+\path|{cmaddis, rampasek}@cs.toronto.edu| 
+\end{abstract}
+
+
+\input intro
+\input methods
+\input results
+\input discussion
+
+%\subsection*{Acknowledgements}
+
+\bibliographystyle{natbib}
+\bibliography{main}
+
+\end{document}
