@@ -398,13 +398,14 @@ def main():
     #run gradient training
     if runGradTraining:
         #run the training iterations
-        for iterNum in range(1):
+        for iterNum in range(5):
         #    print "iterNum: ", iterNum
-            #ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix) 
-            pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, float("inf"), compute_postloss=True)
-            print preloss, params
-            print "{0} !>= {1}".format(pregts - preps, preloss)
-            print "{0} >= {1}".format(postgts - postps, postloss)
+            ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix) 
+            # pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, float("inf"), compute_postloss=True)
+            # print preloss, params
+            # print "{0} !>= {1}".format(pregts - preps, preloss)
+            # print "{0} >= {1}".format(postgts - postps, postloss)
+            print ll, params
             print "------------------------------------------------------------------"
         
         #save the trained parameters to the file
