@@ -917,17 +917,18 @@ class FCNV(object):
         length = len(labelslists[0])
         for pos in xrange(length):
             # print labels[pos], predicted_labels[pos]
-            #pairwise factor value
-            if pos+1 < length:
-                for i in range(len(scores)):
-                    scores[i] = self.logSum(scores[i], edgePotential[labelslists[i][pos]][labelslists[i][pos+1]][self.getDistbin(pos+1)])
-                
             #real positions are <1..n+1)
             nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
-            scores[i] = self.logSum(scores[i], nodePotential[labelslists[i][pos]])
+            
+            for i in range(len(scores)):
+                #pairwise factor value
+                if pos+1 < length:
+                    scores[i] = self.logSum(scores[i], edgePotential[labelslists[i][pos]][labelslists[i][pos+1]][self.getDistbin(pos+1)])
+                #unary factor value
+                scores[i] = self.logSum(scores[i], nodePotential[labelslists[i][pos]])
         
-        for i in range(len(scores)):
-            scores[i] = math.exp(scores[i])
+        #for i in range(len(scores)):
+        #    scores[i] = math.exp(scores[i])
             
         return scores
 
