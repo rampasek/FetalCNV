@@ -86,7 +86,9 @@ class FCNV(object):
         #store genomic positions of the SNPs
         self.positions = positions
         self.possible_distbins = range(5)
-
+        if self.positions != None:
+            self.distBin = [ self.getDistbin(x) for x in range(len(positions)+3)]
+        
         #run intern tests
         self.neg_inf = float('-inf')
         self.inf = float('inf')
@@ -709,6 +711,7 @@ class FCNV(object):
         """
         Compute the parameters likelihood, corresponding gradient, and update the weights
         """
+        distBin = self.distBin
         #get forward and backward DP tables and log of p(X) -- the Z function
         fwd, pX1, scale = self.computeForward(samples, M, P, MSC, PSC, mixture)
         bck, pX2 = self.computeBackward(samples, M, P, MSC, PSC, mixture, scale)
@@ -716,7 +719,7 @@ class FCNV(object):
         logZ = pX1 + sum(scale)
         
         if abs(pX1 - pX2) > 10e-8:
-            print "p(X) from forward and backward DP doesn't match", pX1, pX2
+            print "p(X) from forward and backward DP doesn't match", pX1, pX2, sum(scale)
             return
         
         num_real_states = self.getNumPP()
@@ -743,7 +746,7 @@ class FCNV(object):
             logSumm = self.neg_inf
             for s1_id in range(len(self.states[:num_real_states])):
                 for s2_id in range(len(self.states[:num_real_states])):
-                    pEdgeAtPos = fwd[pos][s1_id] + edgePotential[s1_id][s2_id][self.getDistbin(pos)] + nodePotential[s2_id] + bck[pos+1][s2_id]
+                    pEdgeAtPos = fwd[pos][s1_id] + edgePotential[s1_id][s2_id][distBin[pos]] + nodePotential[s2_id] + bck[pos+1][s2_id]
                     edgeMarginals[pos][s1_id][s2_id] = pEdgeAtPos
                     logSumm = self.logSum(pEdgeAtPos, logSumm)
             for s1_id in range(len(self.states[:num_real_states])):
@@ -756,6 +759,7 @@ class FCNV(object):
         #for i, x in enumerate(labels):
         #    print labels[i], x, self.IPtoID[self.states[x].inheritance_pattern]
             
+        print logLikelihood, logZ
         logLikelihood -= logZ
         
         wSqr = sum([ x*x  for x in self.unaryWeights + self.binaryWeights ])
@@ -784,11 +788,11 @@ class FCNV(object):
         for i, f in enumerate(self.binaryFeaturesList):
             grad = 0.
             for pos in range(len(labels)-1):
-                grad += f(labels[pos], self.states[labels[pos]], labels[pos+1], self.states[labels[pos+1]], self.getDistbin(pos+1))
+                grad += f(labels[pos], self.states[labels[pos]], labels[pos+1], self.states[labels[pos+1]], distBin[pos+1])
                 expect = 0.
                 for s1_id, s1 in enumerate(self.states[:num_real_states]):
                     for s2_id, s2 in enumerate(self.states[:num_real_states]):
-                        expect += edgeMarginals[pos+1][s1_id][s2_id] * f(s1_id, s1, s2_id, s2, self.getDistbin(pos+1))
+                        expect += edgeMarginals[pos+1][s1_id][s2_id] * f(s1_id, s1, s2_id, s2, distBin[pos+1])
                 grad -= expect
             grad -= self.binaryWeights[i]/self.sigmaSqr #regularizator
             #update the current weights
@@ -910,10 +914,14 @@ class FCNV(object):
         return CEN
     
     def getScore(self, samples, M, P, MSC, PSC, mixture, *labelslists):
-        
+        """
+        Computes logScore of (multiple) lists of sequence labeles
+        """
+        distBin = self.distBin
         edgePotential = self.getEdgePotential(self.binaryWeights)
         
-        scores = [self.neg_inf]*len(labelslists)
+        #scores = [self.neg_inf] * len(labelslists)
+        scores = [0.] * len(labelslists)
         length = len(labelslists[0])
         for pos in xrange(length):
             # print labels[pos], predicted_labels[pos]
@@ -923,10 +931,12 @@ class FCNV(object):
             for i in range(len(scores)):
                 #pairwise factor value
                 if pos+1 < length:
-                    scores[i] = self.logSum(scores[i], edgePotential[labelslists[i][pos]][labelslists[i][pos+1]][self.getDistbin(pos+1)])
+                    scores[i] += edgePotential[labelslists[i][pos]][labelslists[i][pos+1]][ distBin[pos+1] ]
+                    if edgePotential[labelslists[i][pos]][labelslists[i][pos+1]][ distBin[pos+1] ] == self.neg_inf: print pos, ":", labelslists[i][pos], labelslists[i][pos+1]
                 #unary factor value
-                scores[i] = self.logSum(scores[i], nodePotential[labelslists[i][pos]])
-        
+                scores[i] += nodePotential[labelslists[i][pos]]
+                #if nodePotential[labelslists[i][pos]] == self.neg_inf: print pos, ":", labelslists[i][pos]
+                
         #for i in range(len(scores)):
         #    scores[i] = math.exp(scores[i])
             
@@ -1065,7 +1075,8 @@ class FCNV(object):
                 featureValue = f(pos, samples, M, P, MSC, PSC, mixture, state)
                 featureValue += math.log(unaryWeights[i])
                 nodePot[state_id] = self.logSum(featureValue, nodePot[state_id])
-        
+            nodePot[state_id] = math.exp(nodePot[state_id])
+            
         return nodePot
 
     def makeBinary(self, distbin):
@@ -1126,32 +1137,33 @@ class FCNV(object):
                         return 1
             return 0
         
-        return [getBinaryF0, getBinaryF1, getBinaryF2, getBinaryF3, getBinaryF4, getBinaryF5]
-#    def getBinaryF6(self, sid1, state1, sid2, state2):
-#        #for CNV states: pairwise energy of going to too diffrent recombination
-#        if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
-#            if sid1 != sid2 and state1.inheritance_pattern == state2.inheritance_pattern:
-#                if state1.inheritance_pattern == (2, 1):
-#                    if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
-#                        return 1
-#                elif state1.inheritance_pattern == (1, 2):
-#                    if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
-#                        edgePot[i][j] = wEps
-#                        return 1
-#        return 0
+        def getBinaryF6(sid1, state1, sid2, state2, curr_distbin):
+            #for CNV states: pairwise energy of going to too diffrent recombination
+            if distbin != curr_distbin: return 0
+            if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
+                if sid1 != sid2 and state1.inheritance_pattern == state2.inheritance_pattern:
+                    if state1.inheritance_pattern == (2, 1):
+                        if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
+                            return 1
+                    elif state1.inheritance_pattern == (1, 2):
+                        if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
+                            return 1
+            return 0
+        
+        return [getBinaryF0, getBinaryF1, getBinaryF2, getBinaryF3, getBinaryF4, getBinaryF5, getBinaryF6]
         
     def getEdgePotential(self, binaryWeights):
         """
         Compute overall edge potential shared across all edges
         
-        return 'num states' x 'num states' matrix representing the potential that
+        return 'num states' x 'num states' x 'num DistBins' matrix representing the potential that
         pools all edge features together given weights vector @binaryWeights
         """
         num_real_states = self.getNumPP()
         num_states = self.getNumStates()
         
         featuresList = self.binaryFeaturesList
-        edgePot = [[[0. for db in self.possible_distbins] for x in range(num_states)] for y in range(num_states)]
+        edgePot = [[[self.neg_inf for db in self.possible_distbins] for x in range(num_states)] for y in range(num_states)]
         
         for dbid, db in enumerate(self.possible_distbins):
             for sid1, state1 in enumerate(self.states[:num_real_states]):
@@ -1159,6 +1171,8 @@ class FCNV(object):
                     #sum log values of all binary features for pair of states/lables
                     for i, f in enumerate(featuresList):
                         featureValue = f(sid1, state1, sid2, state2, db)
+                        if featureValue != 0 and edgePot[sid1][sid2][dbid] == self.neg_inf: edgePot[sid1][sid2][dbid] = 0.
+                        
                         featureValue *= binaryWeights[i]
                         edgePot[sid1][sid2][dbid] += featureValue
             
@@ -1176,12 +1190,12 @@ class FCNV(object):
                             edgePot[sid1][sid2][db] = 1.
         
         
-        #done, take logarithm
-        for i in range(num_states):
-            for j in range(num_states):
-                for k in range(len(self.possible_distbins)):
-                    if edgePot[i][j][k] < 10e-10: edgePot[i][j][k] = self.neg_inf
-                    else: edgePot[i][j][k] = math.log(edgePot[i][j][k])
+#        #done, take logarithm
+#        for i in range(num_states):
+#            for j in range(num_states):
+#                for k in range(len(self.possible_distbins)):
+#                    if edgePot[i][j][k] < 10e-10: edgePot[i][j][k] = self.neg_inf
+#                    else: edgePot[i][j][k] = math.log(edgePot[i][j][k])
             
 #        for k in xrange(num_states):
 #            for l in xrange(num_states):
@@ -1197,8 +1211,9 @@ class FCNV(object):
         num_states = self.getNumStates()
         num_real_states = self.getNumPP() 
         transitions = self.getEdgePotential(self.binaryWeights)
+        distBin = self.distBin
         self.avgCoverage = self.estimateCoverage(samples)
-        
+
         n = len(samples)
         predecessor = [[0 for i in range(num_states)] for j in xrange(n+1)] 
         #DP table dim: seq length+1 x num_states
@@ -1218,7 +1233,7 @@ class FCNV(object):
         for state_id, state in enumerate(self.states[num_real_states:]):
             state_id += num_real_states
             if transitions[start_id][state_id] == self.neg_inf: continue #just for speed-up
-            table[0][state_id] = table[0][start_id] + transitions[start_id][state_id][self.getDistbin(0)]
+            table[0][state_id] = table[0][start_id] + transitions[start_id][state_id][distBin[0]]
             predecessor[0][state_id] = -1
          
         '''DYNAMIC PROGRAMMING'''
@@ -1238,8 +1253,8 @@ class FCNV(object):
                 max_prev = self.neg_inf
                 arg_max = -1
                 for prev_id in range(num_states):
-                    if transitions[prev_id][state_id][self.getDistbin(pos)] == self.neg_inf: continue #just for speed-up
-                    tmp = table[pos-1][prev_id] + transitions[prev_id][state_id][self.getDistbin(pos)]
+                    if transitions[prev_id][state_id][distBin[pos]] == self.neg_inf: continue #just for speed-up
+                    tmp = table[pos-1][prev_id] + transitions[prev_id][state_id][distBin[pos]]
                     if tmp > max_prev:
                         max_prev = tmp
                         arg_max = prev_id
@@ -1259,8 +1274,8 @@ class FCNV(object):
                 max_prev = self.neg_inf
                 arg_max = -1
                 for prev_id in range(state_id + 1):
-                    if transitions[prev_id][state_id][self.getDistbin(pos)] == self.neg_inf: continue #just for speed-up
-                    tmp = table[pos][prev_id] + transitions[prev_id][state_id][self.getDistbin(pos)]
+                    if transitions[prev_id][state_id][distBin[pos+1]] == self.neg_inf: continue #just for speed-up
+                    tmp = table[pos][prev_id] + transitions[prev_id][state_id][distBin[pos+1]]
                     if tmp > max_prev:
                         max_prev = tmp
                         arg_max = prev_id
@@ -1296,6 +1311,7 @@ class FCNV(object):
         num_real_states = self.getNumPP()
         patterns = self.inheritance_patterns
         transitions = self.getEdgePotential(self.binaryWeights)
+        distBin = self.distBin
         self.avgCoverage = self.estimateCoverage(samples)
         
         n = len(samples)
@@ -1314,11 +1330,11 @@ class FCNV(object):
         
         #the start state probability is 1 -> log(1)=0
         table[0][start_id] = 0. 
-        #propagate over all silent states
-        for state_id, state in enumerate(self.states[num_real_states:]):
-            state_id += num_real_states
-            if transitions[start_id][state_id][self.getDistbin(0)] == self.neg_inf: continue #just for speed-up
-            table[0][state_id] = table[0][start_id] + transitions[start_id][state_id][self.getDistbin(0)]
+#        #propagate over all silent states
+#        for state_id, state in enumerate(self.states[num_real_states:]):
+#            state_id += num_real_states
+#            if transitions[start_id][state_id][distBin[0]] == self.neg_inf: continue #just for speed-up
+#            table[0][state_id] = table[0][start_id] + transitions[start_id][state_id][distBin[0]]
         
         '''DYNAMIC PROGRAMMING'''
         #for all SNP positions do:
@@ -1336,8 +1352,8 @@ class FCNV(object):
                 #probability of this state is `emission * \sum {previous state * transition}`
                 summ = self.neg_inf
                 for prev_id in range(num_states):
-                    if transitions[prev_id][state_id][self.getDistbin(pos)] == self.neg_inf: continue #just for speed-up
-                    tmp =  table[pos-1][prev_id] + transitions[prev_id][state_id][self.getDistbin(pos)]
+                    if transitions[prev_id][state_id][distBin[pos]] == self.neg_inf: continue #just for speed-up
+                    tmp =  table[pos-1][prev_id] + transitions[prev_id][state_id][distBin[pos]]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = emis_p + summ
             
@@ -1354,8 +1370,8 @@ class FCNV(object):
                 #probability of this state is `\sum {(actual real state or silent state with lower id) * transition}`
                 summ = self.neg_inf
                 for prev_id in range(state_id):
-                    if transitions[prev_id][state_id][self.getDistbin(pos)] == self.neg_inf: continue #just for speed-up
-                    tmp =  table[pos][prev_id] + transitions[prev_id][state_id][self.getDistbin(pos)]
+                    if transitions[prev_id][state_id][distBin[pos+1]] == self.neg_inf: continue #just for speed-up
+                    tmp =  table[pos][prev_id] + transitions[prev_id][state_id][distBin[pos+1]]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = summ
                 
@@ -1378,6 +1394,7 @@ class FCNV(object):
         num_real_states = self.getNumPP()
         patterns = self.inheritance_patterns
         transitions = self.getEdgePotential(self.binaryWeights)
+        distBin = self.distBin
         self.avgCoverage = self.estimateCoverage(samples)
         
         n = len(samples)
@@ -1399,8 +1416,8 @@ class FCNV(object):
             #\sum {'next'_state * transition_from_here} (no emission)
             summ = self.neg_inf
             for next_id in reversed(range(state_id, num_states)):
-                if transitions[state_id][next_id][self.getDistbin(n+1)] == self.neg_inf: continue #just for speed-up
-                tmp = transitions[state_id][next_id][self.getDistbin(n+1)] + table[n][next_id]
+                if transitions[state_id][next_id][distBin[n+1]] == self.neg_inf: continue #just for speed-up
+                tmp = transitions[state_id][next_id][distBin[n+1]] + table[n][next_id]
                 summ = self.logSum(summ, tmp)
             table[n][state_id] = self.logSum(summ, table[n][state_id])
         
@@ -1409,8 +1426,8 @@ class FCNV(object):
             #\sum {'next'_state * transition_from_here} (no emission)
             summ = self.neg_inf
             for next_id in range(num_real_states, num_states):
-                if transitions[state_id][next_id][self.getDistbin(n+1)] == self.neg_inf: continue #just for speed-up
-                tmp = transitions[state_id][next_id][self.getDistbin(n+1)] + table[n][next_id]
+                if transitions[state_id][next_id][distBin[n+1]] == self.neg_inf: continue #just for speed-up
+                tmp = transitions[state_id][next_id][distBin[n+1]] + table[n][next_id]
                 summ = self.logSum(summ, tmp)
             table[n][state_id] = self.logSum(summ, table[n][state_id])
         
@@ -1430,8 +1447,8 @@ class FCNV(object):
                 # \sum {emission_in_'next' * 'next'_state * transition_from_here}
                 summ = self.neg_inf
                 for next_id in range(num_real_states):
-                    if transitions[state_id][next_id][self.getDistbin(pos+1)] == self.neg_inf: continue #just for speed-up
-                    tmp = transitions[state_id][next_id][self.getDistbin(pos+1)] + table[pos+1][next_id] + nodePotential[next_id]
+                    if transitions[state_id][next_id][distBin[pos+1]] == self.neg_inf: continue #just for speed-up
+                    tmp = transitions[state_id][next_id][distBin[pos+1]] + table[pos+1][next_id] + nodePotential[next_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = summ
             
@@ -1440,8 +1457,8 @@ class FCNV(object):
                 #\sum {'next'_state * transition_from_here} (no emission)
                 summ = self.neg_inf
                 for next_id in reversed(range(state_id, num_states)):
-                    if transitions[state_id][next_id][self.getDistbin(pos+1)] == self.neg_inf: continue #just for speed-up
-                    tmp = transitions[state_id][next_id][self.getDistbin(pos+1)] + table[pos][next_id]
+                    if transitions[state_id][next_id][distBin[pos+1]] == self.neg_inf: continue #just for speed-up
+                    tmp = transitions[state_id][next_id][distBin[pos+1]] + table[pos][next_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = self.logSum(summ, table[pos][state_id])
             
@@ -1450,8 +1467,8 @@ class FCNV(object):
                 #\sum {'next'_state * transition_from_here} (no emission)
                 summ = self.neg_inf
                 for next_id in range(num_real_states, num_states):
-                    if transitions[state_id][next_id][self.getDistbin(pos+1)] == self.neg_inf: continue #just for speed-up
-                    tmp = transitions[state_id][next_id][self.getDistbin(pos+1)] + table[pos][next_id]
+                    if transitions[state_id][next_id][distBin[pos+1]] == self.neg_inf: continue #just for speed-up
+                    tmp = transitions[state_id][next_id][distBin[pos+1]] + table[pos][next_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = self.logSum(summ, table[pos][state_id])
             
