@@ -120,9 +120,6 @@ class FCNV(object):
 #        self.sigmaSqr = 0.01
 #        self.omega = 0.00005
         
-        #set hyper-parameters and CRF parameters
-        self.setCRFparams(crfParams)
-        
         #generate inheritance patterns
         self.inheritance_patterns = []
         self.IPtoID = {}
@@ -148,18 +145,19 @@ class FCNV(object):
                     num_phased_states += 1
             self.max_component_size = max(self.max_component_size, num_phased_states)
         
-        # CNV PRIOR 
-        
-        # biases
+        # CNV PRIOR
         #CNV per position prior
         self.use_prior = use_prior
         self.cnv_prior = cnv_prior
         print "Use priors: ", self.use_prior
-        
+        # biases
         self.cnv_prior_biases = [0, 0, 0]
         for state in self.states:
             copy_number = sum(state.inheritance_pattern) - 1
             self.cnv_prior_biases[copy_number] += 1
+        
+        #set hyper-parameters and CRF parameters
+        self.setCRFparams(crfParams)
                 
         #generate silent states
         self.states.append( HMMState("s", "s") ) #start state
@@ -1043,9 +1041,10 @@ class FCNV(object):
         return emis_logp
 
     def getUnaryF1(self, pos, samples, M, P, MSC, PSC, mixture, state):
-        #emission probability in the given state
+        #copy number prior for the given state
         copy_number = sum(state.inheritance_pattern) - 1
-        return math.log(self.cnv_prior[pos-1][copy_number]) - math.log(self.cnv_prior_biases[copy_number])
+        res = self.cnv_prior[pos-1][copy_number] - math.log(self.cnv_prior_biases[copy_number])
+        return res
         
     def getNodePotential(self, pos, unaryWeights, samples, M, P, MSC, PSC, mixture):
         """
