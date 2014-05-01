@@ -4,11 +4,50 @@ import math
 import argparse
 import sys        
 
-def MSP(j):
-    pass
+def MS(alleles, j, N, n_plus):
+    MSP_j = 0
+    MSG_j = 0
+
+    p_j = 0    
+    for i in range(N):
+        p_j += alleles[i][j]
+        
+    p_j = float(p_j)/n_plus
     
-def MSG(j):
-    pass
+    for i in range(N):
+        n_i = sum(alleles[i])
+        p_ij = float(alleles[i][j])/n_i
+        MSP_j += n_i*(p_ij - p_j) ** 2
+        MSG_j += n_i*p_ij*(1 - p_ij)
+
+    return MSP_j/(N-1), MSG_j/(n_plus - N)
+    
+def rho_mom(alleles):
+    
+    k = len(alleles[0])
+
+    rho_num = 0
+    rho_denom = 0
+    N = len(alleles)
+    
+    n_plus = 0    
+    for i in range(N):
+        n_plus += sum(alleles[i])    
+    
+    n_c = (n_plus - sum(sum(allele) ** 2 for allele in alleles)/float(n_plus))/float(N-1)
+    print alleles
+    
+    for j in range(k):
+        MSP_j, MSG_j = MS(alleles, j, N, n_plus)
+        rho_num += MSP_j - MSG_j
+        rho_denom += MSP_j + (n_c - 1) * MSG_j
+        print "\tj {2} MSP {0} MSG {1}".format(MSP_j, MSG_j, j)
+    
+    print "rhonum {0} rhodenom {1}".format(rho_num, rho_denom)
+    print k, N
+    rho = rho_num/rho_denom
+
+    return rho
 
 def main():
     #parse command line arguments
@@ -39,59 +78,10 @@ def main():
     
     #for each category (expected P) compute the MoM estimate of rho
     for expP in sorted(parameterStats.keys()):
-        pass
+        if len(parameterStats[expP]) > 1:
+            print rho_mom(parameterStats[expP])
     
     
-#    parameterStats = dict()
-#    #return 0
-#    for fname in args.filenames:
-#        fin = open(fname, 'r')
-#        total = int(fin.readline())
-#        for i in range(total):
-#            mean = float(fin.readline())
-#            vals = map(float, fin.readline().split())
-#            if mean not in parameterStats: parameterStats[mean] = list()
-#            parameterStats[mean] += vals
-#        fin.close()
-#    
-#    summ = 0.
-#    total = 0.
-#    catBegin = -1
-#    
-##    for expP in sorted(parameterStats.keys()):
-##        print "----------", expP, "----------"
-##        
-##        for x in parameterStats[expP]:
-##            v = (x-expP)**2v
-##            N = 78
-##            rho = (N*v)/(1. + (N-1)) * 1./(expP*(1. - expP))
-##            print rho,
-##        print "\n================="
-#    
-#    for expP in sorted(parameterStats.keys()):
-#        #empAvg = sum(parameterStats[expP]) / float(len(parameterStats[expP]))
-#        #empVar = sum([ (x-empAvg)**2 for x in parameterStats[expP]]) / float(len(parameterStats[expP]))
-#        #expVar = sum([ (x-expP)**2 for x in parameterStats[expP]]) / float(len(parameterStats[expP]))
-#        #print expP, ':  ', empAvg, empVar, math.sqrt(empVar), " against exp.:", expVar, math.sqrt(expVar)
-#        
-#        if catBegin == -1: catBegin = expP
-#        if expP - catBegin > 0.03:
-#            #print '[', catBegin, expP,') :', summ/total, '      total:', total
-#            if total != 0:
-#                print 'if {0} <= x < {1}: var = {2}'.format(catBegin, expP, summ/total)
-#                catBegin = expP
-#                summ = 0.
-#                total = 0.
-#        
-#        #compute the variance 
-#        leng = len(parameterStats[expP])
-#        vals = sorted(parameterStats[expP])[leng/10:9*leng/10]
-#        
-#        summ += sum([ (x-expP)**2 for x in vals])
-#        total += len(vals)
-#    
-#    #print summ/total, '      total:', total
-#    print 'if {0} <= x < {1}: var = {2}'.format(catBegin, expP, summ/total)
     
 if __name__ == "__main__":
     #import doctest
