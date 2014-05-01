@@ -85,12 +85,8 @@ class FCNV(object):
         
         #store genomic positions of the SNPs
         self.positions = positions
-        
-        #CNV per position prior
-        self.use_prior = use_prior
-        self.cnv_prior = cnv_prior
-        print "Use priors: ", self.use_prior
-        
+        self.possible_distbins = range(5)
+
         #run intern tests
         self.neg_inf = float('-inf')
         self.inf = float('inf')
@@ -152,6 +148,19 @@ class FCNV(object):
                     num_phased_states += 1
             self.max_component_size = max(self.max_component_size, num_phased_states)
         
+        # CNV PRIOR 
+        
+        # biases
+        #CNV per position prior
+        self.use_prior = use_prior
+        self.cnv_prior = cnv_prior
+        print "Use priors: ", self.use_prior
+        
+        self.cnv_prior_biases = [0, 0, 0]
+        for state in self.states:
+            copy_number = sum(state.inheritance_pattern) - 1
+            self.cnv_prior_biases[copy_number] += 1
+                
         #generate silent states
         self.states.append( HMMState("s", "s") ) #start state
         self.states.append( HMMState("t", "t") ) #end state
@@ -163,15 +172,40 @@ class FCNV(object):
         #        print "%.4f" % (math.exp(self.transitions[k][l])),
         #    print " "
     
+    def binDist(self, dist):
+        
+        if 0 <= dist < 120:
+            return 0
+        elif dist < 320:
+            return 1
+        elif dist < 730:
+            return 2
+        elif dist < 3000:
+            return 3
+        else:
+            return 4
+    
+    def getDistbin(self, pos):
+        
+        if 1 < pos < len(self.positions):
+            return self.binDist(self.positions[pos-1] - self.positions[pos-2])
+        else:
+            return 0
+            
     def setCRFparams(self, crfParams):
         """Set the given CRF parameters to global variables
         """
          #weight vector for node features
         self.unaryWeights = crfParams['unaryWeights']
         self.unaryFeaturesList = [self.getUnaryF0]
+        if self.use_prior:
+            self.unaryFeaturesList.append(self.getUnaryF1)
          #weight vector for edge features
         self.binaryWeights = crfParams['binaryWeights']
-        self.binaryFeaturesList = [self.getBinaryF0, self.getBinaryF1, self.getBinaryF2, self.getBinaryF3, self.getBinaryF4, self.getBinaryF5]
+        self.binaryFeaturesList = []
+        for distbin in self.possible_distbins:
+            self.binaryFeaturesList.extend(self.makeBinary(distbin))
+            
          #minimal epsilon weight for a feature
         self.epsWeight = crfParams['epsWeight']
          #training hyperparameters
@@ -686,12 +720,13 @@ class FCNV(object):
         #compute egde marginals
         edgePotential = self.getEdgePotential(self.binaryWeights)
         edgeMarginals = [ [[0.]*num_real_states for x in range(num_real_states)] for y in range(n+1)]
+        
         for pos in xrange(1, n):
             nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
             logSumm = self.neg_inf
             for s1_id in range(len(self.states[:num_real_states])):
                 for s2_id in range(len(self.states[:num_real_states])):
-                    pEdgeAtPos = fwd[pos][s1_id] + edgePotential[s1_id][s2_id] + nodePotential[s2_id] + bck[pos+1][s2_id]
+                    pEdgeAtPos = fwd[pos][s1_id] + edgePotential[s1_id][s2_id][self.getDistbin(pos)] + nodePotential[s2_id] + bck[pos+1][s2_id]
                     edgeMarginals[pos][s1_id][s2_id] = pEdgeAtPos
                     logSumm = self.logSum(pEdgeAtPos, logSumm)
             for s1_id in range(len(self.states[:num_real_states])):
@@ -700,20 +735,9 @@ class FCNV(object):
     
     
         #compute the likelihood of current parameters (weight vectors)           
-        logLikelihood = 0.
+        logLikelihood, = self.getScore(samples, M, P, MSC, PSC, mixture, labels)
         #for i, x in enumerate(labels):
         #    print labels[i], x, self.IPtoID[self.states[x].inheritance_pattern]
-        for pos in range(len(labels)):
-            #pairwise factor value
-            if pos+1 < len(labels):
-                logLikelihood += edgePotential[labels[pos]][labels[pos+1]]
-            #real positions are <1..n+1)
-            nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
-            logLikelihood += nodePotential[labels[pos]]
-            
-            #if pos+1 < len(labels): print edgePotential[labels[pos]][labels[pos+1]], edgeMarginals[pos+1][labels[pos]][labels[pos+1]]
-            #print nodePotential[labels[pos]],  nodeMarginals[pos+1][labels[pos]]
-            #print '-------------------'
             
         logLikelihood -= logZ
         
@@ -743,11 +767,11 @@ class FCNV(object):
         for i, f in enumerate(self.binaryFeaturesList):
             grad = 0.
             for pos in range(len(labels)-1):
-                grad += f(labels[pos], self.states[labels[pos]], labels[pos+1], self.states[labels[pos+1]])
+                grad += f(labels[pos], self.states[labels[pos]], labels[pos+1], self.states[labels[pos+1]], self.getDistbin(pos+1))
                 expect = 0.
                 for s1_id, s1 in enumerate(self.states[:num_real_states]):
                     for s2_id, s2 in enumerate(self.states[:num_real_states]):
-                        expect += edgeMarginals[pos+1][s1_id][s2_id] * f(s1_id, s1, s2_id, s2)
+                        expect += edgeMarginals[pos+1][s1_id][s2_id] * f(s1_id, s1, s2_id, s2, self.getDistbin(pos+1))
                 grad -= expect
             grad -= self.binaryWeights[i]/self.sigmaSqr #regularizator
             #update the current weights
@@ -756,7 +780,6 @@ class FCNV(object):
             print "binary", i, self.binaryWeights[i]
                 
         return logLikelihood, self.encodeCRFparams()
-
         
         
     def getConfusionMatrix(self, labels, predicted_labels):
@@ -880,7 +903,7 @@ class FCNV(object):
             #pairwise factor value
             if pos+1 < length:
                 for i in range(len(scores)):
-                    scores[i] = self.logSum(scores[i], edgePotential[labelslists[i][pos]][labelslists[i][pos+1]])
+                    scores[i] = self.logSum(scores[i], edgePotential[labelslists[i][pos]][labelslists[i][pos+1]][self.getDistbin(pos+1)])
                 
             #real positions are <1..n+1)
             nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
@@ -1006,6 +1029,11 @@ class FCNV(object):
         #emission probability in the given state
         emis_logp = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
         return emis_logp
+
+    def getUnaryF1(self, pos, samples, M, P, MSC, PSC, mixture, state):
+        #emission probability in the given state
+        copy_number = sum(state.inheritance_pattern) - 1
+        return math.log(self.cnv_prior[pos-1][copy_number]) - math.log(self.cnv_prior_biases[copy_number])
         
     def getNodePotential(self, pos, unaryWeights, samples, M, P, MSC, PSC, mixture):
         """
@@ -1027,58 +1055,66 @@ class FCNV(object):
                 nodePot[state_id] = self.logSum(featureValue, nodePot[state_id])
         
         return nodePot
-    
-    
-    def getBinaryF0(self, sid1, state1, sid2, state2):
-        #for Normal states: pairwise energy of staying in the state
-        if state1.inheritance_pattern == (1, 1):
-            if sid1 == sid2:
-                return 1
-        return 0
+
+    def makeBinary(self, distbin):
         
-    def getBinaryF1(self, sid1, state1, sid2, state2):
-        #for Normal states: pairwise energy of recombination of the same IP
-        if state1.inheritance_pattern == (1, 1):
-            if sid1 != sid2 and state1.inheritance_pattern == state2.inheritance_pattern:
-                return 1     
-        return 0
-    
-    def getBinaryF2(self, sid1, state1, sid2, state2):
-        #for Normal states: pairwise energy of going to other real states -- to CNV nodes
-        if state1.inheritance_pattern == (1, 1):
-            if state1.inheritance_pattern != state2.inheritance_pattern and self.isReal(state2):
-                if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
-                    return 1
-        return 0
+        def getBinaryF0(sid1, state1, sid2, state2, curr_distbin):
+            #for Normal states: pairwise energy of staying in the state
+            if distbin == curr_distbin:
+                if state1.inheritance_pattern == (1, 1):
+                    if sid1 == sid2:
+                        return 1
+            return 0
         
-    def getBinaryF3(self, sid1, state1, sid2, state2):
-        #for CNV states: pairwise energy of staying in the state
-        if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
-            if sid1 == sid2:
-                return 1
-        return 0
+        def getBinaryF1(sid1, state1, sid2, state2, curr_distbin):
+            #for Normal states: pairwise energy of recombination of the same IP
+            if distbin == curr_distbin:
+                if state1.inheritance_pattern == (1, 1):
+                    if sid1 != sid2 and state1.inheritance_pattern == state2.inheritance_pattern:
+                        return 1     
+            return 0
+    
+        def getBinaryF2(sid1, state1, sid2, state2, curr_distbin):
+            #for Normal states: pairwise energy of going to other real states -- to CNV nodes
+            if distbin == curr_distbin:
+                if state1.inheritance_pattern == (1, 1):
+                    if state1.inheritance_pattern != state2.inheritance_pattern and self.isReal(state2):
+                        if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
+                            return 1
+            return 0
         
-    def getBinaryF4(self, sid1, state1, sid2, state2):
-        #for CNV states: pairwise energy of recombination of the same IP
-        if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
-            if sid1 != sid2 and state1.inheritance_pattern == state2.inheritance_pattern:
-                result = 1
-                if state1.inheritance_pattern == (2, 1):
-                    if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
-                        result = 0
-                elif state1.inheritance_pattern == (1, 2):
-                    if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
-                        result = 0
-                return result
-        return 0
+        def getBinaryF3(sid1, state1, sid2, state2, curr_distbin):
+            #for CNV states: pairwise energy of staying in the state
+            if distbin == curr_distbin:
+                if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
+                    if sid1 == sid2:
+                        return 1
+            return 0
+        
+        def getBinaryF4(sid1, state1, sid2, state2, curr_distbin):
+            #for CNV states: pairwise energy of recombination of the same IP
+            if distbin == curr_distbin:
+                if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
+                    if sid1 != sid2 and state1.inheritance_pattern == state2.inheritance_pattern:
+                        result = 1
+                        if state1.inheritance_pattern == (2, 1):
+                            if state1.phased_pattern[0][0] ^ state1.phased_pattern[0][1] != state2.phased_pattern[0][0] ^ state2.phased_pattern[0][1]:
+                                result = 0
+                        elif state1.inheritance_pattern == (1, 2):
+                            if state1.phased_pattern[1][0] ^ state1.phased_pattern[1][1] != state2.phased_pattern[1][0] ^ state2.phased_pattern[1][1]:
+                                result = 0
+                        return result
+            return 0
     
-    def getBinaryF5(self, sid1, state1, sid2, state2):
-        #for CNV states: pairwise energy of going to Normal states
-        if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
-            if state2.inheritance_pattern == (1, 1):
-                return 1
-        return 0
-    
+        def getBinaryF5(sid1, state1, sid2, state2, curr_distbin):
+            #for CNV states: pairwise energy of going to Normal states
+            if distbin == curr_distbin:
+                if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
+                    if state2.inheritance_pattern == (1, 1):
+                        return 1
+            return 0
+        
+        return [getBinaryF0, getBinaryF1, getBinaryF2, getBinaryF3, getBinaryF4, getBinaryF5]
 #    def getBinaryF6(self, sid1, state1, sid2, state2):
 #        #for CNV states: pairwise energy of going to too diffrent recombination
 #        if state1.inheritance_pattern != (1, 1) and self.isReal(state1):
@@ -1103,35 +1139,37 @@ class FCNV(object):
         num_states = self.getNumStates()
         
         featuresList = self.binaryFeaturesList
-        edgePot = [[0. for x in range(num_states)] for y in range(num_states)]
+        edgePot = [[[0. for db in self.possible_distbins] for x in range(num_states)] for y in range(num_states)]
         
-        for sid1, state1 in enumerate(self.states[:num_real_states]):
-            for sid2, state2 in enumerate(self.states[:num_real_states]):
-                #sum log values of all binary features for pair of states/lables
-                for i, f in enumerate(featuresList):
-                    featureValue = f(sid1, state1, sid2, state2)
-                    featureValue *= binaryWeights[i]
-                    edgePot[sid1][sid2] += featureValue
-            
-            #constant to the exit state
-            sid2 = self.getExitState()[0]
-            edgePot[sid1][sid2] = 1.  
-        
-        #now generate constant pairwise energy from the start node
-        for sid1, state1 in enumerate(self.states[num_real_states:]):
-            sid1 += num_real_states
-            #if it is the start node
-            if state1.phased_pattern == "s":
+        for dbid, db in enumerate(self.possible_distbins):
+            for sid1, state1 in enumerate(self.states[:num_real_states]):
                 for sid2, state2 in enumerate(self.states[:num_real_states]):
-                    if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
-                        edgePot[sid1][sid2] = 1.
+                    #sum log values of all binary features for pair of states/lables
+                    for i, f in enumerate(featuresList):
+                        featureValue = f(sid1, state1, sid2, state2, db)
+                        featureValue *= binaryWeights[i]
+                        edgePot[sid1][sid2][dbid] += featureValue
+            
+                #constant to the exit state
+                sid2 = self.getExitState()[0]
+                edgePot[sid1][sid2][dbid] = 1.  
+        
+            #now generate constant pairwise energy from the start node
+            for sid1, state1 in enumerate(self.states[num_real_states:]):
+                sid1 += num_real_states
+                #if it is the start node
+                if state1.phased_pattern == "s":
+                    for sid2, state2 in enumerate(self.states[:num_real_states]):
+                        if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
+                            edgePot[sid1][sid2][db] = 1.
         
         
         #done, take logarithm
         for i in range(num_states):
             for j in range(num_states):
-                if edgePot[i][j] < 10e-10: edgePot[i][j] = self.neg_inf
-                else: edgePot[i][j] = math.log(edgePot[i][j])
+                for k in range(len(self.possible_distbins)):
+                    if edgePot[i][j][k] < 10e-10: edgePot[i][j][k] = self.neg_inf
+                    else: edgePot[i][j][k] = math.log(edgePot[i][j][k])
             
 #        for k in xrange(num_states):
 #            for l in xrange(num_states):
@@ -1168,7 +1206,7 @@ class FCNV(object):
         for state_id, state in enumerate(self.states[num_real_states:]):
             state_id += num_real_states
             if transitions[start_id][state_id] == self.neg_inf: continue #just for speed-up
-            table[0][state_id] = table[0][start_id] + transitions[start_id][state_id]
+            table[0][state_id] = table[0][start_id] + transitions[start_id][state_id][self.getDistbin(0)]
             predecessor[0][state_id] = -1
          
         '''DYNAMIC PROGRAMMING'''
@@ -1188,8 +1226,8 @@ class FCNV(object):
                 max_prev = self.neg_inf
                 arg_max = -1
                 for prev_id in range(num_states):
-                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
-                    tmp = table[pos-1][prev_id] + transitions[prev_id][state_id]
+                    if transitions[prev_id][state_id][self.getDistbin(pos)] == self.neg_inf: continue #just for speed-up
+                    tmp = table[pos-1][prev_id] + transitions[prev_id][state_id][self.getDistbin(pos)]
                     if tmp > max_prev:
                         max_prev = tmp
                         arg_max = prev_id
@@ -1209,8 +1247,8 @@ class FCNV(object):
                 max_prev = self.neg_inf
                 arg_max = -1
                 for prev_id in range(state_id + 1):
-                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
-                    tmp = table[pos][prev_id] + transitions[prev_id][state_id]
+                    if transitions[prev_id][state_id][self.getDistbin(pos)] == self.neg_inf: continue #just for speed-up
+                    tmp = table[pos][prev_id] + transitions[prev_id][state_id][self.getDistbin(pos)]
                     if tmp > max_prev:
                         max_prev = tmp
                         arg_max = prev_id
@@ -1237,108 +1275,7 @@ class FCNV(object):
         print "Viterbi path probability: ", table[n][exit_id]    
         return path[1:], state_path[1:]
         
-    def restrictedViterbiPath(self, highOrderLabels, samples, M, P, MSC, PSC, mixture):
-        """
-        Viterbi decoding of the most probable path that has the given higher-order labeling.
-        (i.e. given unphased IP labels)
-        """
-        num_states = self.getNumStates()
-        num_real_states = self.getNumPP() 
-        transitions = self.getEdgePotential(self.binaryWeights)
-        self.avgCoverage = self.estimateCoverage(samples)
-        
-        n = len(samples)
-        predecessor = [[0 for i in range(num_states)] for j in xrange(n+1)] 
-        #DP table dim: seq length+1 x num_states
-        table = [[self.neg_inf for i in range(num_states)] for j in xrange(n+1)] 
-        
-        start_id, start_state = self.getStartState()
-        exit_id, exit_state = self.getExitState()
-        
-        
-        '''INITIALIZE'''
-        #multiply the CNV prior into transition probabilities
-        #self.adjustTransitionProbForPos(0, transitions)
-        
-        #the start state probability is 1 -> log(1)=0
-        table[0][start_id] = 0. 
-        #propagate over all silent states
-        for state_id, state in enumerate(self.states[num_real_states:]):
-            state_id += num_real_states
-            if transitions[start_id][state_id] == self.neg_inf: continue #just for speed-up
-            table[0][state_id] = table[0][start_id] + transitions[start_id][state_id]
-            predecessor[0][state_id] = -1
-         
-        '''DYNAMIC PROGRAMMING'''
-        #for all SNP positions do:
-        for pos in xrange(1, n+1):
-            #real positions are <1..n+1), pos 1 is the base case
-            
-            nodePotential = self.getNodePotential(pos, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
-            
-            #(i) compute new values for all phased patterns - "real" states of the HMM:
-            for state_id, state in enumerate(self.states[:num_real_states]):
-                if self.IPtoID[state.inheritance_pattern] != highOrderLabels[pos-1]: continue
-                
-                #emission probability in the given state
-                #emis_p = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
-                emis_p = nodePotential[state_id]
-                
-                #porobability of this state is `emission * max{previous state * transition}`
-                max_prev = self.neg_inf
-                arg_max = -1
-                for prev_id in range(num_states):
-                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
-                    tmp = table[pos-1][prev_id] + transitions[prev_id][state_id]
-                    if tmp > max_prev:
-                        max_prev = tmp
-                        arg_max = prev_id
-                table[pos][state_id] = max_prev + emis_p
-                predecessor[pos][state_id] = arg_max
-            
-            #multiply the CNV prior into transition probabilities
-            #transitions = copy.deepcopy(self.transitions)
-            #self.adjustTransitionProbForPos(pos, transitions)
-            
-            #(ii, iii) transitions from 'real' states and silent states with lower id to silent states
-            #note: the states in self.states are already ordered such that a transistion from a silent 
-            #   state to another silent state always points to a state with heigher index
-            for state_id, state in enumerate(self.states[num_real_states:]):
-                state_id += num_real_states
-                #porobability of this state is `max{(actual real state or silent state with lower id) * transition}`
-                max_prev = self.neg_inf
-                arg_max = -1
-                for prev_id in range(state_id + 1):
-                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
-                    tmp = table[pos][prev_id] + transitions[prev_id][state_id]
-                    if tmp > max_prev:
-                        max_prev = tmp
-                        arg_max = prev_id
-                table[pos][state_id] = max_prev
-                predecessor[pos][state_id] = arg_max
-            
-            #normalize to sum to 1
-            self.logNormalize(table[pos])
-        
-        '''RESULT'''
-        path = [-1 for i in xrange(n+1)]
-        path[n] = exit_id 
-        while path[n] >= num_real_states: path[n] = predecessor[n][path[n]]
-        for i in reversed(xrange(n)):
-            path[i] = predecessor[i+1][path[i+1]]
-            while path[i] >= num_real_states: path[i] = predecessor[i][path[i]]
-        
-#        state_path = [[] for i in xrange(n+1)]
-#        for i in xrange(1, n+1):
-#            state = self.states[ path[i] ]
-#            path[i] = self.IPtoID[state.inheritance_pattern]
-#            state_path[i] = (state.inheritance_pattern, state.phased_pattern)
-#        
-#        print "Viterbi path probability: ", table[n][exit_id]    
-#        return path[1:], state_path[1:]
 
-        return path[1:]
-    
     def computeForward(self, samples, M, P, MSC, PSC, mixture):
         '''
         Posterior decoding: forward algorithm
@@ -1368,8 +1305,8 @@ class FCNV(object):
         #propagate over all silent states
         for state_id, state in enumerate(self.states[num_real_states:]):
             state_id += num_real_states
-            if transitions[start_id][state_id] == self.neg_inf: continue #just for speed-up
-            table[0][state_id] = table[0][start_id] + transitions[start_id][state_id]
+            if transitions[start_id][state_id][self.getDistbin(0)] == self.neg_inf: continue #just for speed-up
+            table[0][state_id] = table[0][start_id] + transitions[start_id][state_id][self.getDistbin(0)]
         
         '''DYNAMIC PROGRAMMING'''
         #for all SNP positions do:
@@ -1387,8 +1324,8 @@ class FCNV(object):
                 #probability of this state is `emission * \sum {previous state * transition}`
                 summ = self.neg_inf
                 for prev_id in range(num_states):
-                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
-                    tmp =  table[pos-1][prev_id] + transitions[prev_id][state_id]
+                    if transitions[prev_id][state_id][self.getDistbin(pos)] == self.neg_inf: continue #just for speed-up
+                    tmp =  table[pos-1][prev_id] + transitions[prev_id][state_id][self.getDistbin(pos)]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = emis_p + summ
             
@@ -1405,8 +1342,8 @@ class FCNV(object):
                 #probability of this state is `\sum {(actual real state or silent state with lower id) * transition}`
                 summ = self.neg_inf
                 for prev_id in range(state_id):
-                    if transitions[prev_id][state_id] == self.neg_inf: continue #just for speed-up
-                    tmp =  table[pos][prev_id] + transitions[prev_id][state_id]
+                    if transitions[prev_id][state_id][self.getDistbin(pos)] == self.neg_inf: continue #just for speed-up
+                    tmp =  table[pos][prev_id] + transitions[prev_id][state_id][self.getDistbin(pos)]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = summ
                 
@@ -1450,8 +1387,8 @@ class FCNV(object):
             #\sum {'next'_state * transition_from_here} (no emission)
             summ = self.neg_inf
             for next_id in reversed(range(state_id, num_states)):
-                if transitions[state_id][next_id] == self.neg_inf: continue #just for speed-up
-                tmp = transitions[state_id][next_id] + table[n][next_id]
+                if transitions[state_id][next_id][self.getDistbin(n+1)] == self.neg_inf: continue #just for speed-up
+                tmp = transitions[state_id][next_id][self.getDistbin(n+1)] + table[n][next_id]
                 summ = self.logSum(summ, tmp)
             table[n][state_id] = self.logSum(summ, table[n][state_id])
         
@@ -1460,8 +1397,8 @@ class FCNV(object):
             #\sum {'next'_state * transition_from_here} (no emission)
             summ = self.neg_inf
             for next_id in range(num_real_states, num_states):
-                if transitions[state_id][next_id] == self.neg_inf: continue #just for speed-up
-                tmp = transitions[state_id][next_id] + table[n][next_id]
+                if transitions[state_id][next_id][self.getDistbin(n+1)] == self.neg_inf: continue #just for speed-up
+                tmp = transitions[state_id][next_id][self.getDistbin(n+1)] + table[n][next_id]
                 summ = self.logSum(summ, tmp)
             table[n][state_id] = self.logSum(summ, table[n][state_id])
         
@@ -1481,8 +1418,8 @@ class FCNV(object):
                 # \sum {emission_in_'next' * 'next'_state * transition_from_here}
                 summ = self.neg_inf
                 for next_id in range(num_real_states):
-                    if transitions[state_id][next_id] == self.neg_inf: continue #just for speed-up
-                    tmp = transitions[state_id][next_id] + table[pos+1][next_id] + nodePotential[next_id]
+                    if transitions[state_id][next_id][self.getDistbin(pos+1)] == self.neg_inf: continue #just for speed-up
+                    tmp = transitions[state_id][next_id][self.getDistbin(pos+1)] + table[pos+1][next_id] + nodePotential[next_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = summ
             
@@ -1491,8 +1428,8 @@ class FCNV(object):
                 #\sum {'next'_state * transition_from_here} (no emission)
                 summ = self.neg_inf
                 for next_id in reversed(range(state_id, num_states)):
-                    if transitions[state_id][next_id] == self.neg_inf: continue #just for speed-up
-                    tmp = transitions[state_id][next_id] + table[pos][next_id]
+                    if transitions[state_id][next_id][self.getDistbin(pos+1)] == self.neg_inf: continue #just for speed-up
+                    tmp = transitions[state_id][next_id][self.getDistbin(pos+1)] + table[pos][next_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = self.logSum(summ, table[pos][state_id])
             
@@ -1501,8 +1438,8 @@ class FCNV(object):
                 #\sum {'next'_state * transition_from_here} (no emission)
                 summ = self.neg_inf
                 for next_id in range(num_real_states, num_states):
-                    if transitions[state_id][next_id] == self.neg_inf: continue #just for speed-up
-                    tmp = transitions[state_id][next_id] + table[pos][next_id]
+                    if transitions[state_id][next_id][self.getDistbin(pos+1)] == self.neg_inf: continue #just for speed-up
+                    tmp = transitions[state_id][next_id][self.getDistbin(pos+1)] + table[pos][next_id]
                     summ = self.logSum(summ, tmp)
                 table[pos][state_id] = self.logSum(summ, table[pos][state_id])
             
