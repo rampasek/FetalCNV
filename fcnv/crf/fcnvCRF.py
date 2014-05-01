@@ -519,41 +519,60 @@ class FCNV(object):
         res += logFactorial(sum(xs)) - sum(logFactorial(xs))
         return res
     
-    def getPdiff(self, pos_ind, nuc_counts, maternal_alleles, paternal_alleles,\
+    def getAlleleCounts(self, pos_ind, nuc_counts, maternal_alleles, paternal_alleles,\
            maternal_sq_counts, paternal_sq_counts, mix, state_id, parameterStats):
         
-        num_real_states = self.getNumPP()
-        
-        posDiffs = dict()        
+        num_real_states = self.getNumPP()      
         state = self.states[state_id]
-        
-        #for state_id, state in enumerate(self.states[:num_real_states]):
+
         ps = self.allelesDistributionExtended(maternal_alleles, maternal_sq_counts, paternal_alleles, paternal_sq_counts, state.phased_pattern, mix)
-        seen = [0] * 4
+        
+        #identify the two possible alleles
+        expinherited = [0] * 4
         for x in maternal_alleles + paternal_alleles:
-            seen[self.nucleotides.index(x)] = 1
+            expinherited[self.nucleotides.index(x)] = 1
+        
+        seen = [0] * 4
+        for x in range(4):
+            if nuc_counts[x] != 0: seen[x] = 1
+            
+        for x in range(4):
+            seen[x] = int(seen[x] or expinherited[x])
+        
         als = [i for i in range(4) if seen[i] == 1]
         
         #print nuc_counts, '|', als, '|', seen
-        if len(als) > 2:
+        if len(als) > 2: 
             print "WARNING: trialelic pos"
-            #continue
+            return
+        if len(als) == 1: #homozygous position, so just use whatever second allele (has 0 count)
+            for x in range(4):
+                if x != als[0]: 
+                    als.append(x)
+                    break
+
         
         N = float(sum(nuc_counts))
-        empiricalP = 0.0
-        maxP = 0.0
-        for i in range(len(als)):
-            if maxP < ps[als[i]]:
-                maxP = ps[als[i]]
-                empiricalP = nuc_counts[als[i]] / N
-        #print nuc_counts, state.phased_pattern, maxP, empiricalP
+        m = len(als)
+        dmps = [0.] * m
+        for i in range(m):
+            dmps[i] = ps[als[i]]
+        dmps = [ x/sum(dmps) for x in dmps]
         
-        posDiffs[maxP] = empiricalP
+        #make the one with higher p to be the first one
+        if dmps[1] > dmps[0]:
+            dmps[0], dmps[1] = dmps[1], dmps[0]
+            als[0], als[1] = als[1], als[0]
             
-        for expP, empP in posDiffs.iteritems():
-            if expP not in parameterStats:
-                parameterStats[expP] = list()
-            parameterStats[expP].append(empP)
+        expP = dmps[0]
+        alleleAcount = nuc_counts[als[0]]
+        alleleBcount = nuc_counts[als[1]]
+            
+        if expP not in parameterStats:
+            parameterStats[expP] = list()
+        parameterStats[expP].append( (alleleAcount, alleleBcount) )
+        
+        #print expP, (alleleAcount, alleleBcount), "|", nuc_counts, ps
     
     def logLHGivenStateWCoverage(self, pos_ind, nuc_counts, maternal_alleles, paternal_alleles,\
            maternal_sq_counts, paternal_sq_counts, mix, state):
@@ -891,20 +910,13 @@ class FCNV(object):
             
         return scores
 
-    def computePvariance(self, labels, samples, M, P, MSC, PSC, mixture, parameterStats):
+    def computeCountsTable(self, labels, samples, M, P, MSC, PSC, mixture, parameterStats):
         n = len(samples)
         
         # compute stats of the main distrib. parameter        
         for pos in xrange(1, n+1):
             #real positions are <1..n+1), pos 1 is the base case    
-            self.getPdiff(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, labels[pos-1], parameterStats)
-        
-#        for expP in self.parameterStats.keys():
-#            empAvg = sum(self.parameterStats[expP]) / float(len(self.parameterStats[expP]))
-#            empVar = sum([ (x-empAvg)**2 for x in self.parameterStats[expP]]) / float(len(self.parameterStats[expP]))
-#            expVat = sum([ (x-expP)**2 for x in self.parameterStats[expP]]) / float(len(self.parameterStats[expP]))
-#            #print expP, ':  ', empAvg, empVar, math.sqrt(empVar), " against exp.:", expVat, math.sqrt(expVat)
-#            #print self.parameterStats[expP]
+            self.getAlleleCounts(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, labels[pos-1], parameterStats)
         
         return parameterStats
         

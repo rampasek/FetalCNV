@@ -242,7 +242,7 @@ def main():
     parser.add_argument('--ff', type=float, help='fetal mixture ratio', default=-1.)
     parser.add_argument('--useCvrg', help='use coverage flag', action="store_true")
     parser.add_argument('--trainGrad', type=str, help='train by maxll gradient and output new params to given file', default="")
-    parser.add_argument('--getBinVar', help='get binomial parameter variances', action="store_true")
+    parser.add_argument('--getObsCounts', help='get observed allele counts', action="store_true")
     args = parser.parse_args()
     
     in_file_name = args.input[0]
@@ -383,20 +383,15 @@ def main():
     parameterStats = dict()
     
     
-    #get variance of the binomial parameter
-    if args.getBinVar:
-        parameterStats = fcnv.computePvariance(ground_truth, samples, M, P, MSC, PSC, mix, parameterStats)
-        varFileName = target_file_name.split('/')[-1].split('.')[0].replace(':', '-')+'.paramVar.txt'
+    #get get observed allele counts
+    if args.getObsCounts:
+        parameterStats = fcnv.computeCountsTable(ground_truth, samples, M, P, MSC, PSC, mix, parameterStats)
+        varFileName = target_file_name.split('/')[-1].split('.')[0].replace(':', '-')+'.observedCounts.txt'
         varFile = open(varFileName, 'w')
         print >>varFile, len(parameterStats)
         for expP in parameterStats.keys():
-            empAvg = sum(parameterStats[expP]) / float(len(parameterStats[expP]))
-            empVar = sum([ (x-empAvg)**2 for x in parameterStats[expP]]) / float(len(parameterStats[expP]))
-            expVar = sum([ (x-expP)**2 for x in parameterStats[expP]]) / float(len(parameterStats[expP]))
-            #print expP, ':  ', empAvg, empVar, math.sqrt(empVar), " against exp.:", expVar, math.sqrt(expVar)
-            #print expP, ": ", expVar, "(", len(parameterStats[expP]), ")"
             print >>varFile, expP
-            print >>varFile, " ".join(map(str, parameterStats[expP]))
+            print >>varFile, " ".join(map( lambda x: '/'.join(map(str, x)), parameterStats[expP]) )
         varFile.close()
         return 0
     
