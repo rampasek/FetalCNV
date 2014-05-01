@@ -7,6 +7,7 @@ import argparse
 #import numpypy as np
 import sys
 import fcnvCRF
+import cvrgHMM
 from datetime import datetime
 import os
 
@@ -357,18 +358,18 @@ def main():
     if args.ff > 0: mix = args.ff
     print "used:", mix
     
+    
     cnv_prior = None
     if args.useCvrg:
-        pass
-#        cvrg = cvrgHMM.coverageFCNV(snp_positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum)
-#        cvrg_posterior = cvrg.posteriorDecoding(mix)
-#        del prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum
-#        
-#        cnv_prior = [ [0., 0., 0.] for x in range(len(snp_positions)) ]
-#        for pos in range(len(cvrg_posterior)):
-#            for cp_num_posterior in cvrg_posterior[pos]:
-#                cnv_prior[pos][cp_num_posterior[1]] = cp_num_posterior[0]
-#        del cvrg, cvrg_posterior
+        cvrg = cvrgHMM.coverageFCNV(snp_positions, prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum)
+        cvrg_posterior = cvrg.posteriorDecoding(mix)
+        del prefix_sum_plasma, prefix_count_plasma, prefix_sum_ref, prefix_count_ref, gc_sum
+        
+        cnv_prior = [ [0., 0., 0.] for x in range(len(snp_positions)) ]
+        for pos in range(len(cvrg_posterior)):
+            for cp_num_posterior in cvrg_posterior[pos]:
+                cnv_prior[pos][cp_num_posterior[1]] = cp_num_posterior[0]
+        del cvrg, cvrg_posterior
     
     del fcnv
     fcnv = fcnvCRF.FCNV(crfParams, snp_positions, cnv_prior, args.useCvrg)
@@ -398,7 +399,7 @@ def main():
     #run gradient training
     if runGradTraining:
         #run the training iterations
-        for iterNum in range(5):
+        for iterNum in range(1):
         #    print "iterNum: ", iterNum
             ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix) 
             # pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, float("inf"), compute_postloss=True)
