@@ -859,6 +859,45 @@ class FCNV(object):
 #            print ''
         
         return w
+
+    def generateWeightMatrixForSWE(self):
+        """
+        Creates 'num_real_states' x 'num_real_states' matrix of weights for the 
+        individual correlation coefficients used in the MCC computation
+        """
+        num_real_states = self.getNumPP()  
+        w = [ [0.] * num_real_states for x in range(num_real_states)]
+        
+        for s1_id, s1 in enumerate(self.states[:num_real_states]):
+            for s2_id, s2 in enumerate(self.states[:num_real_states]):
+
+                #the same state
+                if s1_id == s2_id:
+                    w[s1_id][s2_id] = 0.
+
+                else:
+                    #if ground truth is a normal state
+                    if s1.inheritance_pattern == (1,1):
+
+                        #recombination
+                        if s1.inheritance_pattern == s2.inheritance_pattern:
+                            w[s1_id][s2_id] = 0.
+
+                        #other inheritance pattern                        
+                        else:
+                            w[s1_id][s2_id] = 0.5
+
+                    #else if ground truth is a CNV state
+                    else:
+                        #recombination
+                        elif s1.inheritance_pattern == s2.inheritance_pattern:
+                            w[s1_id][s2_id] = 0.5
+
+                        #other inheritance pattern
+                        else:
+                            w[s1_id][s2_id] = 1.
+                
+        return w
         
         
     def getConfusionMatrix(self, labels, predicted_labels):
@@ -942,7 +981,7 @@ class FCNV(object):
             
         return mcc
 
-    def numNonNormalErrors(self, labels, predicted_labels):
+    def sumWeightedErrors(self, labels, predicted_labels):
         """
         Compute the Matthews Correlation Coefficient from the Confusion Matrix of
         labels and predicted_labels. Returns a float.
@@ -951,7 +990,9 @@ class FCNV(object):
         
         num_states = self.getNumPP()
         confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
-        # 7,8,9,10 ar enormal
+        w = self.generateWeightMatrixForSWE()
+        
+        return sum(sum(w[i][j]*confusionMatrix[i][j] for j in range(len(w[i]))) for i in range(len(w)))
 
     def confusionEntropy(self, labels, predicted_labels):
         """
