@@ -506,8 +506,12 @@ class FCNV(object):
         return px
     
     def logDirMulti(self, rho, xs, ps):
-        '''
-        '''
+        """
+        log probability of x ~ BetaBinomial(xs, ps, rho)
+        xs -- counts in individual categories
+        ps -- means (probabilities) of individual categories; ps sum to 1
+        rho -- overdispersion parameter of the BB distribution
+        """
         
         def gammaln(n):
             """Compute logarithm of Euler's gamma function for discrete values."""
@@ -612,53 +616,66 @@ class FCNV(object):
            maternal_sq_counts, paternal_sq_counts, mix, state):
         
         if state.inheritance_pattern == (2, 0) or state.inheritance_pattern == (0, 2): return -50
-        
-        #pattern = state.phased_pattern
-        #mus = self.allelesMeans(nuc_counts, maternal_alleles, paternal_alleles, maternal_sq_counts, paternal_sq_counts, pattern, mix)
+
         
         pattern = state.phased_pattern
-#        fetal_alleles = []
-#        fetal_pseudocounts = []
-#        for mHpatt in pattern[0]:
-#            fetal_alleles.append(maternal_alleles[mHpatt])
-#            fetal_pseudocounts.append(maternal_sq_counts[mHpatt])
-#        for pHpatt in pattern[1]:
-#            fetal_alleles.append(paternal_alleles[pHpatt])
-#            fetal_pseudocounts.append(paternal_sq_counts[pHpatt])
-#        ps = self.allelesDistribution(maternal_alleles, tuple(fetal_alleles), mix)
         ps = self.allelesDistributionExtended(maternal_alleles, maternal_sq_counts, paternal_alleles, paternal_sq_counts, pattern, mix)
 
-        N = sum(nuc_counts)
-        avg_doc = 70. #TODO: make this a parameter
-        norm_coef = avg_doc / N
-        
-        mus = [ avg_doc * ps[i] for i in range(4) ]
-        cov_diagonal = [ max(0.8, (N * ps[x]) * norm_coef**2) for x in range(4)]
-        nuc_counts = [ x * norm_coef for x in nuc_counts ]
-        
-        ratios_prob = self.logGaussian(nuc_counts, mus, cov_diagonal)
-        result = ratios_prob
-
-#        #use Beta-Binomial distrib
-#        seen = [0] * 4
-#        for x in maternal_alleles + paternal_alleles:
-#            seen[self.nucleotides.index(x)] = 1
-#        als = [i for i in range(4) if seen[i] == 1]
-#        
-#        #print nuc_counts, '|', als, '|', seen
-#        if len(als) != 2: return -3
-#        
+#        #use Mixture of Independent Gaussians
 #        N = sum(nuc_counts)
-#        eps = 0.01
-#        a = [0.] * 2
-#        for i in range(2):
-#            a[i] = 6 * ps[als[i]] + eps
-#        rho = 1. / (1. + sum(a))
-#        nc = [nuc_counts[als[i]] for i in range(2)]
-#        result = self.logDirMulti(rho, tuple(nc), tuple(a))
+#        avg_doc = 70. #TODO: make this a parameter
+#        norm_coef = avg_doc / N
+#        
+#        mus = [ avg_doc * ps[i] for i in range(4) ]
+#        cov_diagonal = [ max(0.8, (N * ps[x]) * norm_coef**2) for x in range(4)]
+#        nuc_counts = [ x * norm_coef for x in nuc_counts ]
+#        
+#        ratios_prob = self.logGaussian(nuc_counts, mus, cov_diagonal)
+#        result = ratios_prob
 
-        #print sum(nuc_counts), ratios_prob
-        if result < -15: result = -15
+        #use Beta-Binomial distrib
+        expinherited = [0] * 4
+        for x in maternal_alleles + paternal_alleles:
+            expinherited[self.nucleotides.index(x)] = 1
+        #als = [i for i in range(4) if expinherited[i] == 1]
+        
+        seen = [0] * 4
+        for x in range(4):
+            if nuc_counts[x] != 0: seen[x] = 1
+            
+        for x in range(4):
+            seen[x] = int(seen[x] or expinherited[x])
+        
+        als = [i for i in range(4) if seen[i] == 1]
+        
+        #print nuc_counts, '|', als, '|', seen
+        if len(als) > 2: return -3
+        if len(als) == 1:
+            for x in range(4):
+                if x != als[0]: 
+                    als.append(x)
+                    break
+        
+        m = len(als)
+        eps = 0.01
+        dmps = [0.] * m
+        addEps = False
+        for i in range(m):
+            if ps[als[i]] < 0.0001: addEps = True
+        for i in range(m):
+            dmps[i] = ps[als[i]] + eps*int(addEps)
+        dmps = [ x/sum(dmps) for x in dmps]
+        
+        #make the one with higher p to be the first one
+        if dmps[1] > dmps[0]:
+            dmps[0], dmps[1] = dmps[1], dmps[0]
+            als[0], als[1] = als[1], als[0]
+        
+        rho = 0.0267  #0.01608  #estimated from train set by MoM estimator
+        nc = [nuc_counts[als[i]] for i in range(m)]
+        result = self.logDirMulti(rho, tuple(nc), tuple(dmps))
+        
+        #if result < -15: result = -15
         
         return result
     
