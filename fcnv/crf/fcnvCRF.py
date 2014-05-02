@@ -147,6 +147,9 @@ class FCNV(object):
                     num_phased_states += 1
             self.max_component_size = max(self.max_component_size, num_phased_states)
         
+#        for i, s in enumerate(self.states):
+#            print i, s
+        
         # CNV PRIOR
         #CNV per position prior
         self.use_prior = use_prior
@@ -816,6 +819,46 @@ class FCNV(object):
             print "binary", i, self.binaryWeights[i]    
         
         return logLikelihood, self.encodeCRFparams()
+       
+    def generateWeightMatrixForMCC(self):
+        """
+        Creates 'num_real_states' x 'num_real_states' matrix of weights for the 
+        individual correlation coefficients used in the MCC computation
+        """
+        num_real_states = self.getNumPP()  
+        w = [ [0.] * num_real_states for x in range(num_real_states)]
+        
+        for s1_id, s1 in enumerate(self.states[:num_real_states]):
+            for s2_id, s2 in enumerate(self.states[:num_real_states]):
+                #if ground truth is a normal state
+                if s1.inheritance_pattern == (1,1):
+                    #the same state
+                    if s1_id == s2_id:
+                        w[s1_id][s2_id] = 0.
+                    #recombination
+                    elif s1.inheritance_pattern == s2.inheritance_pattern:
+                        w[s1_id][s2_id] = 0.
+                    #other inheritance pattern
+                    else:
+                        w[s1_id][s2_id] = 1.
+                #else if ground truth is a CNV state
+                else:
+                    #the same state
+                    if s1_id == s2_id:
+                        w[s1_id][s2_id] = 1.
+                    #recombination
+                    elif s1.inheritance_pattern == s2.inheritance_pattern:
+                        w[s1_id][s2_id] = 0.5
+                    #other inheritance pattern
+                    else:
+                        w[s1_id][s2_id] = 1.
+        
+#        for i in range(len(w)):
+#            for j in range(len(w[0])):
+#                print w[i][j],
+#            print ''
+        
+        return w
         
         
     def getConfusionMatrix(self, labels, predicted_labels):
@@ -847,13 +890,24 @@ class FCNV(object):
         
         num_states = self.getNumPP()
         confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
-        
+        covWeightMatrix = self.generateWeightMatrixForMCC()
+                
         print "Confusion Matrix:"
         for x in range(len(confusionMatrix)):
             for y in range(len(confusionMatrix[x])):
                 print int(confusionMatrix[x][y]),
             print ''
         
+        #reweight the confusion matrix
+        for i in range(len(confusionMatrix)):
+            for j in range(len(confusionMatrix[i])):
+                confusionMatrix[i][j] *= covWeightMatrix[i][j]
+        
+        print "Confusion Matrix AFTER REWEIGHTING:"
+        for x in range(len(confusionMatrix)):
+            for y in range(len(confusionMatrix[x])):
+                print int(confusionMatrix[x][y]),
+            print ''
         
         cov = 0.
         varx = 0.
