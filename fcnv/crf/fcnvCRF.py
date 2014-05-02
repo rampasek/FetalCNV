@@ -984,8 +984,8 @@ class FCNV(object):
 
     def sumWeightedErrors(self, labels, predicted_labels):
         """
-        Compute the Matthews Correlation Coefficient from the Confusion Matrix of
-        labels and predicted_labels. Returns a float.
+        Computes the dot product between the confusion matrix
+        and the matrix returned by generateWeightMatrixForSWE.
         """
         
         
