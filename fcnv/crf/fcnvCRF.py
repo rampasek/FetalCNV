@@ -888,6 +888,17 @@ class FCNV(object):
             
         return mcc
 
+    def numNonNormalErrors(self, labels, predicted_labels):
+        """
+        Compute the Matthews Correlation Coefficient from the Confusion Matrix of
+        labels and predicted_labels. Returns a float.
+        """
+        
+        
+        num_states = self.getNumPP()
+        confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
+        # 7,8,9,10 ar enormal
+
     def confusionEntropy(self, labels, predicted_labels):
         """
         Compute the Matthews Correlation Coefficient from the Confusion Matrix of
