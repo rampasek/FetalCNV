@@ -873,7 +873,7 @@ class FCNV(object):
 
                 #the same state
                 if s1_id == s2_id:
-                    w[s1_id][s2_id] = 0.
+                    w[s1_id][s2_id] = 0.0
 
                 else:
                     #if ground truth is a normal state
@@ -881,7 +881,7 @@ class FCNV(object):
 
                         #recombination
                         if s1.inheritance_pattern == s2.inheritance_pattern:
-                            w[s1_id][s2_id] = 0.
+                            w[s1_id][s2_id] = 0.0
 
                         #other inheritance pattern                        
                         else:
@@ -889,6 +889,7 @@ class FCNV(object):
 
                     #else if ground truth is a CNV state
                     else:
+                        
                         #recombination
                         elif s1.inheritance_pattern == s2.inheritance_pattern:
                             w[s1_id][s2_id] = 0.5
@@ -912,7 +913,7 @@ class FCNV(object):
         
         return confusionMatrix
         
-    def matthewsCorrelationCoefficient(self, labels, predicted_labels):
+    def matthewsCorrelationCoefficientLoss(self, labels, predicted_labels):
         """
         Compute the Matthews Correlation Coefficient from the Confusion Matrix of
         labels and predicted_labels. Returns a float.
@@ -979,7 +980,7 @@ class FCNV(object):
             print "Error in MCC computation:", e, cov, varx, vary
             mcc = 0.0
             
-        return mcc
+        return 1- mcc
 
     def sumWeightedErrors(self, labels, predicted_labels):
         """
@@ -1124,7 +1125,7 @@ class FCNV(object):
         print "total sqrt f.dist.:", squared_feature_distance
         
         # COMPUTE LOSS
-        loss = 1 - self.matthewsCorrelationCoefficient(labels, predicted_labels)
+        loss = self.matthewsCorrelationCoefficientLoss(labels, predicted_labels)
         
         # COMPUTE TAU
         print "loss: {0}".format(loss)
@@ -1148,7 +1149,7 @@ class FCNV(object):
             
         if compute_postloss:
             predicted_labels, _ = self.viterbiPath(samples, M, P, MSC, PSC, mixture, inferHighLevelLabels=False)
-            postloss = 1 - self.matthewsCorrelationCoefficient(labels, predicted_labels)
+            postloss = self.matthewsCorrelationCoefficientLoss(labels, predicted_labels)
             postgroundtruth_score, postprediction_score = self.getScore(samples, M, P, MSC, PSC, mixture, labels, predicted_labels)
         else:
             postloss, postgroundtruth_score, postprediction_score = None, None, None
