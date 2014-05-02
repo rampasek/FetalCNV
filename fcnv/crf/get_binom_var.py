@@ -20,7 +20,7 @@ def MS(alleles, j, N, n_plus):
         MSP_j += n_i*(p_ij - p_j) ** 2
         MSG_j += n_i*p_ij*(1 - p_ij)
 
-    return MSP_j/(N-1), MSG_j/(n_plus - N)
+    return MSP_j/float(N-1), MSG_j/float(n_plus - N)
     
 def rho_mom(alleles):
     
@@ -34,18 +34,22 @@ def rho_mom(alleles):
     for i in range(N):
         n_plus += sum(alleles[i])    
     
-    n_c = (n_plus - sum(sum(allele) ** 2 for allele in alleles)/float(n_plus))/float(N-1)
-    print alleles
+    sum_n_sqr = sum(sum(allele) ** 2 for allele in alleles)
+    n_c = (n_plus - sum_n_sqr/float(n_plus)) / float(N-1)
+    #print alleles
     
     for j in range(k):
         MSP_j, MSG_j = MS(alleles, j, N, n_plus)
         rho_num += MSP_j - MSG_j
         rho_denom += MSP_j + (n_c - 1) * MSG_j
-        print "\tj {2} MSP {0} MSG {1}".format(MSP_j, MSG_j, j)
+        #print "\tj {2} MSP {0} MSG {1}".format(MSP_j, MSG_j, j)
     
-    print "rhonum {0} rhodenom {1}".format(rho_num, rho_denom)
-    print k, N
-    rho = rho_num/rho_denom
+    #print "rhonum {0} rhodenom {1}".format(rho_num, rho_denom)
+    #print k, N
+    try:
+        rho = rho_num/rho_denom
+    except:
+        rho = 0
 
     return rho
 
@@ -70,16 +74,24 @@ def main():
             parameterStats[mean] += vals
         fin.close()
     
-    #debug output
-    for expP in sorted(parameterStats.keys()):
-        print "----------", expP, "----------"
-        for x in parameterStats[expP]:
-            print x
-    
+#    #debug output
+#    for expP in sorted(parameterStats.keys()):
+#        print "----------", expP, "----------"
+#        for x in parameterStats[expP]:
+#            print x
+    sum_val = 0
+    num_vals = 0
     #for each category (expected P) compute the MoM estimate of rho
     for expP in sorted(parameterStats.keys()):
         if len(parameterStats[expP]) > 1:
-            print rho_mom(parameterStats[expP])
+            rho = rho_mom(parameterStats[expP])
+            #print "RHO >>>>>", rho
+            
+            if rho != 0:
+                sum_val += abs(rho)*len(parameterStats[expP]) 
+                num_vals += len(parameterStats[expP]) 
+    
+    print "Avg rho:", sum_val / num_vals
     
     
     
