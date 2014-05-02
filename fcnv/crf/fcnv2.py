@@ -427,10 +427,11 @@ def main():
         #run the training iterations
         for iterNum in range(1):
             #print "iterNum: ", iterNum
-            pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, float("inf"), compute_postloss=True)
+            compute_postloss = False
+            pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, 0.00001, compute_postloss)
             print preloss, params
             print "{0} !>= {1}".format(pregts - preps, preloss)
-            print "{0} >= {1}".format(postgts - postps, postloss)
+            if compute_postloss: print "{0} >= {1}".format(postgts - postps, postloss)
             print "------------------------------------------------------------------\n\n\n"
         
         #save the trained parameters to the file

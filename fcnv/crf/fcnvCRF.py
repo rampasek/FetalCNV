@@ -820,6 +820,7 @@ class FCNV(object):
         
         return logLikelihood, self.encodeCRFparams()
        
+       
     def generateWeightMatrixForMCC(self):
         """
         Creates 'num_real_states' x 'num_real_states' matrix of weights for the 
@@ -891,16 +892,15 @@ class FCNV(object):
                     else:
                         
                         #recombination
-                        elif s1.inheritance_pattern == s2.inheritance_pattern:
+                        if s1.inheritance_pattern == s2.inheritance_pattern:
                             w[s1_id][s2_id] = 0.5
 
                         #other inheritance pattern
                         else:
-                            w[s1_id][s2_id] = 1.
+                            w[s1_id][s2_id] = 2.
                 
         return w
-        
-        
+    
     def getConfusionMatrix(self, labels, predicted_labels):
         """
         Compute multiclass confusion matrix
@@ -918,7 +918,6 @@ class FCNV(object):
         Compute the Matthews Correlation Coefficient from the Confusion Matrix of
         labels and predicted_labels. Returns a float.
         """
-        
 #        print "MCC:"
 #        print len(labels), len(predicted_labels)
 #        ok_pred = 0
@@ -980,28 +979,25 @@ class FCNV(object):
             print "Error in MCC computation:", e, cov, varx, vary
             mcc = 0.0
             
-        return 1- mcc
+        return 1 - mcc
 
     def sumWeightedErrors(self, labels, predicted_labels):
         """
         Computes the dot product between the confusion matrix
         and the matrix returned by generateWeightMatrixForSWE.
         """
-        
-        
         num_states = self.getNumPP()
         confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
         w = self.generateWeightMatrixForSWE()
         
         return sum(sum(w[i][j]*confusionMatrix[i][j] for j in range(len(w[i]))) for i in range(len(w)))
 
+
     def confusionEntropy(self, labels, predicted_labels):
         """
         Compute the Matthews Correlation Coefficient from the Confusion Matrix of
         labels and predicted_labels. Returns a float.
         """
-        
-        
         confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
         
         CEN = 0.
@@ -1125,7 +1121,8 @@ class FCNV(object):
         print "total sqrt f.dist.:", squared_feature_distance
         
         # COMPUTE LOSS
-        loss = self.matthewsCorrelationCoefficientLoss(labels, predicted_labels)
+        #loss = self.matthewsCorrelationCoefficientLoss(labels, predicted_labels)
+        loss = self.sumWeightedErrors(labels, predicted_labels)
         
         # COMPUTE TAU
         print "loss: {0}".format(loss)
