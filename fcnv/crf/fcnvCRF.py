@@ -730,7 +730,7 @@ class FCNV(object):
         #logNodeMarginals = [ [self.neg_inf]*num_real_states for y in range(n+1)]
         for pos in xrange(1, n+1):
             #logSumm = self.neg_inf
-            for s_id in range(len(self.states[:num_real_states])):
+            for s_id in xrange(num_real_states):
                 logpStateAtPos = fwd[pos][s_id] + bck[pos][s_id] - pX1
                 nodeMarginals[pos][s_id] = math.exp(logpStateAtPos)
                 #logNodeMarginals[pos][s_id] = logpStateAtPos
@@ -744,16 +744,15 @@ class FCNV(object):
         for pos in xrange(1, n):
             nodePotential = self.getNodePotential(pos+1, self.unaryWeights, samples, M, P, MSC, PSC, mixture)
             logSumm = self.neg_inf
-            for s1_id in range(len(self.states[:num_real_states])):
-                for s2_id in range(len(self.states[:num_real_states])):
-                    pEdgeAtPos = fwd[pos][s1_id] + edgePotential[s1_id][s2_id][distBin[pos]] + nodePotential[s2_id] + bck[pos+1][s2_id]
+            for s1_id in xrange(num_real_states):
+                for s2_id in xrange(num_real_states):
+                    pEdgeAtPos = fwd[pos][s1_id] + edgePotential[s1_id][s2_id][distBin[pos+1]] + nodePotential[s2_id] + bck[pos+1][s2_id]
                     edgeMarginals[pos][s1_id][s2_id] = pEdgeAtPos
                     logSumm = self.logSum(pEdgeAtPos, logSumm)
-            for s1_id in range(len(self.states[:num_real_states])):
-                for s2_id in range(len(self.states[:num_real_states])):
+            for s1_id in xrange(num_real_states):
+                for s2_id in xrange(num_real_states):
                     edgeMarginals[pos][s1_id][s2_id] = math.exp(edgeMarginals[pos][s1_id][s2_id] - logSumm)
-    
-    
+        
         #compute the likelihood of current parameters (weight vectors)           
         logLikelihood, = self.getScore(samples, M, P, MSC, PSC, mixture, labels)
         #for i, x in enumerate(labels):
@@ -774,9 +773,8 @@ class FCNV(object):
             for pos in range(len(labels)):
                 grad += math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labels[pos]]))
                 expect = 0.  #self.neg_inf
-                for s_id, s in enumerate(self.states[:num_real_states]):
-                    expect += nodeMarginals[pos+1][s_id] * math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, s))
-                    #expect = self.logSum(expect, logNodeMarginals[pos+1][s_id] + f(pos+1, samples, M, P, MSC, PSC, mixture, s))
+                for s_id in xrange(num_real_states):
+                    expect += nodeMarginals[pos+1][s_id] * math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[s_id]))
                 grad -= expect
             grad -= self.unaryWeights[i]/self.sigmaSqr #regularizator
             #update the current weights
@@ -787,19 +785,19 @@ class FCNV(object):
          #binary features
         for i, f in enumerate(self.binaryFeaturesList):
             grad = 0.
-            for pos in range(len(labels)-1):
-                grad += f(labels[pos], self.states[labels[pos]], labels[pos+1], self.states[labels[pos+1]], distBin[pos+1])
+            for pos in xrange(len(labels)-1):
+                grad += f(labels[pos], self.states[labels[pos]], labels[pos+1], self.states[labels[pos+1]], distBin[pos+2])
                 expect = 0.
-                for s1_id, s1 in enumerate(self.states[:num_real_states]):
-                    for s2_id, s2 in enumerate(self.states[:num_real_states]):
-                        expect += edgeMarginals[pos+1][s1_id][s2_id] * f(s1_id, s1, s2_id, s2, distBin[pos+1])
+                for s1_id in xrange(num_real_states):
+                    for s2_id in xrange(num_real_states):
+                        expect += edgeMarginals[pos+1][s1_id][s2_id] * f(s1_id, self.states[s1_id], s2_id, self.states[s2_id], distBin[pos+2])
                 grad -= expect
             grad -= self.binaryWeights[i]/self.sigmaSqr #regularizator
             #update the current weights
             self.binaryWeights[i] += self.omega * grad
             self.binaryWeights[i] = max(self.binaryWeights[i], self.epsWeight)
-            print "binary", i, self.binaryWeights[i]
-                
+            print "binary", i, self.binaryWeights[i]    
+        
         return logLikelihood, self.encodeCRFparams()
         
         
@@ -931,8 +929,7 @@ class FCNV(object):
             for i in range(len(scores)):
                 #pairwise factor value
                 if pos+1 < length:
-                    scores[i] += edgePotential[labelslists[i][pos]][labelslists[i][pos+1]][ distBin[pos+1] ]
-                    if edgePotential[labelslists[i][pos]][labelslists[i][pos+1]][ distBin[pos+1] ] == self.neg_inf: print pos, ":", labelslists[i][pos], labelslists[i][pos+1]
+                    scores[i] += edgePotential[labelslists[i][pos]][labelslists[i][pos+1]][ distBin[pos+2] ]
                 #unary factor value
                 scores[i] += nodePotential[labelslists[i][pos]]
                 #if nodePotential[labelslists[i][pos]] == self.neg_inf: print pos, ":", labelslists[i][pos]
@@ -960,8 +957,13 @@ class FCNV(object):
         
                 
         # SCORE OF THE TRUE LABELS
-        predicted_labels, _ = self.viterbiPath(samples, M, P, MSC, PSC, mixture)
+        predicted_labels, _ = self.viterbiPath(samples, M, P, MSC, PSC, mixture, inferHighLevelLabels=False)
         groundtruth_score, prediction_score = self.getScore(samples, M, P, MSC, PSC, mixture, labels, predicted_labels)
+        
+        print predicted_labels[:100]
+        print labels[:100]
+        print "labels scores:", groundtruth_score, prediction_score
+        
         # groundtruth_score = self.neg_inf
         # prediction_score = self.neg_inf
         # 
@@ -990,21 +992,26 @@ class FCNV(object):
         squared_feature_distance = 0
         for i in xrange(len(predictionUnaryFeatures)):
             squared_feature_distance += (groundtruthUnaryFeatures[i] - predictionUnaryFeatures[i]) ** 2
+
+        print "sqr unary feature dist: ", squared_feature_distance
+        
         for i in xrange(len(predictionBinaryFeatures)):
             squared_feature_distance += (groundtruthBinaryFeatures[i] - predictionBinaryFeatures[i]) ** 2
-
+        
+        print "total sqrt f.dist.:", squared_feature_distance
+        
         # COMPUTE LOSS
         loss = 1 - self.matthewsCorrelationCoefficient(labels, predicted_labels)
         
-        # # COMPUTE TAU
-        # print "loss: {0}".format(loss)
-        # print "prediction_score: {0}".format(prediction_score)
-        # print "groundtruth_score: {0}".format(groundtruth_score)
-        # print "squared_feature_distance: {0}".format(squared_feature_distance)
+        # COMPUTE TAU
+        print "loss: {0}".format(loss)
+        print "prediction_score: {0}".format(prediction_score)
+        print "groundtruth_score: {0}".format(groundtruth_score)
+        print "squared_feature_distance: {0}".format(squared_feature_distance)
         
         tau = min(C, (prediction_score - groundtruth_score + loss)/squared_feature_distance)
         
-        # print "tau: {0}".format(tau)
+        print "tau: {0}".format(tau)
         
         for i, f in enumerate(self.unaryFeaturesList):
             update = tau * (groundtruthUnaryFeatures[i] - predictionUnaryFeatures[i])
@@ -1017,7 +1024,7 @@ class FCNV(object):
             self.binaryWeights[i] = max(self.binaryWeights[i], self.epsWeight)
             
         if compute_postloss:
-            predicted_labels, _ = self.viterbiPath(samples, M, P, MSC, PSC, mixture)
+            predicted_labels, _ = self.viterbiPath(samples, M, P, MSC, PSC, mixture, inferHighLevelLabels=False)
             postloss = 1 - self.matthewsCorrelationCoefficient(labels, predicted_labels)
             postgroundtruth_score, postprediction_score = self.getScore(samples, M, P, MSC, PSC, mixture, labels, predicted_labels)
         else:
@@ -1042,7 +1049,7 @@ class FCNV(object):
         for i, f in enumerate(self.binaryFeaturesList):
             feature = 0.
             for pos in xrange(len(labels)-1):
-                feature += f(labels[pos], self.states[labels[pos]], labels[pos+1], self.states[labels[pos+1]])
+                feature += f(labels[pos], self.states[labels[pos]], labels[pos+1], self.states[labels[pos+1]], self.distBin[pos+2])
             binaryFeatures.append(feature)
         return binaryFeatures
     
@@ -1187,7 +1194,7 @@ class FCNV(object):
                 if state1.phased_pattern == "s":
                     for sid2, state2 in enumerate(self.states[:num_real_states]):
                         if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
-                            edgePot[sid1][sid2][db] = 1.
+                            edgePot[sid1][sid2][dbid] = 1.
         
         
 #        #done, take logarithm
@@ -1204,7 +1211,7 @@ class FCNV(object):
         
         return edgePot
             
-    def viterbiPath(self, samples, M, P, MSC, PSC, mixture):
+    def viterbiPath(self, samples, M, P, MSC, PSC, mixture, inferHighLevelLabels=True):
         """
         Viterbi decoding of the most probable path.
         """
@@ -1232,7 +1239,7 @@ class FCNV(object):
         #propagate over all silent states
         for state_id, state in enumerate(self.states[num_real_states:]):
             state_id += num_real_states
-            if transitions[start_id][state_id] == self.neg_inf: continue #just for speed-up
+            if transitions[start_id][state_id][distBin[0]] == self.neg_inf: continue #just for speed-up
             table[0][state_id] = table[0][start_id] + transitions[start_id][state_id][distBin[0]]
             predecessor[0][state_id] = -1
          
@@ -1296,7 +1303,8 @@ class FCNV(object):
         state_path = [[] for i in xrange(n+1)]
         for i in xrange(1, n+1):
             state = self.states[ path[i] ]
-            path[i] = self.IPtoID[state.inheritance_pattern]
+            if inferHighLevelLabels:
+                path[i] = self.IPtoID[state.inheritance_pattern]
             state_path[i] = (state.inheritance_pattern, state.phased_pattern)
         
         print "Viterbi path probability: ", table[n][exit_id]    

@@ -243,6 +243,7 @@ def main():
     parser.add_argument('--ff', type=float, help='fetal mixture ratio', default=-1.)
     parser.add_argument('--useCvrg', help='use coverage flag', action="store_true")
     parser.add_argument('--trainGrad', type=str, help='train by maxll gradient and output new params to given file', default="")
+    parser.add_argument('--trainMargin', type=str, help='train by max margin and output new params to given file', default="")
     parser.add_argument('--getObsCounts', help='get observed allele counts', action="store_true")
     args = parser.parse_args()
     
@@ -253,10 +254,15 @@ def main():
     seq_file = open(args.seq[0], "r")
     param_file = open(args.param[0], "r")
     if args.ff > 0: mix = args.ff
+    
     runGradTraining = False
     if args.trainGrad != "":
          runGradTraining = True
          res_param_file_name = args.trainGrad
+    runMarginTraining = False
+    if args.trainMargin != "":
+         runMarginTraining = True
+         res_param_file_name = args.trainMargin
     
     #print input info
     print "------------------------------------------"
@@ -399,15 +405,33 @@ def main():
     #run gradient training
     if runGradTraining:
         #run the training iterations
-        for iterNum in range(3):
-        #    print "iterNum: ", iterNum
-            ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix) 
-            # pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, float("inf"), compute_postloss=True)
-            # print preloss, params
-            # print "{0} !>= {1}".format(pregts - preps, preloss)
-            # print "{0} >= {1}".format(postgts - postps, postloss)
+        for iterNum in range(1):
+            #print "iterNum: ", iterNum
+            ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix)
             print ll, params
             print "------------------------------------------------------------------"
+        
+        #save the trained parameters to the file
+        res_param_file = open(res_param_file_name, "w")    
+        for p in sorted(params):
+            if isinstance(params[p], list):
+                print >>res_param_file, p, "=", " ".join(map(str, params[p]))
+            else:
+                print >>res_param_file, p, "=", params[p]
+        res_param_file.close()
+        
+        return 0
+    
+    #run max margin training
+    if runMarginTraining:
+        #run the training iterations
+        for iterNum in range(1):
+            #print "iterNum: ", iterNum
+            pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, float("inf"), compute_postloss=True)
+            print preloss, params
+            print "{0} !>= {1}".format(pregts - preps, preloss)
+            print "{0} >= {1}".format(postgts - postps, postloss)
+            print "------------------------------------------------------------------\n\n\n"
         
         #save the trained parameters to the file
         res_param_file = open(res_param_file_name, "w")    
