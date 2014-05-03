@@ -1,4 +1,4 @@
 \section{Discussion}
 Our experiments showed that the beta-binomial model is a good replacement for multivariate Gaussian, as a model of allele counts, not only in theory but also in practice.
 
-Turned out, that in practice it is challenging to properly train our CRF for the problem of CNV detection. One of the main problems is the relative rare abundance of some transitions. In particular, a transition from normal inheritance to a CNV state occurs only once per train case (out of \ntilde 50k tranistions), however is absolutely vital for a correct inference. 
+Turned out, that in practice it is challenging to properly train our CRF for the problem of CNV detection. One of the main problems is the relative rare abundance of some transitions. In particular, a transition from normal inheritance to a CNV state occurs only once per train case (out of \ntilde 50k tranistions), however it is absolutely vital for a correct CNV prediction. 
