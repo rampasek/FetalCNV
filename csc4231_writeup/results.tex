@@ -7,29 +7,38 @@ We use synthetic data set of \cite{rampasek2014fcnv} based on sequencing data of
 We trained 4 sets of feature weights by one randomized pass over the training set. For each training method (gradient and maximum margin training) we trained 2 models -- with, and without copy count priors (depth-of-coverage information), respectively. As the initial weights for edge features (in each distance bin) we chose the log of transition probabilities used in the HMM by \cite{rampasek2014fcnv}. Note that there is no difference between edge features' weights between different distance bins in this initialization.
 
 \subsection{CRF performance}
-\begin{figure}
-\caption{Performance of our CRF trained by gradient method with and without copy count prior}
+In the Figure \ref{fig:CRFinit} we show CRF performance with initial set of weights without any sort of training. Further, Figures \ref{fig:CRFbyGM} and \ref{fig:CRFbyMM} show performance of our CRF after training by gradient and maximum margin method, respectively.
+
+\begin{figure*}
+\caption{Performance of our CRF before training with initial weights corresponding to logarithm of transition probabilities of the HMM. Results are presented for model with and also without copy count prior, respectively.}
+\label{fig:CRFinit}
+\centering
+\includegraphics[width=0.99\textwidth]{figures/crf_initial_w}
+\end{figure*}
+
+\begin{figure*}
+\caption{Performance of our CRF trained by gradient method with and without copy count prior, respectively.}
 \label{fig:CRFbyGM}
 \centering
-%\includegraphics[height=0.33\textheight]{figures/}
-\end{figure}
+\includegraphics[width=0.99\textwidth]{figures/crf_gradient}
+\end{figure*}
 
-\begin{figure}
-\caption{Performance of our CRF trained by maximum margin method with and without copy count prior}
+\begin{figure*}
+\caption{Performance of our CRF trained by maximum margin method with and without copy count prior, respectively.}
 \label{fig:CRFbyMM}
 \centering
-%\includegraphics[height=0.33\textheight]{figures/}
-\end{figure}
+\includegraphics[width=0.99\textwidth]{figures/crf_margin}
+\end{figure*}
 
 \subsection{Beta-binomial model vs. multivariate Gaussian model in HMM framework}
-To evaluate the performance influence of the beta-binomial model on the performance of our model, we compared performance of the HMM as described in \cite{rampasek2014fcnv} with the original multivariate Gaussian model and with beta-binomial model for allele distribution. We did not include the copy count priors in the models for these experiments, i.e. only the allelic counts signal was used.
+To evaluate the performance influence of the beta-binomial model on the performance of our model, we compared performance of the HMM as described in \cite{rampasek2014fcnv} with the original multivariate Gaussian model and with beta-binomial model for allele distribution. We did not include the copy count priors in the models for these experiments, i.e. only the allelic counts signal was used. The results are in Figure \ref{fig:BBvsMG}.
 
-\begin{figure}
+\begin{figure*}
 \caption{Performance of beta-binomial vs multivariate Gaussian allele counts model in the original HMM framework}
 \label{fig:BBvsMG}
 \centering
-%\includegraphics[height=0.33\textheight]{figures/}
-\end{figure}
+\includegraphics[width=0.99\textwidth]{figures/hmm_bb_mg}
+\end{figure*}
 
 
 %\subsection{Project goals}
