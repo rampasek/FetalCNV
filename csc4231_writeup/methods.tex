@@ -1,13 +1,48 @@
 \section{Methods}
+The task of CNV detection can be formalized as a sequence segmentation task---given a sequence of maternal blood plasma allele counts (reference and variant counts) $\ar_{\pos}$ at SNP location $\pos$ predict the phased inheritance pattern of the feature $\pip_{\pos}$ for that SNP. Thus, the segmentation problem is predicting the class of each $\pip_{\pos}$ from $\ars$. In this section we describe two related models (CRFs and HMMs) for solving this problem and introduce the CRF architecture explored in this paper.
 
 \subsection{CRF vs HMM}
-The HMM in \citep{rampasek2014fcnv} is a generative model whose discriminative model pair is a linear-chain conditional random field (CRF). This is a natural model to compare against the HMM and, as we discuss in this section, is possibly a more appropriate model for the task. Because using CRFs may require training for feature weights we consider what improvements can be gained and problems may be introduced by training a discriminative model.
+An HMM is a natural model for sequence segmentation. HMMs model the distribution of $\pips$ and $\ars$ as a generative model with a particular first-order Markov structure:
+\begin{align*}
+p(\ars, \pips) = p(\pip_1) p(\ar_1 | \pip_1) \prod_{\pos > 1} p(\pip_{\pos} | \pip_{\pos-1})  p(\ar_{\pos} | \pip_{\pos})
+\end{align*}
+Traditionally the HMM is trained to optimize the probability of producing the data $\ars$. Yet the task is to predict the most likely inheritance pattern. This is done by computing the most likely path in the conditional distribution $p(\pips | \ars)$ that the HMM implicitly defines. 
+\begin{align*}
+\pips^* = \argmax_{\pips} p(\pips | \ars)
+\end{align*}
+This suggests directly modelling $p(\pips | \ars)$ without wasting model capacity on the marginal of the allelic ratios, $p(\ars)$. The hypothesis space of conditional distributions of HMMs corresponds exactly to a family of conditional Markov random fields with special pairwise potentials known as linear-chain CRFs \citep{sutton2012}. In other words, any conditional distribution $p(\pips | \ars)$ of an HMM can be converted into a linear-chain CRF with the same distributions. Linear chain CRFs usually parameterize the probability of segmentations as follows:
+\begin{align*}
+p(\pips | \ars) \propto \exp\left( \sum_{\pos} \sum_{k} w_k f_k(\pip_{\pos-1}, \pip_{\pos}, \ar_{\pos})\right)
+\end{align*}
+where the functions $f_k$ are real valued functions called feature functions and $w_k$ are weights, respectively, for the feature functions. The parameterization that corresponds to an HMM posterior has features of the following form
+\begin{align*}
+&\log p(\ar_{\pos} | \pip_{\pos} = s) \indicator{\pip_{\pos} = s}\\
+&\log p( \pip_{\pos} = t | \pip_{\pos-1} = s) \indicator{\pip_{\pos-1} = s, \pip_{\pos} = t}
+\end{align*}
+where $s,t$ are possible phased inheritance patterns, and $\indicator{\text{condition}}$ is an indicator. These features have weights of 1 associated with them. The polytime inference algorithms for HMMs have exact analogues for linear-chain CRFs, and since the model is fully observed the likelihood function is convex and maximum likelihood training will converge to the global optimum. Thus, CRFs are a natural model to compare against the HMM and, as we discuss in this section, is possibly a more appropriate model for the task.
 
-The HMM defines a joint model $p(\cnv) p(\snp | \cnv)$ of the CNV inheritance pattern $\cnv$ and SNP allelic ratios $\snp$. Yet the task is to predict the CNVs of the fetal genome after having observed allelic ratios at distinct SNP positions of the sequenced maternal plasma cfDNA. This is done by computing the most likely path in the conditional distribution $p(\cnv | \snp)$ that the HMM implicitly defines. This suggests directly modelling $p(\cnv | \snp)$ without wasting model capacity on the marginal of the allelic ratios, $p(\snp)$. The hypothesis space of conditional distributions of HMMs corresponds exactly to a family of conditional Markov random fields with special pairwise potentials known as linear-chain CRFs \citep{sutton2012}. In other words, any conditional distribution $p(\cnv | \snp)$ of an HMM can be converted into a linear-chain CRF with the same distributions. This also means that there exist inference algorithms for the linear-chain CRFs that are exact in poly time, and since the model is fully observed the likelihood function is convex and maximum likelihood training will converge to the global optimum.
+The primary advantage of discriminative models is that they avoid paying any cost for complex structure in the input. Although the conditional distribution of HMMs and a particular class of linear-chain CRFs define the same hypothesis space, the HMM training is biased towards models that spend capacity on modelling the marginal of the SNP allelic ratios $p(\ars)$. Moreover, there is no need to restrict the feature functions dependence on $\ars$. In particular the feature functions can include rich, dependent features of the inputs without requiring more complex inference algorithms or inducing intractability. Furthermore, similar to HMMs we can have the feature functions depend on the position $\pos$. So, we can rewrite the family of linear-chain CRFs as distributions with the following form
+\begin{align*}
+p(\pips | \ars) \propto \exp\left( \sum_{\pos} \sum_{k} w_k f_{k}(\pip_{\pos-1}, \pip_{\pos}, \ars, t)\right)
+\end{align*}
 
-The primary advantage of discriminative models is that they avoid paying any cost for complex structure in the input. Although the conditional distribution of HMMs and a particular class of linear-chain CRFs define the same hypothesis space, the HMM training is biased towards models that spend capacity on modelling the marginal of the SNP allelic ratios $p(\snp)$. Moreover, general linear-chain CRFs are more expressive and can include rich, dependent features of the inputs without requiring more complex inference algorithms or inducing intractability. 
+There are some possible disadvantages of linear-chain CRFs for CNV data. First, and perhaps most important, it is not clear how to proceed with training in the absence of real data sets. Second, if only small datasets were available it is possible that the HMM training procedure results in better conditional distributions. This is because the marginal over the SNPs $p(\ars)$ can have a smoothing effect on the resulting conditional distribution. In general discriminative models are more prone to overfitting. Yet, discriminative models are a natural direction for further research and the presence of \textit{in silico} CNV simulation methods developed in \citep{rampasek2014fcnv} make training linear-chain CRFs a promising direction for CNV prediction. Linear-chain CRFs enjoy widespread success in NLP for tasks like named-entity recognition, shallow parsing, semantic role finding, and word alignment in machine translation \citep{sutton2012}. Many of these tasks share structure with the CNV prediction task.  Indeed, semi-Markov CRFs have been used in computational biology for tasks like gene prediction \citep{bernal2007} and RNA structural alignment \citep{Sato01012005}.
 
-There are some possible disadvantages of linear-chain CRFs for CNV data. First, and perhaps most important, it is not clear how to proceed with training in the absence of real data sets. Second, if only small datasets were available it is possible that the HMM training procedure results in better conditional distributions. This is because the marginal over the SNPs $p(\snp)$ can have a smoothing effect on the resulting conditional distribution. In general discriminative models are more prone to overfitting. Yet, discriminative models are a natural direction for further research and the presence of \textit{in silico} CNV simulation methods developed in \citep{rampasek2014fcnv} make training linear-chain CRFs a promising direction for CNV prediction. Linear-chain CRFs enjoy widespread success in NLP for tasks like named-entity recognition, shallow parsing, semantic role finding, and word alignment in machine translation \citep{sutton2012}. Many of these tasks share structure with the CNV prediction task.  Indeed, semi-Markov CRFs have been used in computational biology for tasks like gene prediction \citep{bernal2007} and RNA structural alignment \citep{Sato01012005}.
+\subsection{Description of the CRF Model}
+In this section we describe the feature functions we use in our CRF. In general we split them into node features and edge features; node features describe the dependence of $\pip_{\pos}$ on the input at each position and edge features describe the dependence of $\pip_{\pos}$ on $\pip_{\pos - 1}$.
+
+\subsubsection{Node Feature: Beta-binomial Feature}
+The Beta-binomial features is the result of inverting a Beta-binomial emission distribution in an HMM. The Beta-binomial is parameterized by $\alpha$ and $\beta$, the parameters of the beta, so we have a separate $\alpha_s$ and $\beta_s$ for every possible phased inheritance pattern. In particular let $N$ be the number of reads aligned to position $\pos$, then $\ar_{\pos}$ is a tuple $(\refe, \alte)$ of reference and variant counts that sum to $N$. If we assume that $\refe$ was generated by a Beta-binomial, then the log probability of generating $\refe$ is
+\begin{align*}
+\log p(\ar_{\pos} | \pip_{\pos} = s) = \log 
+\end{align*}
+
+
+\subsubsection{Node Feature: Coverage Feature}
+
+\subsubsection{Edge Features}
+
+\subsection{Training Details}
 
 
 %%%%%%%%%%%%%%%%%% FIGURE TEMPLATES %%%%%%%%%%%%%%%%%
