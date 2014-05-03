@@ -680,7 +680,7 @@ class FCNV(object):
         nc = [nuc_counts[als[i]] for i in range(m)]
         result = self.logDirMulti(rho, tuple(nc), tuple(dmps))
         
-        #if result < -15: result = -15
+#        if result < -15: result = -15
         
         return result
     
@@ -811,7 +811,7 @@ class FCNV(object):
         logLikelihood -= logZ
         
         wSqr = sum([ x*x  for x in self.unaryWeights + self.binaryWeights ])
-        logLikelihood -= wSqr/(2.*self.sigmaSqr) #regularizator
+        #logLikelihood -= wSqr/(2.*self.sigmaSqr) #regularizator
         
         print "loglikelihood before param adjustment:", logLikelihood
         
@@ -820,12 +820,12 @@ class FCNV(object):
         for i, f in enumerate(self.unaryFeaturesList):
             grad = 0.
             for pos in range(len(labels)):
-                grad += math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labels[pos]]))
+                grad += f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labels[pos]])
                 expect = 0.  #self.neg_inf
                 for s_id in xrange(num_real_states):
-                    expect += nodeMarginals[pos+1][s_id] * math.exp(f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[s_id]))
+                    expect += nodeMarginals[pos+1][s_id] * f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[s_id])
                 grad -= expect
-            grad -= self.unaryWeights[i]/self.sigmaSqr #regularizator
+            #grad -= self.unaryWeights[i]/self.sigmaSqr #regularizator
             #update the current weights
             self.unaryWeights[i] += self.omega * grad
             self.unaryWeights[i] = max(self.unaryWeights[i], self.epsWeight)
@@ -841,13 +841,14 @@ class FCNV(object):
                     for s2_id in xrange(num_real_states):
                         expect += edgeMarginals[pos+1][s1_id][s2_id] * f(s1_id, self.states[s1_id], s2_id, self.states[s2_id], distBin[pos+2])
                 grad -= expect
-            grad -= self.binaryWeights[i]/self.sigmaSqr #regularizator
+            #grad -= self.binaryWeights[i]/self.sigmaSqr #regularizator
             #update the current weights
             self.binaryWeights[i] += self.omega * grad
             self.binaryWeights[i] = max(self.binaryWeights[i], self.epsWeight)
             print "binary", i, self.binaryWeights[i]    
         
         return logLikelihood, self.encodeCRFparams()
+       
        
     def generateWeightMatrixForMCC(self):
         """
@@ -925,11 +926,10 @@ class FCNV(object):
 
                         #other inheritance pattern
                         else:
-                            w[s1_id][s2_id] = 1.
+                            w[s1_id][s2_id] = 10.
                 
         return w
-        
-        
+    
     def getConfusionMatrix(self, labels, predicted_labels):
         """
         Compute multiclass confusion matrix
@@ -947,7 +947,6 @@ class FCNV(object):
         Compute the Matthews Correlation Coefficient from the Confusion Matrix of
         labels and predicted_labels. Returns a float.
         """
-        
 #        print "MCC:"
 #        print len(labels), len(predicted_labels)
 #        ok_pred = 0
@@ -1009,28 +1008,25 @@ class FCNV(object):
             print "Error in MCC computation:", e, cov, varx, vary
             mcc = 0.0
             
-        return 1- mcc
+        return 1 - mcc
 
     def sumWeightedErrors(self, labels, predicted_labels):
         """
         Computes the dot product between the confusion matrix
         and the matrix returned by generateWeightMatrixForSWE.
         """
-        
-        
         num_states = self.getNumPP()
         confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
         w = self.generateWeightMatrixForSWE()
         N, M = len(w), len(w[0])
         return sum(sum(w[i][j]*confusionMatrix[i][j] for j in range(M)) for i in range(N))
 
+
     def confusionEntropy(self, labels, predicted_labels):
         """
         Compute the Matthews Correlation Coefficient from the Confusion Matrix of
         labels and predicted_labels. Returns a float.
         """
-        
-        
         confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
         
         CEN = 0.
@@ -1154,7 +1150,7 @@ class FCNV(object):
         print "total sqrt f.dist.:", squared_feature_distance
         
         # COMPUTE LOSS
-        loss = self.matthewsCorrelationCoefficientLoss(labels, predicted_labels)
+        loss = self.sumWeightedErrors(labels, predicted_labels)
         
         # COMPUTE TAU
         print "loss: {0}".format(loss)
@@ -1178,7 +1174,7 @@ class FCNV(object):
             
         if compute_postloss:
             predicted_labels, _ = self.viterbiPath(samples, M, P, MSC, PSC, mixture, inferHighLevelLabels=False)
-            postloss = self.matthewsCorrelationCoefficientLoss(labels, predicted_labels)
+            postloss = self.sumWeightedErrors(labels, predicted_labels)
             postgroundtruth_score, postprediction_score = self.getScore(samples, M, P, MSC, PSC, mixture, labels, predicted_labels)
         else:
             postloss, postgroundtruth_score, postprediction_score = None, None, None
@@ -1189,10 +1185,10 @@ class FCNV(object):
         
         unaryFeatures = []
         for i, f in enumerate(self.unaryFeaturesList):
-            feature = self.neg_inf
+            feature = 0.
             for pos in xrange(len(labels)):
-                feature = self.logSum(feature, f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labels[pos]]))
-            unaryFeatures.append(math.exp(feature))
+                feature += f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[labels[pos]])
+            unaryFeatures.append(feature)
             
         return unaryFeatures
 
@@ -1228,14 +1224,16 @@ class FCNV(object):
         
         featuresList = self.unaryFeaturesList
         num_real_states = self.getNumPP()
-        nodePot = [self.neg_inf] * num_real_states
+        nodePot = [0.] * num_real_states
         for state_id, state in enumerate(self.states[:num_real_states]):
             #sum log values of all unary features for this position and state/lable
             for i, f in enumerate(featuresList):
                 featureValue = f(pos, samples, M, P, MSC, PSC, mixture, state)
-                featureValue += math.log(unaryWeights[i])
-                nodePot[state_id] = self.logSum(featureValue, nodePot[state_id])
-            nodePot[state_id] = math.exp(nodePot[state_id])
+                #featureValue += math.log(unaryWeights[i])
+                featureValue *= unaryWeights[i]
+                #nodePot[state_id] = self.logSum(featureValue, nodePot[state_id])
+                nodePot[state_id] += featureValue
+            #nodePot[state_id] = math.exp(nodePot[state_id])
             
         return nodePot
 
@@ -1340,7 +1338,7 @@ class FCNV(object):
             
                 #constant to the exit state
                 sid2 = self.getExitState()[0]
-                edgePot[sid1][sid2][dbid] = 1.  
+                edgePot[sid1][sid2][dbid] = 0.  
         
             #now generate constant pairwise energy from the start node
             for sid1, state1 in enumerate(self.states[num_real_states:]):
@@ -1349,6 +1347,7 @@ class FCNV(object):
                 if state1.phased_pattern == "s":
                     for sid2, state2 in enumerate(self.states[:num_real_states]):
                         if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
+<<<<<<< HEAD
                             edgePot[sid1][sid2][dbid] = 1.
                 
         return edgePot
@@ -1356,6 +1355,9 @@ class FCNV(object):
     def getEdgePotential(self, binaryWeights):
         """
         Compute overall edge potential shared across all edges
+=======
+                            edgePot[sid1][sid2][dbid] = 0.
+>>>>>>> e169fdb4ee56cbbbb5f1094a4e1bc910c59b8fff
         
         return 'num states' x 'num states' x 'num DistBins' matrix representing the potential that
         pools all edge features together given weights vector @binaryWeights
@@ -1432,6 +1434,12 @@ class FCNV(object):
         transitions = self.getEdgePotential(self.binaryWeights)
         distBin = self.distBin
         self.avgCoverage = self.estimateCoverage(samples)
+
+#        for x in range(len(transitions)):
+#            for y in range(len(transitions[x])):
+#                print transitions[x][y][0],
+#            print ''
+
 
         n = len(samples)
         predecessor = [[0 for i in range(num_states)] for j in xrange(n+1)] 
