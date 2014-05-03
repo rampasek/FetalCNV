@@ -1,18 +1,50 @@
 \section{Results}
 
-\subsection{Project goals}
-More concretely, the goals of this project are:
+\subsection{Data sets}
+We use synthetic data set of \cite{rampasek2014fcnv} based on sequencing data of mother-father-child trio I1 published by \cite{kitzman2012}. This data set consists of 360 CNV cases simulated \textit{in silico} in chromosome 1 of I1 maternal plasma sample. These 360 cases fall into 36 categories defined by 6 different CNV types (maternal/paternal deletion, maternal/paternal duplication of haplotype A/B) and 6 different CNV lengths, with 10 cases for each of these ``type $\times$ length'' categories. We randomly split this data set to a training set of 300 cases and a testing set of 60 cases, while maintaining the relative abundance of the 6 different CNV types constant across both sets. That means the training and testing sets are mutually unbiased towards CNV types.
 
-\begin{enumerate}
+\subsection{Model training}
+We trained 4 sets of feature weights by one randomized pass over the training set. For each training method (gradient and maximum margin training) we trained 2 models -- with, and without copy count priors (depth-of-coverage information), respectively. As the initial weights for edge features (in each distance bin) we chose the log of transition probabilities used in the HMM by \cite{rampasek2014fcnv}. Note that there is no difference between edge features' weights between different distance bins in this initialization.
 
-\item Test CRF models by trying different features (including DOC and allelic ratios) and exploring training procedures in the simulated training set regime. Training may include initializing the CRF with the converted HMM conditional distribution features and weights and fine-tuning with the discriminative objective. Training algorithms worth exploring are maximum likelihood training with L-BFGS or an online large-margin procedure as in \cite{bernal2007}.
+\subsection{CRF performance}
+\begin{figure}
+\caption{Performance of our CRF trained by gradient method with and without copy count prior}
+\label{fig:CRFbyGM}
+\centering
+%\includegraphics[height=0.33\textheight]{figures/}
+\end{figure}
 
-\item (optional) Model parental CNV as called by CNVnator on the respective WG sequencing samples. Explicitly pre-computing and utilizing information about these potentially inherited CNVs is likely to reduce the false positive rate.
+\begin{figure}
+\caption{Performance of our CRF trained by maximum margin method with and without copy count prior}
+\label{fig:CRFbyMM}
+\centering
+%\includegraphics[height=0.33\textheight]{figures/}
+\end{figure}
 
-\item (optional, more challenging) Investigate how to extend the method to eliminate the need for explicit knowledge of paternal genotype. This is an important issue for potential clinical use, not only for the implied cost reduction, but mainly because paternal genotype might be difficult or impossible to obtain in practice.
+\subsection{Beta-binomial model vs. multivariate Gaussian model in HMM framework}
+To evaluate the performance influence of the beta-binomial model on the performance of our model, we compared performance of the HMM as described in \cite{rampasek2014fcnv} with the original multivariate Gaussian model and with beta-binomial model for allele distribution. We did not include the copy count priors in the models for these experiments, i.e. only the allelic counts signal was used.
 
-\end{enumerate}
-While goals (2) and (3) are important for clinical practise, we plan to focus our efforts mainly on the machine learning aspects as described in (1).
+\begin{figure}
+\caption{Performance of beta-binomial vs multivariate Gaussian allele counts model in the original HMM framework}
+\label{fig:BBvsMG}
+\centering
+%\includegraphics[height=0.33\textheight]{figures/}
+\end{figure}
+
+
+%\subsection{Project goals}
+%More concretely, the goals of this project are:
+%
+%\begin{enumerate}
+%
+%\item Test CRF models by trying different features (including DOC and allelic ratios) and exploring training procedures in the simulated training set regime. Training may include initializing the CRF with the converted HMM conditional distribution features and weights and fine-tuning with the discriminative objective. Training algorithms worth exploring are maximum likelihood training with L-BFGS or an online large-margin procedure as in \cite{bernal2007}.
+%
+%\item (optional) Model parental CNV as called by CNVnator on the respective WG sequencing samples. Explicitly pre-computing and utilizing information about these potentially inherited CNVs is likely to reduce the false positive rate.
+%
+%\item (optional, more challenging) Investigate how to extend the method to eliminate the need for explicit knowledge of paternal genotype. This is an important issue for potential clinical use, not only for the implied cost reduction, but mainly because paternal genotype might be difficult or impossible to obtain in practice.
+%
+%\end{enumerate}
+%While goals (2) and (3) are important for clinical practise, we plan to focus our efforts mainly on the machine learning aspects as described in (1).
 
 
 %%%%%%%%%%%%%%%%%% FIGURE TEMPLATES %%%%%%%%%%%%%%%%%
