@@ -1,5 +1,5 @@
 \section{Methods}
-The task of CNV detection can be formalized as a sequence segmentation task---given a sequence of maternal blood plasma allele counts (reference and variant counts) $\ar_{\pos}$ at SNP location $\pos$ predict the phased inheritance pattern of the feature $\pip_{\pos}$ for that SNP. Thus, the segmentation problem is predicting the class of each $\pip_{\pos}$ from $\ars$. In this section we describe two related models (CRFs and HMMs) for solving this problem and introduce the CRF architecture explored in this paper.
+The task of CNV detection can be formalized as a sequence segmentation task---given a sequence of allele counts (reference and variant counts) $\ar_{\pos}$ at SNP location $\pos$ predict the phased inheritance pattern of the feature $\pip_{\pos}$ for that SNP. Thus, the segmentation problem is predicting the class of each $\pip_{\pos}$ from $\ars$. In this section we describe two related models (CRFs and HMMs) for solving this problem and introduce the CRF architecture explored in this paper.
 
 \subsection{CRF vs HMM}
 An HMM is a natural model for sequence segmentation. HMMs model the distribution of $\pips$ and $\ars$ as a generative model with a particular first-order Markov structure:
@@ -14,36 +14,78 @@ This suggests directly modelling $p(\pips | \ars)$ without wasting model capacit
 \begin{align*}
 p(\pips | \ars) \propto \exp\left( \sum_{\pos} \sum_{k} w_k f_k(\pip_{\pos-1}, \pip_{\pos}, \ar_{\pos})\right)
 \end{align*}
-where the functions $f_k$ are real valued functions called feature functions and $w_k$ are weights, respectively, for the feature functions. The parameterization that corresponds to an HMM posterior has features of the following form
+where the functions $f_k$ are real valued functions called feature functions and $w_k$ are weights, respectively, for the feature functions. If the observations $\ars$ have a categorical distribution with possible states $m$, the linear-chain CRF that corresponds to the conditional distribution over labelings defined by an HMM has features of the following form
 \begin{align*}
-&\log p(\ar_{\pos} | \pip_{\pos} = s) \indicator{\pip_{\pos} = s}\\
-&\log p( \pip_{\pos} = t | \pip_{\pos-1} = s) \indicator{\pip_{\pos-1} = s, \pip_{\pos} = t}
+&\indicator{\pip_{\pos} = s, \ar_{\pos} = m}\\
+&\indicator{\pip_{\pos-1} = s^{\prime} , \pip_{\pos} = s}
 \end{align*}
-where $s,t$ are possible phased inheritance patterns, and $\indicator{\text{condition}}$ is an indicator. These features have weights of 1 associated with them. The polytime inference algorithms for HMMs have exact analogues for linear-chain CRFs, and since the model is fully observed the likelihood function is convex and maximum likelihood training will converge to the global optimum. Thus, CRFs are a natural model to compare against the HMM and, as we discuss in this section, is possibly a more appropriate model for the task.
+where $\indicator{\text{condition}}$ is an indicator and $s,s^{\prime}$ are possible label states and $m$ is an emission state. To replicate the conditional of the HMM we just need to take weights
+\begin{align*}
+&\log p(\ar_{\pos} = m | \pip_{\pos} = s)\\
+&\log p( \pip_{\pos} = s | \pip_{\pos-1} = s^{\prime})
+\end{align*}
+respectively. The polytime inference algorithms for HMMs have exact analogues for linear-chain CRFs, and since the model is fully observed the likelihood function is convex and maximum likelihood training will converge to the global optimum. Thus, CRFs are a natural model to compare against the HMM and, as we discuss in this section, is possibly a more appropriate model for the task.
 
 The primary advantage of discriminative models is that they avoid paying any cost for complex structure in the input. Although the conditional distribution of HMMs and a particular class of linear-chain CRFs define the same hypothesis space, the HMM training is biased towards models that spend capacity on modelling the marginal of the SNP allelic ratios $p(\ars)$. Moreover, there is no need to restrict the feature functions dependence on $\ars$. In particular the feature functions can include rich, dependent features of the inputs without requiring more complex inference algorithms or inducing intractability. Furthermore, similar to HMMs we can have the feature functions depend on the position $\pos$. So, we can rewrite the family of linear-chain CRFs as distributions with the following form
 \begin{align*}
-p(\pips | \ars) \propto \exp\left( \sum_{\pos} \sum_{k} w_k f_{k}(\pip_{\pos-1}, \pip_{\pos}, \ars, t)\right)
+p(\pips | \ars) \propto \exp\left( \sum_{\pos} \sum_{k} w_k f_{k}(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos)\right)
 \end{align*}
 
 There are some possible disadvantages of linear-chain CRFs for CNV data. First, and perhaps most important, it is not clear how to proceed with training in the absence of real data sets. Second, if only small datasets were available it is possible that the HMM training procedure results in better conditional distributions. This is because the marginal over the SNPs $p(\ars)$ can have a smoothing effect on the resulting conditional distribution. In general discriminative models are more prone to overfitting. Yet, discriminative models are a natural direction for further research and the presence of \textit{in silico} CNV simulation methods developed in \citep{rampasek2014fcnv} make training linear-chain CRFs a promising direction for CNV prediction. Linear-chain CRFs enjoy widespread success in NLP for tasks like named-entity recognition, shallow parsing, semantic role finding, and word alignment in machine translation \citep{sutton2012}. Many of these tasks share structure with the CNV prediction task.  Indeed, semi-Markov CRFs have been used in computational biology for tasks like gene prediction \citep{bernal2007} and RNA structural alignment \citep{Sato01012005}.
 
 \subsection{Description of the CRF Model}
-In this section we describe the feature functions we use in our CRF. In general we split them into node features and edge features; node features describe the dependence of $\pip_{\pos}$ on the input at each position and edge features describe the dependence of $\pip_{\pos}$ on $\pip_{\pos - 1}$.
+In this section we describe the feature functions we use in our CRF. In general we split them into node features and edge features; node features describe the dependence of $\pip_{\pos}$ on the input at each position and edge features describe the dependence of $\pip_{\pos}$ on $\pip_{\pos - 1}$. Each binary features gets a unique weight, the binomial features all share one wait, and the coverage features share one weight---the weights in this case balance the relative importance of the different feature types in predicting labelings.
 
-\subsubsection{Node Feature: Beta-binomial Feature}
-The Beta-binomial features is the result of inverting a Beta-binomial emission distribution in an HMM. The Beta-binomial is parameterized by $\alpha$ and $\beta$, the parameters of the beta, so we have a separate $\alpha_s$ and $\beta_s$ for every possible phased inheritance pattern. In particular let $N$ be the number of reads aligned to position $\pos$, then $\ar_{\pos}$ is a tuple $(\refe, \alte)$ of reference and variant counts that sum to $N$. If we assume that $\refe$ was generated by a Beta-binomial, then the log probability of generating $\refe$ is
+\subsubsection{Node Feature: Beta-binomial Features}
+The Beta-binomial features is the result of inverting a Beta-binomial emission distribution in an HMM. The Beta-binomial is parameterized by $\alpha$ and $\beta$, the parameters of the beta, so we have a separate $\alpha_s$ and $\beta_s$ for every possible phased inheritance pattern. In particular let $N_{\pos}$ be the number of reads aligned to position $\pos$, then $\ar_{\pos}$ is a tuple $(\refe_{\pos}, \alte_{\pos})$ of reference and variant counts that sum to $N_{\pos}$. The following generative model describes generating $\refe_{\pos}$ from a Beta-binomial
 \begin{align*}
-\log p(\ar_{\pos} | \pip_{\pos} = s) = \log 
+p \sim Beta(\alpha_s, \beta_s)\\
+\refe_{\pos} \sim Binomial(N_{\pos}, p)
 \end{align*}
-
+Under this model the log probability of generating $\refe_{\pos}$ is
+\begin{align*}
+\log p(\ar_{\pos} | \pip_{\pos} = s) = \log \left(\binom{N_{\pos}}{\refe_{\pos}} \frac{B(\refe_{\pos} + \alpha_s, N_{\pos} - \refe_{\pos} + \beta_s)}{B(\alpha_s, \beta_s)}\right)
+\end{align*}
+where $B(x,y)$ is the beta function. Thus we include a feature of the form
+\begin{align*}
+\indicator{\pip_{\pos} = s}\log \left(\binom{N_{\pos}}{\refe_{\pos}} \frac{B(\refe_{\pos} + \alpha_s, N_{\pos} - \refe_{\pos} + \beta_s)}{B(\alpha_s, \beta_s)}\right) 
+\end{align*}
+for every possible phased inheritance pattern. The Beta-binomial can be reparameterized in terms of a location $\mu_s$ and an over-dispersion parameter $\rho_s$. Each phased inheritance pattern predicts a certain proportion of reference vs. variant alleles, we se $\mu_s$ to this value. $\rho_s = \rho$ is shared across all phased inheritance patterns and was estimated from the whole dataset of allelic ratios using the estimator from \citet{weirHill2002}. There is a single weight $w_{BB}$ shared across all positions and states that weights the contribution of the Beta-binomial feature.
 
 \subsubsection{Node Feature: Coverage Feature}
+Depth of coverage information provides a prediction of the fetal allele copy count number. We adopt the method in \citet{rampasek2014fcnv}  for computing the probability of fetal allele copy count. Thus for each phased inheritance pattern $s$, we can compute its copy count $\copycount(s) \in \{0, 1, 2\}$, and then the probability of that copy count conditioned on the depth of coverage at position $\pos$. Thus, we add features
+\begin{align*}
+\indicator{\pip_{\pos} = s}\log \frac{p(\copycount(s) = k | doc_{\pos})}{\text{\# of phased inheritance patterns $s$ with } \copycount(s) = k}
+\end{align*}
+Thus, with no other features these features would predict copy counts with the right probabilities.There is a single weight $w_{DOC}$ shared across all positions and states that weights the contribution of the coverage feature.
 
 \subsubsection{Edge Features}
+The distance in base pairs between SNP locations can provide information about the probability of a recombination event or CNV. The traditional edge features would be $\indicator{\pip_{\pos-1} = s^{\prime} , \pip_{\pos} = s}$. We incorporate into these traditional edge features information about the distance between $\pip_{\pos-1} = s^{\prime}$ and $\pip_{\pos} = s$. The information is incorporated by first binning all distance into the following 5 bins: 
+\begin{align*}
+< 120 bp\\
+< 320 bp\\
+< 730 bp\\
+< 3k bp\\
+> 3k bp
+\end{align*}
+So, we take the features
+\begin{align*}
+\indicator{\pip_{\pos-1} = s^{\prime} , \pip_{\pos} = s, bin(dist(\pip_{\pos-1} , \pip_{\pos} )) = k}
+\end{align*}
+Thus, there are potentially $5 \times $ \# phased inheritance patterns $\times $ \# phased inheritance many weights. However, we restrict most of the weights to be negative infinity (this has the effect of making certain transition impossible). We do this in order to replicate the connectivity of the HMM reported in \citet{rampasek2014fcnv}. This results $5 \times 6$ finite weights allowing only the transitions from \citet{rampasek2014fcnv}.
 
-\subsection{Training Details}
+\subsection{Training CRFs}
 
+Because CRFs have tractable inference it is common to simply train the model by following the gradient of the log likelihood. For CRFs the gradient on a single data point $\ars, \pips$ has a particularly nice form:
+\begin{align*}
+\frac{\partial \log p(\pips|\ars)}{\partial w_k} = \sum_{\pos} f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) - \sum_{\pos} \mathbb{E} [f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) | \ars]
+\end{align*}
+where $\mathbb{E} [ \cdot | \ars]$ is the expected value over the labelings with respect to the current weights. These expected values can be computed with the forward-backward analogue for CRFs.
+
+Nonetheless computing gradients can be slow. 
+max marg
+
+why might max margin be better than gradient
 
 %%%%%%%%%%%%%%%%%% FIGURE TEMPLATES %%%%%%%%%%%%%%%%%
 %%%%%%%%% SINGLE FIGURE %%%%%%%%
