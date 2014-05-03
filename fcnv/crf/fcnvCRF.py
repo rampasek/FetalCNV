@@ -174,9 +174,7 @@ class FCNV(object):
         #    for l in xrange(num_states):
         #        print "%.4f" % (math.exp(self.transitions[k][l])),
         #    print " "
-        self.testEdgePotential()
-        
-        
+    
     def binDist(self, dist):
         
         if 0 <= dist < 120:
@@ -728,33 +726,6 @@ class FCNV(object):
         result = sum(map(sum, samples)) / float(len(samples))
         return result
     
-    def score(self, labels, samples, M, P, MSC, PSC, mixture):
-        score = 0
-        for pos, sample in enumerate(samples):
-
-            state = labels[pos]
-            
-            for w, f in self.unaryWeightFeaturesList:
-                score += f(pos+1, samples, M, P, MSC, PSC, mixture, y)*w
-
-            # transitions            
-            if pos > 0:
-                prev_state = labels[pos-1]
-                score += self.binaryFeature(prev_state, state, pos)
-            
-            
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
     
     def computeLLandGradient(self, labels, samples, M, P, MSC, PSC, mixture):
         """
@@ -1018,8 +989,8 @@ class FCNV(object):
         num_states = self.getNumPP()
         confusionMatrix = self.getConfusionMatrix(labels, predicted_labels)
         w = self.generateWeightMatrixForSWE()
-        N, M = len(w), len(w[0])
-        return sum(sum(w[i][j]*confusionMatrix[i][j] for j in range(M)) for i in range(N))
+        
+        return sum(sum(w[i][j]*confusionMatrix[i][j] for j in range(len(w[i]))) for i in range(len(w)))
 
 
     def confusionEntropy(self, labels, predicted_labels):
@@ -1326,9 +1297,7 @@ class FCNV(object):
         for dbid, db in enumerate(self.possible_distbins):
             for sid1, state1 in enumerate(self.states[:num_real_states]):
                 for sid2, state2 in enumerate(self.states[:num_real_states]):
-                    
-                    # sum log values of all binary features 
-                    # for pair of states/lables
+                    #sum log values of all binary features for pair of states/lables
                     for i, f in enumerate(featuresList):
                         featureValue = f(sid1, state1, sid2, state2, db)
                         if featureValue != 0 and edgePot[sid1][sid2][dbid] == self.neg_inf: edgePot[sid1][sid2][dbid] = 0.
@@ -1347,84 +1316,23 @@ class FCNV(object):
                 if state1.phased_pattern == "s":
                     for sid2, state2 in enumerate(self.states[:num_real_states]):
                         if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
-<<<<<<< HEAD
-                            edgePot[sid1][sid2][dbid] = 1.
-                
-        return edgePot
-
-    def getEdgePotential(self, binaryWeights):
-        """
-        Compute overall edge potential shared across all edges
-=======
                             edgePot[sid1][sid2][dbid] = 0.
->>>>>>> e169fdb4ee56cbbbb5f1094a4e1bc910c59b8fff
         
-        return 'num states' x 'num states' x 'num DistBins' matrix representing the potential that
-        pools all edge features together given weights vector @binaryWeights
-        """
-        num_real_states = self.getNumPP()
-        num_states = self.getNumStates()
         
-        featuresList = self.binaryFeaturesList
-        edgePot = [[[self.neg_inf for db in self.possible_distbins] for x in range(num_states)] for y in range(num_states)]
-        
-        for dbid, db in enumerate(self.possible_distbins):
-            for sid1, state1 in enumerate(self.states[:num_real_states]):
-                for sid2, state2 in enumerate(self.states[:num_real_states]):
-                    
-                    # sum log values of all binary features 
-                    # for pair of states/lables
-                    for i, f in enumerate(featuresList):
-                        featureValue = f(sid1, state1, sid2, state2, db)
-                        if featureValue != 0 and edgePot[sid1][sid2][dbid] == self.neg_inf: edgePot[sid1][sid2][dbid] = 0.
-                        
-                        featureValue *= binaryWeights[i]
-                        edgePot[sid1][sid2][dbid] += featureValue
+#        #done, take logarithm
+#        for i in range(num_states):
+#            for j in range(num_states):
+#                for k in range(len(self.possible_distbins)):
+#                    if edgePot[i][j][k] < 10e-10: edgePot[i][j][k] = self.neg_inf
+#                    else: edgePot[i][j][k] = math.log(edgePot[i][j][k])
             
-                #constant to the exit state
-                sid2 = self.getExitState()[0]
-                edgePot[sid1][sid2][dbid] = 1.  
+#        for k in xrange(num_states):
+#            for l in xrange(num_states):
+#                print "%.4f" % (math.exp(edgePot[k][l])),
+#            print " "
         
-            #now generate constant pairwise energy from the start node
-            for sid1, state1 in enumerate(self.states[num_real_states:]):
-                sid1 += num_real_states
-                #if it is the start node
-                if state1.phased_pattern == "s":
-                    for sid2, state2 in enumerate(self.states[:num_real_states]):
-                        if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
-                            edgePot[sid1][sid2][dbid] = 1.
-                
         return edgePot
             
-    def testEdgePotential(self):
-        """
-        Compute overall edge potential shared across all edges
-        
-        return 'num states' x 'num states' x 'num DistBins' matrix representing the potential that
-        pools all edge features together given weights vector @binaryWeights
-        """
-        num_real_states = self.getNumPP()
-        num_states = self.getNumStates()
-        
-        featuresList = self.binaryFeaturesList[:6]
-        featuresMat = [[0 for j in range(num_real_states)] for i in range(num_real_states)]
-        
-        db = 0
-        
-        for sid1, state1 in enumerate(self.states[:num_real_states]):
-            for sid2, state2 in enumerate(self.states[:num_real_states]):
-                for i, f in enumerate(featuresList):
-                    featureValue = f(sid1, state1, sid2, state2, db)
-                    if featureValue == 1:
-                        if featuresMat[sid1][sid2] == 0:
-                            featuresMat[sid1][sid2] = 1
-                        else:
-                            raise Exception("WHAT")
-                            
-        print featuresMat
-                        
-
-
     def viterbiPath(self, samples, M, P, MSC, PSC, mixture, inferHighLevelLabels=True):
         """
         Viterbi decoding of the most probable path.
