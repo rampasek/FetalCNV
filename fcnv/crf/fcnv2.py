@@ -2,6 +2,8 @@
 
 #time pypy fcnv2.py IM1-A-chr1-29032136-30032136-duplicate.alleles_doc.txt IM1-A-chr1-29032136-30032136-duplicate.pplabels.txt /dev/null /dev/null /dev/null crfParams.in --trainGrad crfParams.outMM  > logfcnv2.log 2>&1 &
 
+#0.9799 0.003 0.0001 0.9799 0.001 0.0001 0.00001  0.9799 0.003 0.0001 0.9799 0.001 0.0001 0.00001  0.9799 0.003 0.0001 0.9799 0.001 0.0001 0.00001  0.9799 0.003 0.0001 0.9799 0.001 0.0001 0.00001  0.9799 0.003 0.0001 0.9799 0.001 0.0001 0.00001  0.9799 0.003 0.0001 0.9799 0.001 0.0001 0.00001
+
 import math
 import argparse
 #import numpypy as np
@@ -68,7 +70,7 @@ def readParams(param_file):
             crfParams['unaryWeights'] = unaryWeights
             
         elif line[0] == 'binaryWeights':
-            binaryWeights = map(float, line[1].split())
+            binaryWeights = map(float, line[1].split()) #map(lambda x: math.log(float(x)), line[1].split())
             crfParams['binaryWeights'] = binaryWeights
             
         elif line[0] == 'epsWeight':
@@ -428,7 +430,7 @@ def main():
         for iterNum in range(1):
             #print "iterNum: ", iterNum
             compute_postloss = False
-            pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, 0.00001, compute_postloss)
+            pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, 0.0001, compute_postloss)
             print preloss, params
             print "{0} !>= {1}".format(pregts - preps, preloss)
             if compute_postloss: print "{0} >= {1}".format(postgts - postps, postloss)
