@@ -53,7 +53,7 @@
 \section{Motivation:}
 Non-invasive methods facilitating genome-wide detection of sub-chromosomal CNVs in fetal genome are highly desired, to enable prenatal screening for congenital genetic diseases. Non-invasive prenatal methods pose no side-effects or method-related health risks for neither the mother or its fetus. Such methods rely on sequencing of cell-free DNA contained in maternal plasma, which is known to contain admixture of fetal-derived DNA during the pregnancy. Although detection of whole-chromosomal copy variations has been extensively studied in past years, there has been little work published on generic genome-wide sub-chromosomal CNVs detection. Here, we introduce a new model utilizing Conditional Random Fields to leverage multitude of data-derived signals to address this task.
 \section{Results:}
-Not too impressive :-(
+We have developed a CRF utilizing the following features: parental haplotype phasing, number of reads supporting reference or alternative alleles at 1000gp SNP loci modelled by beta-binomial distribution, depth-of-coverage around these SNP loci, and distance between the adjacent SNP loci. We approached training of the CRF with two different methods, albeit with limited success.
 \section{Availability:}
 http://github.com/rampasek/FetalCNV
 

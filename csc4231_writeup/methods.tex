@@ -68,7 +68,7 @@ The distance in base pairs between two adjacent SNP locations can provide inform
 < 3 \; kbp\\
 \geq 3 \; kbp
 \end{align*}
-These distance bins were empirically estimated from SNP positions in chromosome 1, where $3\%$ of the adjacent SNPs are $\geq 3\;kbp$ apart. The other distance bins brake points correspond to quantiles of the empirical distribution for distances that are $< 3\;kbp$.
+These distance bins were empirically estimated from SNP positions in chromosome 1, where $3\%$ of the adjacent SNPs are $\geq 3\;kbp$ apart. The other distance bins brake points correspond to quartiles of the empirical distribution for distances that are $< 3\;kbp$.
 This binning allows us to define the following edge features:
 \begin{align*}
 \indicator{\pip_{\pos-1} = s^{\prime} , \pip_{\pos} = s, bin(dist(\pip_{\pos-1} , \pip_{\pos} )) = k}
@@ -81,9 +81,9 @@ Because CRFs have tractable inference it is common to simply train the model by 
 \begin{align*}
 \Delta w_k = \tau \left(\sum_{\pos} f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) - \sum_{\pos} \mathbb{E} [f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) | \ars]\right)
 \end{align*}
-where $\mathbb{E} [ \cdot | \ars]$ is the expected value over the labelings with respect to the current weights and $\tau$ is a learning rate. These expected values can be computed with the forward-backward analogue for CRFs. 
+where $\mathbb{E} [ \cdot | \ars]$ is the expected value over the labelings with respect to the current weights and $\tau$ is a learning rate. These expected values can be computed with CRF analogues of the HMM forward and backward algorithms. 
 
-Margin Infused Relaxed Algorithm (MIRA) is an alternative algorithm for training CRFs that is in the family of large-margin learning methods. Large-margin learning methods were original developed in the context of Support Vector Machines (SVM), which classify with a separating hyperplane. The observation in the context of SVM training is that separating hyperplanes with a large margin to training points is more robust to noise and leads to better prediction. MIRA is an algorithm in this spirit that extends this intuition to a more general class of models \citep{crammerThesis}. MIRA was used to train CRFs in a gene prediction task \citep{bernal2007}. The weight update rule is simple
+Margin Infused Relaxed Algorithm (MIRA) is an alternative algorithm for training CRFs that is in the family of large-margin learning methods. This type of training is usually less precise but much faster than the maximum likelihood training. Large-margin learning methods were originally developed in the context of Support Vector Machines (SVM), which classify with a separating hyperplane. The observation in the context of SVM training is that separating hyperplanes with a large margin to training points is more robust to noise and leads to better prediction. MIRA is an algorithm in this spirit that extends this intuition to a more general class of models \citep{crammerThesis}. MIRA was used to train CRFs in a gene prediction task \citep{bernal2007}. The weight update rule is simple
 \begin{align*}
 \Delta w_k = \tau \left(\sum_{\pos} f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) - \sum_{\pos} f_k(\pip^*_{\pos-1}, \pip^*_{\pos}, \ars, \pos)\right)
 \end{align*}
@@ -91,10 +91,13 @@ where $\pips^* = \argmax_{y} p(\pips|\ars)$ for the current model distribution. 
 \begin{align*}
 \tau = \min\left(C, \frac{S_{\bm{w}}(\ars, \pips^*) - S_{\bm{w}}(\ars, \pips) + \mathcal{L}(\pips, \pips^*)}{\left(\sum_{\pos} \sum_k (f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) - f_k(\pip^*_{\pos-1}, \pip^*_{\pos}, \ars, \pos))^2 \right)^2}\right)
 \end{align*}
-where $C$ is a user-specified constant and $\mathcal{L}(\pips, \pips^*)$ is any non-negative loss function. In this work we used a loss function that penalizes the differently for different types of misclassifications. In particular, if $C_{ss^{\prime}}$ is the number of ground truth $\pip_{\pos} = s$ that were classified as $s^{\prime}$, then our loss function was
+where $C$ is a user-specified constant and $\mathcal{L}(\pips, \pips^*)$ is any non-negative loss function. In this work we used a loss function that penalizes for different types of misclassifications. In particular, if $C_{ss^{\prime}}$ is the number of ground truth $\pip_{\pos} = s$ that were classified as $s^{\prime}$, then our loss function was
 \begin{align*}
 \mathcal{L}(\pips, \pips^*) = \sum_{s, s^{\prime}} b_{ss^{\prime}} C_{ss^{\prime}}
 \end{align*}
+We set the parameters $b_{ss^{\prime}}$ according to significance of individual misclassification types, e.g. misclassification within an inheritance pattern (that is getting the phasing wrong, but correct inheritance pattern) was penalized only relatively lightly.
+
+
 %%%%%%%%%%%%%%%%%% FIGURE TEMPLATES %%%%%%%%%%%%%%%%%
 %%%%%%%%% SINGLE FIGURE %%%%%%%%
 %\begin{figure}

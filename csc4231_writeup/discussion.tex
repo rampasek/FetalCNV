@@ -1,4 +1,10 @@
-\section{Discussion}
-Our experiments showed that the beta-binomial model is a good replacement for multivariate Gaussian, as a model of allele counts, not only in theory but also in practice.
+\section{Discussion}\label{sec:discussion}
+Our experiments showed that the beta-binomial model is a good replacement for multivariate Gaussian as a model of allele counts, not only in theory, but also in practice. In future, we would like to explore also the possibility of utilizing both these models in our CRF, with possibly different weights for different inheritance patterns. This would enable the model to learn from a training set possible biases of the individual allele support count models with respect to different inheritance patterns.
 
-Turned out, that in practice it is challenging to properly train our CRF for the problem of CNV detection. One of the main problems is the relative rare abundance of some transitions. In particular, a transition from normal inheritance to a CNV state occurs only once per train case (out of \ntilde 50k tranistions), however it is absolutely vital for a correct CNV prediction. 
+Turned out, that in practice it is challenging to properly train our CRF for the problem of CNV detection. One of the problems is the relative rare abundance of some transitions. In particular, a transition from normal inheritance to a CNV state occurs only once per train case (out of \ntilde 50k tranistions), however it is absolutely vital for a correct CNV prediction.
+
+There can be more causes to the failure of our model training. Naturally, it might be an error in our implementation. Arguments against this explanation are the results with initial parameters (i.e. the inference from our model seems to work properly). Further, likelihood of the training cases always increases during our log-likelihood gradient training, while margin between the ground truth and model's best prediction decreases (if the two are not equal) during the maximum margin training.
+
+Next, the problem with our training might be in the hyperparameters like the learning rate, normalization term, or in the margin training the choice of our loss function. However we explored several options, this remains to be investigated with more caution.
+
+Thirdly, there might be a problem with the distribution of our data set, however we believe this to be unlikely. Lastly, there might be a conceptual problem with our model that we have overlooked.

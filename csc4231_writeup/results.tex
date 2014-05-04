@@ -6,6 +6,15 @@ We used synthetic data set of \cite{rampasek2014fcnv} based on sequencing data o
 \subsection{Model training}
 We trained 4 sets of feature weights by one randomized pass over the training set. For each training method (gradient and maximum margin training) we trained 2 models -- with, and without copy count priors (depth-of-coverage information), respectively. As the initial weights for edge features (in each distance bin) we chose the log of transition probabilities used in the HMM by \cite{rampasek2014fcnv}. Note that there is no difference between edge features' weights between different distance bins in this initialization. The beta-binomial and copy count prior feature weights were both initialized to 1.
 
+\subsection{Beta-binomial model vs. multivariate Gaussian model in HMM framework}
+\begin{figure*}
+\caption{Performance of beta-binomial vs multivariate Gaussian allele counts model in the original HMM framework}
+\label{fig:BBvsMG}
+\centering
+\includegraphics[width=0.99\textwidth]{figures/hmm_bb_mg}
+\end{figure*}
+To evaluate the performance influence of the beta-binomial model on the performance of our model, we compared performance of the HMM as described in \cite{rampasek2014fcnv} with the original multivariate Gaussian model and with beta-binomial model for allele distribution, respectively. We did not include the copy count priors in the models for these experiments, i.e. only the allelic counts signal was used. The results are in Figure \ref{fig:BBvsMG}. The results suggests that the beta-binomial model is a significantly more precise model, however with decreased sensitivity.
+
 \subsection{CRF performance}
 \begin{figure*}
 \caption{Performance of our CRF before training with initial weights corresponding to logarithm of transition probabilities of the HMM. Results are presented for model with and also without copy count prior, respectively.}
@@ -17,10 +26,10 @@ We trained 4 sets of feature weights by one randomized pass over the training se
 First, we tested our CRF model with the initial parameters. The results on all of the data set combined are presented in Figure \ref{fig:CRFinit}. CRF without the depth-of-coverage feature, but with these initial parameters, conceptually corresponds to the original HMM. As the results show, this is a very good initialization of the edge feature weights. When we included also the depth-of-coverage feature, we see a significant performance drop, this is because weights for both node features (beta-binomial model and DOC-based prior, respectively) have the same weight. Their relative importance for correct CNV prediction needs to be learnt from the data.
 
 
-The obtained results on training and testing set are shown in Figure \ref{fig:CRFresAll}. Our training did not work as expected as the model almost never calls any CNVs.
+Next we tested our CRF trained in the ways as described above. The obtained results on training and testing set are shown in Figure \ref{fig:CRFresAll}. Our training did not work as expected as the model almost never calls any CNVs in case of both training methods. These results are disappointing and we provide possible explanations later in Section \ref{sec:discussion}.
 
 \begin{figure*}
-\caption{Performance of our CRF with different sets of feature weights. Results are presented on both training and testing set, respectively.}
+\caption{Summary of the performance of our CRF with different sets of feature weights. Results are presented on both training and testing set, respectively.}
 \label{fig:CRFresAll}
 \centering
 \includegraphics[width=0.7\textwidth]{figures/crf_res_all}
@@ -48,15 +57,6 @@ The obtained results on training and testing set are shown in Figure \ref{fig:CR
 %\centering
 %\includegraphics[width=0.99\textwidth]{figures/crf_margin}
 %\end{figure*}
-
-\subsection{Beta-binomial model vs. multivariate Gaussian model in HMM framework}
-\begin{figure*}
-\caption{Performance of beta-binomial vs multivariate Gaussian allele counts model in the original HMM framework}
-\label{fig:BBvsMG}
-\centering
-\includegraphics[width=0.99\textwidth]{figures/hmm_bb_mg}
-\end{figure*}
-To evaluate the performance influence of the beta-binomial model on the performance of our model, we compared performance of the HMM as described in \cite{rampasek2014fcnv} with the original multivariate Gaussian model and with beta-binomial model for allele distribution, respectively. We did not include the copy count priors in the models for these experiments, i.e. only the allelic counts signal was used. The results are in Figure \ref{fig:BBvsMG}. The results suggests that the beta-binomial model is a significantly more precise model, however with decreased sensitivity.
 
 
 %\subsection{Project goals}
