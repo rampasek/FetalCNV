@@ -28,13 +28,13 @@ The polytime inference algorithms for HMMs have exact analogues for linear-chain
 
 The primary advantage of discriminative models is that they avoid paying any cost for complex structure in the input. Although the conditional distribution of HMMs and a particular class of linear-chain CRFs define the same hypothesis space, the HMM training is biased towards models that spend capacity on modelling the marginal of the SNP allelic ratios $p(\ars)$. Moreover, there is no need to restrict the feature functions dependence on $\ars$. In particular the feature functions can include rich, dependent features of the inputs without requiring more complex inference algorithms or inducing intractability. Furthermore, similar to HMMs we can have the feature functions depend on the position $\pos$. So, we can rewrite the family of linear-chain CRFs as distributions with the following form
 \begin{align*}
-p(\pips | \ars) \propto \exp\left( \sum_{\pos} \sum_{k} w_k f_{k}(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos)\right)
+p(\pips | \ars) \propto \exp\left( \sum_{\pos} \sum_{k} w_k f_{k}(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos)\right) \equiv \exp(S_{\bm{w}}(\ars, \pips))
 \end{align*}
 
 There are some possible disadvantages of linear-chain CRFs for CNV data. First, and perhaps most important, it is not clear how to proceed with training in the absence of real data sets. Second, if only small datasets were available it is possible that the HMM training procedure results in better conditional distributions. This is because the marginal over the SNPs $p(\ars)$ can have a smoothing effect on the resulting conditional distribution. In general discriminative models are more prone to overfitting. Yet, discriminative models are a natural direction for further research and the presence of \textit{in silico} CNV simulation methods developed in \cite{rampasek2014fcnv} make training linear-chain CRFs a promising direction for CNV prediction. Linear-chain CRFs enjoy widespread success in NLP for tasks like named-entity recognition, shallow parsing, semantic role finding, and word alignment in machine translation \citep{sutton2012}. Many of these tasks share structure with the CNV prediction task.  Indeed, semi-Markov CRFs have been used in computational biology for tasks like gene prediction \citep{bernal2007} and RNA structural alignment \citep{Sato01012005}.
 
 \subsection{Description of the CRF Model}
-In this section we describe the feature functions we use in our CRF. In general we split them into node features and edge features; node features describe the dependence of $\pip_{\pos}$ on the input at each position and edge features describe the dependence of $\pip_{\pos}$ on $\pip_{\pos - 1}$. Each binary features gets a unique weight, the binomial features all share one wait, and the coverage features share one weight---the weights in this case balance the relative importance of the different feature types in predicting labelings.
+In this section we describe the feature functions of our CRF. We consider two types of weights: node features and edge features; node features describe the dependence of $\pip_{\pos}$ on $\ar_{\pos}$, and edge features describe the pairwise dependencies between $\pip_{\pos}$ on $\pip_{\pos - 1}$.
 
 \subsubsection{Node Feature: Beta-binomial Features}
 The Beta-binomial features is the result of inverting a Beta-binomial emission distribution in an HMM. The Beta-binomial is parameterized by $\alpha$ and $\beta$, the parameters of the beta, so we have a separate $\alpha_s$ and $\beta_s$ for every possible phased inheritance pattern. In particular let $N_{\pos}$ be the number of reads aligned to position $\pos$, then $\ar_{\pos}$ is a tuple $(\refe_{\pos}, \alte_{\pos})$ of reference and variant counts that sum to $N_{\pos}$. The following generative model describes generating $\refe_{\pos}$ from a Beta-binomial
@@ -62,13 +62,13 @@ Thus, with no other features these features would predict copy counts with the r
 \subsubsection{Edge Features}
 The distance in base pairs between two adjacent SNP locations can provide information about the probability of a recombination event or CNV. The traditional edge features would be $\indicator{\pip_{\pos-1} = s^{\prime} , \pip_{\pos} = s}$. We incorporate into these traditional edge features information about the distance between $\pip_{\pos-1} = s^{\prime}$ and $\pip_{\pos} = s$. The information is incorporated by first binning all distances into the following 5 bins: 
 \begin{align*}
-< 120 bp\\
-< 320 bp\\
-< 730 bp\\
-< 3k bp\\
-\geq 3k bp
+< 120 \; bp\\
+< 320 \; bp\\
+< 730 \; bp\\
+< 3 \; kbp\\
+\geq 3 \; kbp
 \end{align*}
-These distance bins were empirically estimated from SNP positions in chromosome 1, where $3\%$ of the adjacent SNPs are $\geq 3kbp$ apart. The other distance bins brake points correspond to quantiles of the empirical distribution for distances that are $< 3kbp$.
+These distance bins were empirically estimated from SNP positions in chromosome 1, where $3\%$ of the adjacent SNPs are $\geq 3\;kbp$ apart. The other distance bins brake points correspond to quantiles of the empirical distribution for distances that are $< 3\;kbp$.
 This binning allows us to define the following edge features:
 \begin{align*}
 \indicator{\pip_{\pos-1} = s^{\prime} , \pip_{\pos} = s, bin(dist(\pip_{\pos-1} , \pip_{\pos} )) = k}
@@ -77,17 +77,24 @@ Thus, there are potentially $5 \times $ \# phased inheritance patterns $\times $
 
 \subsection{Training CRFs}
 
-Because CRFs have tractable inference it is common to simply train the model by following the gradient of the log likelihood. For CRFs the gradient on a single data point $\ars, \pips$ has a particularly nice form:
+Because CRFs have tractable inference it is common to simply train the model by following the gradient of the log likelihood. For CRFs the gradient on a single data point $\ars, \pips$ has a particularly nice form leading to the following weight update:
 \begin{align*}
-\frac{\partial \log p(\pips|\ars)}{\partial w_k} = \sum_{\pos} f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) - \sum_{\pos} \mathbb{E} [f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) | \ars]
+\Delta w_k = \tau \left(\sum_{\pos} f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) - \sum_{\pos} \mathbb{E} [f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) | \ars]\right)
 \end{align*}
-where $\mathbb{E} [ \cdot | \ars]$ is the expected value over the labelings with respect to the current weights. These expected values can be computed with the forward-backward analogue for CRFs.
+where $\mathbb{E} [ \cdot | \ars]$ is the expected value over the labelings with respect to the current weights and $\tau$ is a learning rate. These expected values can be computed with the forward-backward analogue for CRFs. 
 
-Nonetheless computing gradients can be slow. 
-max marg
-
-why might max margin be better than gradient
-
+Margin Infused Relaxed Algorithm (MIRA) is an alternative algorithm for training CRFs that is in the family of large-margin learning methods. Large-margin learning methods were original developed in the context of Support Vector Machines (SVM), which classify with a separating hyperplane. The observation in the context of SVM training is that separating hyperplanes with a large margin to training points is more robust to noise and leads to better prediction. MIRA is an algorithm in this spirit that extends this intuition to a more general class of models \citep{crammerThesis}. MIRA was used to train CRFs in a gene prediction task \citep{bernal2007}. The weight update rule is simple
+\begin{align*}
+\Delta w_k = \tau \left(\sum_{\pos} f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) - \sum_{\pos} f_k(\pip^*_{\pos-1}, \pip^*_{\pos}, \ars, \pos)\right)
+\end{align*}
+where $\pips^* = \argmax_{y} p(\pips|\ars)$ for the current model distribution. The specifics of the MIRA algorithm are in how the learning rate $\tau$ is set. In the version of MIRA we used $\tau$ is set
+\begin{align*}
+\tau = \min\left(C, \frac{S_{\bm{w}}(\ars, \pips^*) - S_{\bm{w}}(\ars, \pips) + \mathcal{L}(\pips, \pips^*)}{\left(\sum_{\pos} \sum_k (f_k(\pip_{\pos-1}, \pip_{\pos}, \ars, \pos) - f_k(\pip^*_{\pos-1}, \pip^*_{\pos}, \ars, \pos))^2 \right)^2}\right)
+\end{align*}
+where $C$ is a user-specified constant and $\mathcal{L}(\pips, \pips^*)$ is any non-negative loss function. In this work we used a loss function that penalizes the differently for different types of misclassifications. In particular, if $C_{ss^{\prime}}$ is the number of ground truth $\pip_{\pos} = s$ that were classified as $s^{\prime}$, then our loss function was
+\begin{align*}
+\mathcal{L}(\pips, \pips^*) = \sum_{s, s^{\prime}} b_{ss^{\prime}} C_{ss^{\prime}}
+\end{align*}
 %%%%%%%%%%%%%%%%%% FIGURE TEMPLATES %%%%%%%%%%%%%%%%%
 %%%%%%%%% SINGLE FIGURE %%%%%%%%
 %\begin{figure}
@@ -106,7 +113,7 @@ why might max margin be better than gradient
 %	\centering
 %	\includegraphics[width=0.98\textwidth]{figures/}
 %	\end{minipage}	
-%}
+%
 %\subfigure[subfig title B]{
 %	\begin{minipage}[b]{0.48\textwidth}
 %		\centering
