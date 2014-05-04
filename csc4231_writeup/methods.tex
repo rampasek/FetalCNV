@@ -1,5 +1,5 @@
 \section{Methods}
-The task of CNV detection can be formalized as a sequence segmentation task---given a sequence of allele counts (reference and variant counts) $\ar_{\pos}$ at SNP location $\pos$ predict the phased inheritance pattern of the feature $\pip_{\pos}$ for that SNP. Thus, the segmentation problem is predicting the class of each $\pip_{\pos}$ from $\ars$. In this section we describe two related models (CRFs and HMMs) for solving this problem and introduce the CRF architecture explored in this paper.
+The task of CNV detection can be formalized as a sequence segmentation task---given a sequence of allele counts (reference and variant counts) $\ar_{\pos}$ at SNP location $\pos$ predict the phased inheritance pattern of the fetus $\pip_{\pos}$ for that SNP. In this section we describe two related models (CRFs and HMMs) for solving this problem and introduce the CRF architecture explored in this paper.
 
 \subsection{CRF vs HMM}
 An HMM is a natural model for sequence segmentation. HMMs model the distribution of $\pips$ and $\ars$ as a generative model with a particular first-order Markov structure:
