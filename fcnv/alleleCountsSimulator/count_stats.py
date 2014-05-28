@@ -6,6 +6,8 @@ import numpy as np
 import sys
 import os
 import itertools
+from scipy.interpolate import UnivariateSpline
+from matplotlib import pyplot as plt
 
 allele_file_header = ''
 
@@ -144,26 +146,62 @@ def allelesDistributionExtended(Malleles, Mcounts, Palleles, Pcounts, pattern, m
     dist_list = [dist[nuc] for nuc in nucleotides]
     return dist_list
 
-def simulateCounts(samples, M, P, gt, ff):
-    newS = []
+def computeCountsStats(samples, M, P, MSC, PSC, gt, ff):
+    stats = [ dict() for i in range(30) ] 
+    nucleotides = ['A', 'C', 'G', 'T']
     phased_patterns = generatePPstates()
     
-    for i in range(len(samples)):
-        ps = allelesDistributionExtended(M[i], (100,100), P[i], (100,100), phased_patterns[gt[i]], ff)
-        #sim = np.random.multinomial(sum(samples[i]), ps)
-        sim = np.random.multinomial(500, ps)
-        #sim = map(int, list(np.array(ps)*500))
-        newS.append(sim)
+    for sid in range(len(samples)):
+        ps = allelesDistributionExtended(M[sid], (30, 30), P[sid], (30, 30), phased_patterns[gt[sid]], ff)
+        nuc_counts = samples[sid]
         
-        #print samples[i], M[i], P[i], ps
-        #print tuple(sim), '\n'
-        #if i == 5: break
+        expinherited = [0] * 4
+        for x in M[sid] + P[sid]:
+            expinherited[nucleotides.index(x)] = 1
+        
+        seen = [0] * 4
+        for x in range(4):
+            if nuc_counts[x] != 0: seen[x] = 1
+            
+        for x in range(4):
+            seen[x] = int(seen[x] or expinherited[x])
+        
+        als = [i for i in range(4) if seen[i] == 1]
+        
+        #print nuc_counts, '|', als, '|', seen
+        if len(als) > 2: continue
+        if len(als) == 1:
+            for x in range(4):
+                if x != als[0]: 
+                    als.append(x)
+                    break
+        
+        m = len(als)
+        eps = 0.005 #.5/sum(nuc_counts)
+        dmps = [0.] * m
+        addEps = False
+        for i in range(m):
+            if ps[als[i]] < 0.0001: addEps = True
+        for i in range(m):
+            dmps[i] = ps[als[i]] + eps*int(addEps)
+        dmps = [ x/sum(dmps) for x in dmps]
+        
+        #make the one with higher p to be the first one
+        if dmps[1] > dmps[0]:
+            dmps[0], dmps[1] = dmps[1], dmps[0]
+            als[0], als[1] = als[1], als[0]
+        
+        nc = [nuc_counts[als[i]] for i in range(m)]
+        #print nc, dmps, " | ", nuc_counts, ps, list(np.array(nuc_counts)/float(sum(nuc_counts)))
+        
+        if tuple(dmps) not in stats[gt[sid]]: stats[gt[sid]][tuple(dmps)] = list()
+        stats[gt[sid]][tuple(dmps)].append(tuple(nc))
     
-    return newS
+    return stats
         
 def main():
     #parse command line arguments
-    parser = argparse.ArgumentParser(description='Performs fetal CNV analysis from maternal plasma and phased parental data.')
+    parser = argparse.ArgumentParser(description='')
     parser.add_argument('input', type=str, nargs=1, help='path to input file with allele counts in plasma and parental haplotypes')
     parser.add_argument('target', type=str, nargs=1, help='path to file with background truth - "target"')
     parser.add_argument('outDir', type=str, nargs=1, help='path to output directory')
@@ -200,19 +238,52 @@ def main():
         ground_truth.append(int(line[-1]))
     target_file.close()
     
-    
     file_name_prefix = target_file_name.split('/')[-1].split('.')[0].replace(':', '-')
     out_file_name = out_dir + '/' + file_name_prefix + '.sim_allele_counts.txt'
     #print out_file_name
     #out_file = open(out_file_name, 'w')
     
     #print snp_positions[0], samples[0], M[0], P[0], MSC[0], PSC[0], ground_truth[0]
+
+    stats = computeCountsStats(samples, M, P, MSC, PSC, ground_truth, ff)
+    #print stats
     
-    MSC = [(100,100)] * len(MSC)
-    PSC = [(100,100)] * len(MSC)
-    samplesSim = simulateCounts(samples, M, P, ground_truth, ff)
+    num = 0
+    phased_patterns = generatePPstates()
+    for state in range(30):
+        for mu, emp in stats[state].iteritems():
+            print state, phased_patterns[state], ":", mu, len(emp)
+            #continue
+            plt.figure(figsize=(16, 12))
+            n = 150
+            bins = np.linspace(0., 1., n)
+            
+            s = [float(e[0])/sum(e) for e in emp]
+            plt.hist(s, bins, color='blue', alpha=0.5, label='empirical')
+            
+            #p, x = np.histogram(s, bins=n) # bin it into n bins
+            #x = x[:-1] + (x[1] - x[0])/2   # convert bin edges to centers            
+            #f = UnivariateSpline(x, p, s=1)
+            #plt.plot(x, f(x))
+            
+            s = [np.random.multinomial(sum(e), mu) for e in emp]
+            s = [float(e[0])/sum(e) for e in s]
+            plt.hist(s, bins, color='green', alpha=0.5, label='sinthetic')
+            
+            #p, x = np.histogram(s, bins=n) # bin it into n bins
+            #x = x[:-1] + (x[1] - x[0])/2   # convert bin edges to centers
+            #f = UnivariateSpline(x, p, s=1)
+            #plt.plot(x, f(x))
+            
+            plt.legend(loc='upper left')
+            plt.axvline(mu[0], color='r', linestyle='dashed', linewidth=2)
+            
+            #plt.show()
+            num += 1
+            plt.savefig('hist/'+str(num)+'hist'+str(state)+str(phased_patterns[state])+'.png', dpi = 100)
+            plt.close('all')
     
-    writeOutput(out_file_name, snp_positions, samplesSim, M, P, MSC, PSC)
+    #writeOutput(out_file_name, snp_positions, samplesSim, M, P, MSC, PSC)
     
 if __name__ == "__main__":
     #import doctest
