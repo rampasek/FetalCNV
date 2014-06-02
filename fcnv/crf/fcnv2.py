@@ -181,7 +181,7 @@ def computeStats(ok, wrong, pref, num_patt):
         print pref, t, ": ", o, w, ratio, '%'
 
 def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_name_prefix):
-    vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture) 
+    vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture, inferHighLevelLabels=False)  #change
     #vp = fcnv.maxPosteriorDecoding(samples, M, P, MSC, PSC, mixture)
     
     date = datetime.now().strftime('%m-%d-%H-%M')
@@ -191,13 +191,14 @@ def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, fi
     
     print fcnv.inheritance_patterns
     num_patt = fcnv.getNumIP()
-
+    num_states = fcnv.getNumPP()
+    num_patt = num_states #for phased pattern labeling
+    
     viterbi_correct = 0
-    state_correct_vp = [0 for x in range(num_patt)]
+    state_correct_vp = [0] * num_patt 
 
     for i in xrange(len(vp)):
         print >>annot_out, snp_positions[i], ground_truth[i], vp[i] #, v_state_path[i]
-
         viterbi_correct += int(ground_truth[i] == vp[i])
         state_correct_vp[ground_truth[i]] += int(ground_truth[i] == vp[i])
 
@@ -351,18 +352,17 @@ def main():
     #snp_positions = []
     ground_truth = []
     target_file = open(target_file_name, 'r')
-    while True: 
-        line = target_file.readline()
-        if not line: break
+    for line in target_file.readlines():
         line = line.rstrip("\n").split("\t")
         #snp_positions.append(int(line[0]))
         ground_truth.append(int(line[-1]))
     target_file.close()
     
-    fcnv = fcnvCRF.FCNV(crfParams, None, None, False)
-    mix, mix_median, ct = fcnv.estimateMixture(samples, M, P)
-    print "Est. Mixture: ", mix, mix_median, '(', ct ,')',
-    #mix = 0.13 #proportion of fetal genome in plasma
+    #fcnv = fcnvCRF.FCNV(crfParams, None, None, False)
+    #mix, mix_median, ct = fcnv.estimateMixture(samples, M, P)
+    #del fcnv
+    #print "Est. Mixture: ", mix, mix_median, '(', ct ,')',
+    mix = 0.13 #proportion of fetal genome in plasma
     if args.ff > 0: mix = args.ff
     print "used:", mix
     
@@ -379,19 +379,9 @@ def main():
                 cnv_prior[pos][cp_num_posterior[1]] = cp_num_posterior[0]
         del cvrg, cvrg_posterior
     
-    del fcnv
     fcnv = fcnvCRF.FCNV(crfParams, snp_positions, cnv_prior, args.useCvrg)
     
-    ground_truth = []
-    target_file = open(target_file_name, 'r')
-    for line in target_file.readlines():
-        line = line.rstrip("\n").split("\t")
-        ground_truth.append(int(line[-1]))
-    target_file.close()
-    
     parameterStats = dict()
-    
-    
     #get get observed allele counts
     if args.getObsCounts:
         parameterStats = fcnv.computeCountsTable(ground_truth, samples, M, P, MSC, PSC, mix, parameterStats)
@@ -407,7 +397,7 @@ def main():
     #run gradient training
     if runGradTraining:
         #run the training iterations
-        for iterNum in range(1):
+        for iterNum in range(3):
             #print "iterNum: ", iterNum
             ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix)
             print ll, params
@@ -427,9 +417,9 @@ def main():
     #run max margin training
     if runMarginTraining:
         #run the training iterations
-        for iterNum in range(1):
-            #print "iterNum: ", iterNum
-            compute_postloss = False
+        for iterNum in range(5): #change
+            print "iterNum: ", iterNum
+            compute_postloss = True #change + the const C
             pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, 0.0001, compute_postloss)
             print preloss, params
             print "{0} !>= {1}".format(pregts - preps, preloss)

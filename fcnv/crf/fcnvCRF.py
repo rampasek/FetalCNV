@@ -508,6 +508,66 @@ class FCNV(object):
         
         return px
     
+    def logMultinomial(self, xs, ps):
+        """Calculate probability mass function of multinomial distribution
+        returns log(Multi(xs | sum(xs), ps))
+        
+        Arguments:
+        xs -- [ints] -- counts
+        ps -- [floats] -- probabilities
+        returns float 
+        
+        >>> f = FCNV()
+        >>> f.logMultinomial([1,2,3], [.2,.3,.5])
+        -2.0024805005437072
+        """
+        
+        def gammaln(n):
+            """Compute logarithm of Euler's gamma function for discrete values."""
+            if n < 1:
+                return float('inf')
+            if n < 3:
+                return 0.0
+            c = [76.18009172947146, -86.50532032941677, \
+                 24.01409824083091, -1.231739572450155, \
+                 0.001208650973866179, -0.5395239384953 * 0.00001]
+            x, y = float(n), float(n)
+            tm = x + 5.5
+            tm -= (x + 0.5) * math.log(tm)
+            se = 1.0000000000000190015
+            for j in range(6):
+                y += 1.0
+                se += c[j] / y
+            return -tm + math.log(2.5066282746310005 * se / x)
+        
+        def logFactorial(x):
+            """Calculate ln(x!).
+                
+            Arguments:
+            x -- list(floats)
+            returns list(floats)
+                
+            """
+            if isinstance(x, tuple):
+                res = []
+                for val in x:
+                    res.append(gammaln(val+1))
+                return tuple(res)
+            else: 
+                return gammaln(x+1)
+        
+        n = sum(xs)
+        '''#numpy implementation:
+        xs, ps = np.array(xs), np.array(ps)
+        result = logFactorial(n) - sum(logFactorial(xs)) + sum(xs * np.log(ps))
+        '''
+        
+        result = logFactorial(n) - sum(logFactorial(xs))
+        for i in range(len(ps)):
+            result += xs[i] * math.log(ps[i])
+            
+        return result
+    
     def logDirMulti(self, rho, xs, ps):
         """
         log probability of x ~ BetaBinomial(xs, ps, rho)
@@ -624,7 +684,7 @@ class FCNV(object):
         pattern = state.phased_pattern
         ps = self.allelesDistributionExtended(maternal_alleles, maternal_sq_counts, paternal_alleles, paternal_sq_counts, pattern, mix)
 
-#        #use Mixture of Independent Gaussians
+        ### use Mixture of Independent Gaussians
 #        N = sum(nuc_counts)
 #        avg_doc = 70. #TODO: make this a parameter
 #        norm_coef = avg_doc / N
@@ -635,12 +695,11 @@ class FCNV(object):
 #        
 #        ratios_prob = self.logGaussian(nuc_counts, mus, cov_diagonal)
 #        result = ratios_prob
-
-        #use Beta-Binomial distrib
+        
+        ######## get counts and means for 2 expressed allels, sort them by the expected mean
         expinherited = [0] * 4
         for x in maternal_alleles + paternal_alleles:
             expinherited[self.nucleotides.index(x)] = 1
-        #als = [i for i in range(4) if expinherited[i] == 1]
         
         seen = [0] * 4
         for x in range(4):
@@ -660,7 +719,7 @@ class FCNV(object):
                     break
         
         m = len(als)
-        eps = 0.01
+        eps = 0.005
         dmps = [0.] * m
         addEps = False
         for i in range(m):
@@ -673,13 +732,18 @@ class FCNV(object):
         if dmps[1] > dmps[0]:
             dmps[0], dmps[1] = dmps[1], dmps[0]
             als[0], als[1] = als[1], als[0]
-        
-        rho = 0.0267  #0.01608  #estimated from train set by MoM estimator
         nc = [nuc_counts[als[i]] for i in range(m)]
+        
+        
+        ### use multinomial distrib
+        #result = self.logMultinomial(tuple(nc), tuple(dmps))
+
+
+        ###use Beta-Binomial distrib
+        rho = 0.01608  #0.0267  #estimated from train set by MoM estimator
         result = self.logDirMulti(rho, tuple(nc), tuple(dmps))
         
 #        if result < -15: result = -15
-        
         return result
     
     def estimateMixture(self, samples, M, P):
@@ -726,7 +790,24 @@ class FCNV(object):
         result = sum(map(sum, samples)) / float(len(samples))
         return result
     
-    
+    def getRegionStats(self, labels, samples, M, P, MSC, PSC, mixture):
+        predicted_labels, _ = self.viterbiPath(samples, M, P, MSC, PSC, mixture, inferHighLevelLabels=False)
+        
+        # COMPUTE FEATURES
+        groundtruthUnaryFeatures = self.getUnaryFeatures(labels, samples, M, P, MSC, PSC, mixture) 
+        #groundtruthBinaryFeatures = self.getBinaryFeatures(labels, samples, M, P, MSC, PSC, mixture) 
+        predictionUnaryFeatures = self.getUnaryFeatures(predicted_labels, samples, M, P, MSC, PSC, mixture) 
+        #predictionBinaryFeatures = self.getBinaryFeatures(predicted_labels, samples, M, P, MSC, PSC, mixture)
+        
+        print "GT unary:", groundtruthUnaryFeatures
+        print "VP unary:", predictionUnaryFeatures
+        print "GT unary CNV:", self.getUnaryFeatures(labels[28205:29250], samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
+        print "VP unary CNV:", self.getUnaryFeatures(predicted_labels[28205:29250], samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
+        print "simpleGT unary CNV:", self.getUnaryFeatures([7]* (-28205+29250), samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
+        print "simpleGT unary CNV:", self.getUnaryFeatures([8]* (-28205+29250), samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
+        print "simpleGT unary CNV:", self.getUnaryFeatures([9]* (-28205+29250), samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
+        print "simpleGT unary CNV:", self.getUnaryFeatures([10]* (-28205+29250), samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
+        
     def computeLLandGradient(self, labels, samples, M, P, MSC, PSC, mixture):
         """
         Compute the parameters likelihood, corresponding gradient, and update the weights
@@ -785,6 +866,8 @@ class FCNV(object):
         #logLikelihood -= wSqr/(2.*self.sigmaSqr) #regularizator
         
         print "loglikelihood before param adjustment:", logLikelihood
+        print "before:"
+        self.getRegionStats(labels, samples, M, P, MSC, PSC, mixture)
         
         #compute gradients w.r.t. indiviudal features and update the current weights
          #unary features
@@ -817,6 +900,9 @@ class FCNV(object):
             self.binaryWeights[i] += self.omega * grad
             self.binaryWeights[i] = max(self.binaryWeights[i], self.epsWeight)
             print "binary", i, self.binaryWeights[i]    
+        
+        print "after:"
+        self.getRegionStats(labels, samples, M, P, MSC, PSC, mixture)
         
         return logLikelihood, self.encodeCRFparams()
        
@@ -1107,7 +1193,13 @@ class FCNV(object):
         groundtruthBinaryFeatures = self.getBinaryFeatures(labels, samples, M, P, MSC, PSC, mixture) 
         predictionUnaryFeatures = self.getUnaryFeatures(predicted_labels, samples, M, P, MSC, PSC, mixture) 
         predictionBinaryFeatures = self.getBinaryFeatures(predicted_labels, samples, M, P, MSC, PSC, mixture)
-
+        
+        #print "GT unary:", groundtruthUnaryFeatures
+        #print "VP unary:", predictionUnaryFeatures
+        #print "GT unary CNV:", self.getUnaryFeatures(labels[28205:29250], samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
+        #print "VP unary CNV:", self.getUnaryFeatures(predicted_labels[28205:29250], samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
+        #print "VP unary CNV:", self.getUnaryFeatures([9]* (-28205+29250), samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
+        
         # COMPUTE SQUARED DISTANCE
         squared_feature_distance = 0
         for i in xrange(len(predictionUnaryFeatures)):
@@ -1153,7 +1245,9 @@ class FCNV(object):
         return groundtruth_score, prediction_score, loss, self.encodeCRFparams(), postgroundtruth_score, postprediction_score, postloss
     
     def getUnaryFeatures(self, labels, samples, M, P, MSC, PSC, mixture):
-        
+        """
+        For every unary feature, compute the total sum of the feature values for the given label seqence
+        """
         unaryFeatures = []
         for i, f in enumerate(self.unaryFeaturesList):
             feature = 0.
@@ -1164,7 +1258,9 @@ class FCNV(object):
         return unaryFeatures
 
     def getBinaryFeatures(self, labels, samples, M, P, MSC, PSC, mixture):
-
+        """
+        For every binary feature, compute the total sum of the feature values for the given label seqence
+        """
         binaryFeatures = []
         for i, f in enumerate(self.binaryFeaturesList):
             feature = 0.
