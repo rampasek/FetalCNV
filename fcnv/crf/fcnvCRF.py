@@ -742,6 +742,7 @@ class FCNV(object):
         ###use Beta-Binomial distrib
         rho = 0.01608  #0.0267  #estimated from train set by MoM estimator
         result = self.logDirMulti(rho, tuple(nc), tuple(dmps))
+        #print result, self.logMultinomial(tuple(nc), tuple(dmps))
         
 #        if result < -15: result = -15
         return result
@@ -801,12 +802,14 @@ class FCNV(object):
         
         print "GT unary:", groundtruthUnaryFeatures
         print "VP unary:", predictionUnaryFeatures
-        print "GT unary CNV:", self.getUnaryFeatures(labels[28205:29250], samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
-        print "VP unary CNV:", self.getUnaryFeatures(predicted_labels[28205:29250], samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
-        print "simpleGT unary CNV:", self.getUnaryFeatures([7]* (-28205+29250), samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
-        print "simpleGT unary CNV:", self.getUnaryFeatures([8]* (-28205+29250), samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
-        print "simpleGT unary CNV:", self.getUnaryFeatures([9]* (-28205+29250), samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
-        print "simpleGT unary CNV:", self.getUnaryFeatures([10]* (-28205+29250), samples[28205:29250], M[28205:29250], P[28205:29250], MSC[28205:29250], PSC[28205:29250], mixture)
+        cnvB = 28205 - 28000
+        cnvE = 29250 - 28000
+        print "GT unary CNV:", self.getUnaryFeatures(labels[cnvB:cnvE], samples[cnvB:cnvE], M[cnvB:cnvE], P[cnvB:cnvE], MSC[cnvB:cnvE], PSC[cnvB:cnvE], mixture)
+        print "VP unary CNV:", self.getUnaryFeatures(predicted_labels[cnvB:cnvE], samples[cnvB:cnvE], M[cnvB:cnvE], P[cnvB:cnvE], MSC[cnvB:cnvE], PSC[cnvB:cnvE], mixture)
+        print "simpleGT unary CNV:", self.getUnaryFeatures([7]* (-cnvB+cnvE), samples[cnvB:cnvE], M[cnvB:cnvE], P[cnvB:cnvE], MSC[cnvB:cnvE], PSC[cnvB:cnvE], mixture)
+        print "simpleGT unary CNV:", self.getUnaryFeatures([8]* (-cnvB+cnvE), samples[cnvB:cnvE], M[cnvB:cnvE], P[cnvB:cnvE], MSC[cnvB:cnvE], PSC[cnvB:cnvE], mixture)
+        print "simpleGT unary CNV:", self.getUnaryFeatures([9]* (-cnvB+cnvE), samples[cnvB:cnvE], M[cnvB:cnvE], P[cnvB:cnvE], MSC[cnvB:cnvE], PSC[cnvB:cnvE], mixture)
+        print "simpleGT unary CNV:", self.getUnaryFeatures([10]* (-cnvB+cnvE), samples[cnvB:cnvE], M[cnvB:cnvE], P[cnvB:cnvE], MSC[cnvB:cnvE], PSC[cnvB:cnvE], mixture)
         
     def computeLLandGradient(self, labels, samples, M, P, MSC, PSC, mixture):
         """
