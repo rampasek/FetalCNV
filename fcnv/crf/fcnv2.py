@@ -181,7 +181,7 @@ def computeStats(ok, wrong, pref, num_patt):
         print pref, t, ": ", o, w, ratio, '%'
 
 def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_name_prefix):
-    vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture, inferHighLevelLabels=False)  #change
+    vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture) 
     #vp = fcnv.maxPosteriorDecoding(samples, M, P, MSC, PSC, mixture)
     
     date = datetime.now().strftime('%m-%d-%H-%M')
@@ -192,7 +192,7 @@ def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, fi
     print fcnv.inheritance_patterns
     num_patt = fcnv.getNumIP()
     num_states = fcnv.getNumPP()
-    num_patt = num_states #for phased pattern labeling
+    #num_patt = num_states #for phased pattern labeling
     
     viterbi_correct = 0
     state_correct_vp = [0] * num_patt 
@@ -397,7 +397,7 @@ def main():
     #run gradient training
     if runGradTraining:
         #run the training iterations
-        for iterNum in range(3):
+        for iterNum in range(1):
             #print "iterNum: ", iterNum
             ll, params = fcnv.computeLLandGradient(ground_truth, samples, M, P, MSC, PSC, mix)
             print ll, params
@@ -417,9 +417,9 @@ def main():
     #run max margin training
     if runMarginTraining:
         #run the training iterations
-        for iterNum in range(5): #change
-            print "iterNum: ", iterNum
-            compute_postloss = True #change + the const C
+        for iterNum in range(1):
+            #print "iterNum: ", iterNum
+            compute_postloss = False
             pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, 0.0001, compute_postloss)
             print preloss, params
             print "{0} !>= {1}".format(pregts - preps, preloss)

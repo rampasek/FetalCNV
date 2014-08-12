@@ -779,11 +779,18 @@ class FCNV(object):
                     mix += (2.*num_type2)/sum_all
                     estimates.append((2.*num_type2)/sum_all)
                 else:
-                    num += 1.
+                    num += 1
                     estimates.append(0.)
 
         estimates.sort()
-        return mix/num, estimates[len(estimates)/2], len(estimates)
+        try:
+            resEstim = mix/num
+            medianEstim = estimates[len(estimates)/2]
+        except:
+            resEstim = -1.
+            medianEstim = -1.
+            
+        return resEstim, medianEstim, len(estimates)
         
     def estimateCoverage(self, samples):
         """Estimate coverage of the SNP loci in the plasma samples as empirical mean.
@@ -869,8 +876,8 @@ class FCNV(object):
         #logLikelihood -= wSqr/(2.*self.sigmaSqr) #regularizator
         
         print "loglikelihood before param adjustment:", logLikelihood
-        print "before:"
-        self.getRegionStats(labels, samples, M, P, MSC, PSC, mixture)
+        #print "before:"
+        #self.getRegionStats(labels, samples, M, P, MSC, PSC, mixture)
         
         #compute gradients w.r.t. indiviudal features and update the current weights
          #unary features
@@ -904,8 +911,8 @@ class FCNV(object):
             self.binaryWeights[i] = max(self.binaryWeights[i], self.epsWeight)
             print "binary", i, self.binaryWeights[i]    
         
-        print "after:"
-        self.getRegionStats(labels, samples, M, P, MSC, PSC, mixture)
+        #print "after:"
+        #self.getRegionStats(labels, samples, M, P, MSC, PSC, mixture)
         
         return logLikelihood, self.encodeCRFparams()
        
@@ -1224,6 +1231,7 @@ class FCNV(object):
         print "groundtruth_score: {0}".format(groundtruth_score)
         print "squared_feature_distance: {0}".format(squared_feature_distance)
         
+        if squared_feature_distance < 0.0000001: squared_feature_distance = 0.0000001
         tau = min(C, (prediction_score - groundtruth_score + loss)/squared_feature_distance)
         
         print "tau: {0}".format(tau)
