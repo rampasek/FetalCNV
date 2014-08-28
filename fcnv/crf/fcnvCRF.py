@@ -89,6 +89,9 @@ class FCNV(object):
         if self.positions != None:
             self.distBin = [ self.getDistbin(x) for x in range(len(positions)+3)]
         
+        #list of possible parental haplotype configuration types
+        self.possible_parental_configs = ["1000", "1001", "1010", "1011", "1100", "1101", "1110", "1111"]
+        
         #run intern tests
         self.neg_inf = float('-inf')
         self.inf = float('inf')
@@ -119,7 +122,7 @@ class FCNV(object):
 #         #minimal epsilon weight for a feature
 #        self.epsWeight = 0.0001
 #         #training hyperparameters
-#        self.sigmaSqr = 0.01
+#        self.regLambda = 0.01
 #        self.omega = 0.00005
         
         #generate inheritance patterns
@@ -167,7 +170,24 @@ class FCNV(object):
         #generate silent states
         self.states.append( HMMState("s", "s") ) #start state
         self.states.append( HMMState("t", "t") ) #end state
-
+        
+        # FEATURES
+        # create unary features list
+        num_states = self.getNumPP() 
+        #self.unaryFeaturesList = [self.getUnaryF0]
+        self.unaryFeaturesList = []
+        for parental_config in self.possible_parental_configs:
+            for s_id in xrange(num_states):
+                if self.states[s_id].inheritance_pattern in [(2,0), (0,2)]: continue
+                self.unaryFeaturesList.append(self.makeUnaryBB(parental_config, s_id))
+        if self.use_prior:
+            self.unaryFeaturesList.append(self.getUnaryF1)
+        
+        # create binary features list
+        self.binaryFeaturesList = []
+        for distbin in self.possible_distbins:
+            self.binaryFeaturesList.extend(self.makeBinary(distbin))
+        
         #print the table
         num_states = self.getNumStates()
         #for k in xrange(num_states):
@@ -175,8 +195,7 @@ class FCNV(object):
         #        print "%.4f" % (math.exp(self.transitions[k][l])),
         #    print " "
     
-    def binDist(self, dist):
-        
+    def binDist(self, dist):      
         if 0 <= dist < 120:
             return 0
         elif dist < 320:
@@ -200,19 +219,15 @@ class FCNV(object):
         """
          #weight vector for node features
         self.unaryWeights = crfParams['unaryWeights']
-        self.unaryFeaturesList = [self.getUnaryF0]
-        if self.use_prior:
-            self.unaryFeaturesList.append(self.getUnaryF1)
+                
          #weight vector for edge features
         self.binaryWeights = crfParams['binaryWeights']
-        self.binaryFeaturesList = []
-        for distbin in self.possible_distbins:
-            self.binaryFeaturesList.extend(self.makeBinary(distbin))
             
          #minimal epsilon weight for a feature
         self.epsWeight = crfParams['epsWeight']
          #training hyperparameters
-        self.sigmaSqr = crfParams['sigmaSqr']
+        self.regNorm = crfParams['regNorm']
+        self.regLambda = crfParams['regLambda']
         self.omega = crfParams['omega']
         
     def encodeCRFparams(self):
@@ -222,7 +237,8 @@ class FCNV(object):
         crfParams['unaryWeights'] = self.unaryWeights
         crfParams['binaryWeights'] = self.binaryWeights
         crfParams['epsWeight'] = self.epsWeight
-        crfParams['sigmaSqr'] = self.sigmaSqr
+        crfParams['regNorm'] = self.regNorm
+        crfParams['regLambda'] = self.regLambda
         crfParams['omega'] = self.omega
         return crfParams
             
@@ -870,10 +886,16 @@ class FCNV(object):
         #    print labels[i], x, self.IPtoID[self.states[x].inheritance_pattern]
             
         print logLikelihood, logZ
-        logLikelihood -= logZ
-        
-        wSqr = sum([ x*x  for x in self.unaryWeights + self.binaryWeights ])
-        #logLikelihood -= wSqr/(2.*self.sigmaSqr) #regularizator
+        logLikelihood -= logZ #normalize by the partition function value
+        #regularization
+        if self.regNorm == 1:
+            wAbsSum = sum([ abs(x)  for x in self.unaryWeights + self.binaryWeights ])
+            logLikelihood -= wAbsSum*self.regLambda
+        elif self.regNorm == 2: # L2 squared regularizator
+            wSqr = sum([ x*x  for x in self.unaryWeights + self.binaryWeights ])
+            logLikelihood -= wSqr*self.regLambda
+        else: #no regularization
+            pass
         
         print "loglikelihood before param adjustment:", logLikelihood
         #print "before:"
@@ -889,7 +911,13 @@ class FCNV(object):
                 for s_id in xrange(num_real_states):
                     expect += nodeMarginals[pos+1][s_id] * f(pos+1, samples, M, P, MSC, PSC, mixture, self.states[s_id])
                 grad -= expect
-            #grad -= self.unaryWeights[i]/self.sigmaSqr #regularizator
+            #regularization
+            if self.regNorm == 1:
+                grad -= self.unaryWeights[i]*self.regLambda
+            elif self.regNorm == 2: # L2 squared regularizator
+                grad -= (self.unaryWeights[i]/2.)*self.regLambda
+            else: #no regularization
+                pass
             #update the current weights
             self.unaryWeights[i] += self.omega * grad
             self.unaryWeights[i] = max(self.unaryWeights[i], self.epsWeight)
@@ -905,7 +933,13 @@ class FCNV(object):
                     for s2_id in xrange(num_real_states):
                         expect += edgeMarginals[pos+1][s1_id][s2_id] * f(s1_id, self.states[s1_id], s2_id, self.states[s2_id], distBin[pos+2])
                 grad -= expect
-            #grad -= self.binaryWeights[i]/self.sigmaSqr #regularizator
+            #regularization
+            if self.regNorm == 1:
+                grad -= self.binaryWeights[i]*self.regLambda
+            elif self.regNorm == 2: # L2 squared regularizator
+                grad -= (self.binaryWeights[i]/2.)*self.regLambda
+            else: #no regularization
+                pass
             #update the current weights
             self.binaryWeights[i] += self.omega * grad
             self.binaryWeights[i] = max(self.binaryWeights[i], self.epsWeight)
@@ -1280,10 +1314,39 @@ class FCNV(object):
             binaryFeatures.append(feature)
         return binaryFeatures
     
-    def getUnaryF0(self, pos, samples, M, P, MSC, PSC, mixture, state):
-        #emission probability in the given state
-        emis_logp = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
-        return emis_logp
+    def makeUnaryBB(self, parental_config, state_id):
+
+        def getUnaryPPandPatConf(pos, samples, M, P, MSC, PSC, mixture, state):
+            #print "START  ", M[pos-1], P[pos-1], "var:", parental_config, state_id
+            #unary feature for particular phase pattern and paternal config combination
+            if state.phased_pattern != self.states[state_id].phased_pattern:
+                return 0.
+                
+            curr_PatConf = M[pos-1] + P[pos-1]
+            zero = one = ''
+            for x in range(4):
+                if parental_config[x] == '0':
+                    if zero == '':
+                        zero = curr_PatConf[x]
+                    elif zero != curr_PatConf[x]:
+                        return 0.
+                elif parental_config[x] == '1':
+                    if one == '':
+                        one = curr_PatConf[x]
+                    elif one != curr_PatConf[x]:
+                        return 0.
+                
+            #emission probability in the given state
+            #print "yeheeeeee", M[pos-1], P[pos-1], "var:", parental_config, state_id, self.phased_patterns.index(state.phased_pattern)
+            emis_logp = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
+            return 1. / (-emis_logp)
+            
+        return getUnaryPPandPatConf
+    
+#    def getUnaryF0(self, pos, samples, M, P, MSC, PSC, mixture, state):
+#        #emission probability in the given state
+#        emis_logp = self.logLHGivenStateWCoverage(pos-1, samples[pos-1], M[pos-1], P[pos-1], MSC[pos-1], PSC[pos-1], mixture, state)
+#        return emis_logp
 
     def getUnaryF1(self, pos, samples, M, P, MSC, PSC, mixture, state):
         #copy number prior for the given state
@@ -1414,7 +1477,7 @@ class FCNV(object):
             
                 #constant to the exit state
                 sid2 = self.getExitState()[0]
-                edgePot[sid1][sid2][dbid] = 0.  
+                edgePot[sid1][sid2][dbid] = 1.  
         
             #now generate constant pairwise energy from the start node
             for sid1, state1 in enumerate(self.states[num_real_states:]):
@@ -1423,7 +1486,7 @@ class FCNV(object):
                 if state1.phased_pattern == "s":
                     for sid2, state2 in enumerate(self.states[:num_real_states]):
                         if state2.inheritance_pattern != (0, 2) and state2.inheritance_pattern != (2, 0):
-                            edgePot[sid1][sid2][dbid] = 0.
+                            edgePot[sid1][sid2][dbid] = 1.
         
         
 #        #done, take logarithm

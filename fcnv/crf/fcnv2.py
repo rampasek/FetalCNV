@@ -13,7 +13,6 @@ import cvrgHMM
 from datetime import datetime
 import os
 
-
 def readInput(in_file_name):
     """Read the input from files.
     Read maternal alleles, paternal alleles, and samples per position.
@@ -77,9 +76,13 @@ def readParams(param_file):
             epsWeight = float(line[1])
             crfParams['epsWeight'] = epsWeight
             
-        elif line[0] == 'sigmaSqr':
-            sigmaSqr = float(line[1])
-            crfParams['sigmaSqr'] = sigmaSqr
+        elif line[0] == 'regNorm':
+            regNorm = int(line[1])
+            crfParams['regNorm'] = regNorm
+              
+        elif line[0] == 'regLambda':
+            regLambda = float(line[1])
+            crfParams['regLambda'] = regLambda
             
         elif line[0] == 'omega':
             omega = float(line[1])
@@ -181,7 +184,7 @@ def computeStats(ok, wrong, pref, num_patt):
         print pref, t, ": ", o, w, ratio, '%'
 
 def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, file_name_prefix):
-    vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture) 
+    vp, v_state_path = fcnv.viterbiPath(samples, M, P, MSC, PSC, mixture, inferHighLevelLabels=False)  #change
     #vp = fcnv.maxPosteriorDecoding(samples, M, P, MSC, PSC, mixture)
     
     date = datetime.now().strftime('%m-%d-%H-%M')
@@ -192,7 +195,7 @@ def test(fcnv, snp_positions, samples, M, P, MSC, PSC, mixture, ground_truth, fi
     print fcnv.inheritance_patterns
     num_patt = fcnv.getNumIP()
     num_states = fcnv.getNumPP()
-    #num_patt = num_states #for phased pattern labeling
+    num_patt = num_states #for phased pattern labeling #change
     
     viterbi_correct = 0
     state_correct_vp = [0] * num_patt 
@@ -417,9 +420,9 @@ def main():
     #run max margin training
     if runMarginTraining:
         #run the training iterations
-        for iterNum in range(1):
-            #print "iterNum: ", iterNum
-            compute_postloss = False
+        for iterNum in range(5): #change
+            print "iterNum: ", iterNum
+            compute_postloss = True #change + the const C
             pregts, preps, preloss, params, postgts, postps, postloss = fcnv.computeLLandMaxMarginUpdate(ground_truth, samples, M, P, MSC, PSC, mix, 0.0001, compute_postloss)
             print preloss, params
             print "{0} !>= {1}".format(pregts - preps, preloss)
@@ -447,7 +450,7 @@ def main():
 if __name__ == "__main__":
     #import doctest
     #doctest.testmod()
-    
+    start_time = time.time()
     main()
     
 
